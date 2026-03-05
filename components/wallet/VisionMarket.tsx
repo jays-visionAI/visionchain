@@ -42,6 +42,7 @@ import {
     Eye,
     Maximize2,
 } from 'lucide-solid';
+import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
 
 // Contract constants (must match transferService.ts)
@@ -435,39 +436,34 @@ const VisionMarket = (props: { walletAddress?: string }) => {
     };
 
     return (
-        <div class="h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-4 lg:px-8 pb-32 lg:pb-8 max-w-6xl mx-auto w-full overflow-y-auto custom-scrollbar">
-            {/* ── Header ── */}
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 shrink-0">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-[10px] font-black text-cyan-400 uppercase tracking-widest">Global Channel</span>
+        <div class="h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-4 lg:px-8 pb-32 lg:pb-8 max-w-5xl mx-auto w-full overflow-y-auto custom-scrollbar">
+            <WalletViewHeader
+                tag="Global Channel"
+                title="VISION"
+                titleAccent="MARKET"
+                description="Discover and purchase premium datasets, media, and documents."
+                icon={ShoppingBag}
+                rightElement={
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <Search class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                placeholder="Search materials..."
+                                value={searchQuery()}
+                                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                                class="h-12 w-64 pl-11 pr-4 bg-white/[0.04] border border-white/[0.08] rounded-2xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                            />
+                        </div>
+                        <button
+                            onClick={loadMarket}
+                            class="h-12 w-12 flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-2xl text-gray-400 hover:text-white transition-all"
+                        >
+                            <Filter class="w-5 h-5" />
+                        </button>
                     </div>
-                    <h1 class="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-                        <ShoppingBag class="w-8 h-8 text-cyan-400" />
-                        VISION MARKET
-                    </h1>
-                    <p class="text-sm text-gray-400 font-medium">Discover and purchase premium datasets, media, and documents.</p>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <div class="relative">
-                        <Search class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                        <input
-                            type="text"
-                            placeholder="Search materials..."
-                            value={searchQuery()}
-                            onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="h-12 w-64 pl-11 pr-4 bg-white/[0.04] border border-white/[0.08] rounded-2xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                        />
-                    </div>
-                    <button
-                        onClick={loadMarket}
-                        class="h-12 w-12 flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-2xl text-gray-400 hover:text-white transition-all"
-                    >
-                        <Filter class="w-5 h-5" />
-                    </button>
-                </div>
-            </div>
+                }
+            />
 
             {/* ── Main Content ── */}
             <div class="flex-1 min-h-0">

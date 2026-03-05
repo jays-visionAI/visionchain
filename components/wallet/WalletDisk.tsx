@@ -6,6 +6,7 @@ import {
     MoreVertical, Search, Grid, List, ChevronRight,
     Download, Trash2, Eye, X, ArrowLeft, Plus, Check, AlertTriangle, Copy
 } from 'lucide-solid';
+import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
 import {
     uploadDiskFile, downloadDiskFile, downloadDiskFileGranular, listDiskFiles, deleteDiskFile, renameDiskFile,
@@ -827,7 +828,7 @@ export const WalletDisk = (props: {
 
     return (
         <div
-            class={`h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-3 sm:px-4 lg:px-8 pb-32 lg:pb-8 max-w-6xl mx-auto w-full overflow-x-hidden overflow-y-auto custom-scrollbar relative transition-all ${isDragOver() ? 'ring-2 ring-cyan-400/40 ring-inset' : ''}`}
+            class={`h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-3 sm:px-4 lg:px-8 pb-32 lg:pb-8 max-w-5xl mx-auto w-full overflow-x-hidden overflow-y-auto custom-scrollbar relative transition-all ${isDragOver() ? 'ring-2 ring-cyan-400/40 ring-inset' : ''}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
@@ -862,167 +863,165 @@ export const WalletDisk = (props: {
             </Presence>
 
             {/* ── Header ── */}
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 shrink-0">
-                <div class="space-y-1">
-                    <h1 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                        <HardDrive class="w-6 h-6 text-cyan-400" />
-                        VISION DISK
-                    </h1>
-                    <p class="text-sm text-gray-400 font-medium">Decentralized storage powered by Vision Nodes</p>
+            <WalletViewHeader
+                tag="Decentralized"
+                title="VISION"
+                titleAccent="DISK"
+                description="Decentralized storage powered by Vision Nodes"
+                icon={HardDrive}
+            />
+
+            <div class="flex flex-wrap items-center gap-2 mb-6 shrink-0">
+                {/* Search */}
+                <div class="relative">
+                    <Search class="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                        type="text"
+                        placeholder="Search files..."
+                        value={searchQuery()}
+                        onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                        class="h-10 w-32 sm:w-48 pl-9 pr-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all"
+                    />
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2">
-                    {/* Search */}
-                    <div class="relative">
-                        <Search class="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                            type="text"
-                            placeholder="Search files..."
-                            value={searchQuery()}
-                            onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="h-10 w-32 sm:w-48 pl-9 pr-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all"
-                        />
-                    </div>
+                {/* View Toggle */}
+                <div class="flex items-center bg-white/[0.04] rounded-xl border border-white/[0.08] overflow-hidden">
+                    <button
+                        onClick={() => setViewMode('grid')}
+                        class={`p-2.5 transition-all ${viewMode() === 'grid' ? 'bg-white/[0.1] text-cyan-400' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        <Grid class="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setViewMode('list')}
+                        class={`p-2.5 transition-all ${viewMode() === 'list' ? 'bg-white/[0.1] text-cyan-400' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        <List class="w-4 h-4" />
+                    </button>
+                </div>
 
-                    {/* View Toggle */}
-                    <div class="flex items-center bg-white/[0.04] rounded-xl border border-white/[0.08] overflow-hidden">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            class={`p-2.5 transition-all ${viewMode() === 'grid' ? 'bg-white/[0.1] text-cyan-400' : 'text-gray-500 hover:text-white'}`}
-                        >
-                            <Grid class="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            class={`p-2.5 transition-all ${viewMode() === 'list' ? 'bg-white/[0.1] text-cyan-400' : 'text-gray-500 hover:text-white'}`}
-                        >
-                            <List class="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    {/* Distributed Toggle */}
-                    <div class="relative">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setUseDistributed(!useDistributed());
-                            }}
-                            onMouseEnter={() => { if (window.innerWidth > 768) setShowVNetTooltip(true); }}
-                            onMouseLeave={() => setShowVNetTooltip(false)}
-                            onTouchEnd={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setShowVNetTooltip(!showVNetTooltip());
-                                setShowPrivateTooltip(false);
-                                if (!showVNetTooltip()) setTimeout(() => setShowVNetTooltip(false), 3000);
-                            }}
-                            class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useDistributed()
-                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                                : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
-                                }`}
-                        >
-                            <Globe class={`w-4 h-4 ${useDistributed() ? 'text-amber-500' : 'text-gray-600'}`} />
-                            <span class="hidden md:inline">VNet</span>
-                        </button>
-                        <Show when={showVNetTooltip()}>
-                            <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
-                                <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
-                                <p class="font-bold text-amber-400 mb-1.5">Vision Network Storage</p>
-                                <p class="text-gray-300 mb-1.5">
-                                    Files are split into 256KB chunks and distributed across Vision Nodes worldwide. Each chunk is replicated to 3+ nodes for maximum durability.
-                                </p>
-                                <div class="flex items-center gap-1.5 text-gray-500">
-                                    <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                                    <span>Merkle tree verification ensures data integrity</span>
-                                </div>
-                                <button onClick={() => setShowVNetTooltip(false)} class="md:hidden absolute top-2 right-2 text-gray-500 hover:text-white">
-                                    <X class="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        </Show>
-                    </div>
-
-                    {/* Encryption Toggle */}
-                    <div class="relative">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setUseEncryption(!useEncryption());
-                            }}
-                            onMouseEnter={() => { if (window.innerWidth > 768) setShowPrivateTooltip(true); }}
-                            onMouseLeave={() => setShowPrivateTooltip(false)}
-                            onTouchEnd={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setShowPrivateTooltip(!showPrivateTooltip());
-                                setShowVNetTooltip(false);
-                                if (!showPrivateTooltip()) setTimeout(() => setShowPrivateTooltip(false), 3000);
-                            }}
-                            class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
-                                ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
-                                }`}
-                        >
-                            {useEncryption() ? <ShieldCheck class="w-4 h-4" /> : <ShieldAlert class="w-4 h-4 text-gray-600" />}
-                            <span class="hidden md:inline">Private</span>
-                        </button>
-                        <Show when={showPrivateTooltip()}>
-                            <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
-                                <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
-                                <p class="font-bold text-blue-400 mb-1.5">End-to-End Encryption</p>
-                                <p class="text-gray-300 mb-1.5">
-                                    Files are encrypted in your browser before uploading. No one — not even Vision Chain — can view your data without your password.
-                                </p>
-                                <div class="flex items-center gap-1.5 text-red-400/70">
-                                    <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                                    <span>If you lose your password, files cannot be recovered</span>
-                                </div>
-                                <button onClick={() => setShowPrivateTooltip(false)} class="md:hidden absolute top-2 right-2 text-gray-500 hover:text-white">
-                                    <X class="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        </Show>
-                    </div>
-
-                    {/* Preserve Original Toggle */}
+                {/* Distributed Toggle */}
+                <div class="relative">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            setPreserveOriginal(!preserveOriginal());
+                            setUseDistributed(!useDistributed());
                         }}
-                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${preserveOriginal()
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        onMouseEnter={() => { if (window.innerWidth > 768) setShowVNetTooltip(true); }}
+                        onMouseLeave={() => setShowVNetTooltip(false)}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowVNetTooltip(!showVNetTooltip());
+                            setShowPrivateTooltip(false);
+                            if (!showVNetTooltip()) setTimeout(() => setShowVNetTooltip(false), 3000);
+                        }}
+                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useDistributed()
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
                             : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
                             }`}
-                        title={preserveOriginal() ? 'Original: files uploaded without optimization' : 'Optimized: images → WebP, videos → MP4'}
                     >
-                        <svg class={`w-4 h-4 ${preserveOriginal() ? 'text-emerald-400' : 'text-gray-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="12" y1="18" x2="12" y2="12" />
-                            <line x1="9" y1="15" x2="15" y2="15" />
-                        </svg>
-                        <span class="hidden md:inline">Original</span>
+                        <Globe class={`w-4 h-4 ${useDistributed() ? 'text-amber-500' : 'text-gray-600'}`} />
+                        <span class="hidden md:inline">VNet</span>
                     </button>
-
-                    {/* New Folder */}
-                    <button
-                        onClick={() => setShowNewFolder(true)}
-                        class="h-10 px-3 flex items-center gap-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-xl text-sm text-gray-300 hover:text-white transition-all"
-                    >
-                        <FolderPlus class="w-4 h-4" />
-                        <span class="hidden sm:inline">Folder</span>
-                    </button>
-
-                    {/* Upload */}
-                    <button
-                        onClick={() => fileInputRef?.click()}
-                        class="h-10 flex items-center gap-2 px-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
-                    >
-                        <UploadCloud class="w-4 h-4" />
-                        Upload
-                    </button>
+                    <Show when={showVNetTooltip()}>
+                        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
+                            <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
+                            <p class="font-bold text-amber-400 mb-1.5">Vision Network Storage</p>
+                            <p class="text-gray-300 mb-1.5">
+                                Files are split into 256KB chunks and distributed across Vision Nodes worldwide. Each chunk is replicated to 3+ nodes for maximum durability.
+                            </p>
+                            <div class="flex items-center gap-1.5 text-gray-500">
+                                <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                                <span>Merkle tree verification ensures data integrity</span>
+                            </div>
+                            <button onClick={() => setShowVNetTooltip(false)} class="md:hidden absolute top-2 right-2 text-gray-500 hover:text-white">
+                                <X class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </Show>
                 </div>
+
+                {/* Encryption Toggle */}
+                <div class="relative">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setUseEncryption(!useEncryption());
+                        }}
+                        onMouseEnter={() => { if (window.innerWidth > 768) setShowPrivateTooltip(true); }}
+                        onMouseLeave={() => setShowPrivateTooltip(false)}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowPrivateTooltip(!showPrivateTooltip());
+                            setShowVNetTooltip(false);
+                            if (!showPrivateTooltip()) setTimeout(() => setShowPrivateTooltip(false), 3000);
+                        }}
+                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
+                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                            }`}
+                    >
+                        {useEncryption() ? <ShieldCheck class="w-4 h-4" /> : <ShieldAlert class="w-4 h-4 text-gray-600" />}
+                        <span class="hidden md:inline">Private</span>
+                    </button>
+                    <Show when={showPrivateTooltip()}>
+                        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
+                            <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
+                            <p class="font-bold text-blue-400 mb-1.5">End-to-End Encryption</p>
+                            <p class="text-gray-300 mb-1.5">
+                                Files are encrypted in your browser before uploading. No one — not even Vision Chain — can view your data without your password.
+                            </p>
+                            <div class="flex items-center gap-1.5 text-red-400/70">
+                                <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                <span>If you lose your password, files cannot be recovered</span>
+                            </div>
+                            <button onClick={() => setShowPrivateTooltip(false)} class="md:hidden absolute top-2 right-2 text-gray-500 hover:text-white">
+                                <X class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </Show>
+                </div>
+
+                {/* Preserve Original Toggle */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setPreserveOriginal(!preserveOriginal());
+                    }}
+                    class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${preserveOriginal()
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                        }`}
+                    title={preserveOriginal() ? 'Original: files uploaded without optimization' : 'Optimized: images → WebP, videos → MP4'}
+                >
+                    <svg class={`w-4 h-4 ${preserveOriginal() ? 'text-emerald-400' : 'text-gray-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="12" y1="18" x2="12" y2="12" />
+                        <line x1="9" y1="15" x2="15" y2="15" />
+                    </svg>
+                    <span class="hidden md:inline">Original</span>
+                </button>
+
+                {/* New Folder */}
+                <button
+                    onClick={() => setShowNewFolder(true)}
+                    class="h-10 px-3 flex items-center gap-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-xl text-sm text-gray-300 hover:text-white transition-all"
+                >
+                    <FolderPlus class="w-4 h-4" />
+                    <span class="hidden sm:inline">Folder</span>
+                </button>
+
+                {/* Upload */}
+                <button
+                    onClick={() => fileInputRef?.click()}
+                    class="h-10 flex items-center gap-2 px-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
+                >
+                    <UploadCloud class="w-4 h-4" />
+                    Upload
+                </button>
             </div>
 
             {/* ── Storage Usage ── */}
@@ -2141,7 +2140,7 @@ export const WalletDisk = (props: {
                     </Motion.div>
                 </Show>
             </Presence>
-        </div>
+        </div >
     );
 };
 

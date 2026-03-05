@@ -1,5 +1,6 @@
 import { createSignal, Show, For, onMount, createMemo, createEffect } from 'solid-js';
 import { Bot, Play, Pause, Settings, Clock, Zap, ArrowUpRight, Shield, RefreshCw, ChevronRight, AlertTriangle, CheckCircle, Trash2, Copy } from 'lucide-solid';
+import { WalletViewHeader } from './WalletViewHeader';
 
 // Agent Gateway API URL - environment-aware
 const AGENT_API_URL = (() => {
@@ -521,31 +522,10 @@ export default function AgentHosting(props: AgentHostingProps) {
     };
 
     return (
-        <div class="agent-hosting">
-            <style>{`
-                .agent-hosting {
-                    padding: 24px;
-                    max-width: 900px;
-                    margin: 0 auto;
-                    color: #e2e8f0;
-                }
-                .ah-header {
-                    margin-bottom: 32px;
-                }
-                .ah-title {
-                    font-size: 28px;
-                    font-weight: 900;
-                    color: white;
-                    margin-bottom: 8px;
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                }
-                .ah-subtitle {
-                    font-size: 14px;
-                    color: #94a3b8;
-                    line-height: 1.6;
-                }
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+            <div class="max-w-5xl mx-auto space-y-8 text-gray-300">
+                <style>{`
+
                 .ah-tabs {
                     display: flex;
                     gap: 4px;
@@ -1004,813 +984,811 @@ export default function AgentHosting(props: AgentHostingProps) {
                 }
             `}</style>
 
-            {/* Header */}
-            <div class="ah-header">
-                <h1 class="ah-title">
-                    <Bot class="w-7 h-7 text-cyan-400" />
-                    Agent Hosting
-                </h1>
-                <p class="ah-subtitle">
-                    Create autonomous AI agents that run on Vision Chain's infrastructure.
-                    No server needed -- powered by VCN tokens.
-                </p>
-            </div>
+                {/* Header */}
+                <WalletViewHeader
+                    tag="AI Hosting"
+                    title="VISION"
+                    titleAccent="AGENT"
+                    description="Create autonomous AI agents that run on Vision Chain's infrastructure. No server needed -- powered by VCN tokens."
+                    icon={Bot}
+                />
 
-            {/* Tabs */}
-            <div class="ah-tabs">
-                <button
-                    class={`ah-tab ${activeTab() === 'overview' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('overview')}
-                >
-                    <Bot class="w-4 h-4" /> My Agents
-                </button>
-                <button
-                    class={`ah-tab ${activeTab() === 'setup' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('setup')}
-                >
-                    <Settings class="w-4 h-4" /> Setup
-                </button>
-                <button
-                    class={`ah-tab ${activeTab() === 'logs' ? 'active' : ''}`}
-                    onClick={() => { setActiveTab('logs'); loadLogs(); }}
-                >
-                    <Clock class="w-4 h-4" /> Logs
-                </button>
-            </div>
-
-            {/* Overview Tab */}
-            <Show when={activeTab() === 'overview'}>
-                <Show when={loading()}>
-                    <div class="ah-card" style="text-align: center; padding: 40px;">
-                        <RefreshCw class="w-6 h-6 text-cyan-400 animate-spin" style="margin: 0 auto 12px;" />
-                        <p style="color: #94a3b8; font-size: 13px;">Loading agents...</p>
-                    </div>
-                </Show>
-
-                <Show when={!loading() && agents().length === 0}>
-                    <div class="ah-card ah-empty-state">
-                        <div class="ah-empty-icon">
-                            <Bot class="w-10 h-10 text-cyan-400" />
-                        </div>
-                        <h2 class="ah-empty-title">No Agents Yet</h2>
-                        <p class="ah-empty-desc">
-                            Deploy your first autonomous AI agent on Vision Chain.
-                            It runs 24/7, makes decisions, and executes on-chain actions -- all powered by VCN.
-                        </p>
-                        <button class="ah-btn-primary" onClick={() => setActiveTab('setup')}>
-                            <Zap class="w-4 h-4" /> Create Agent
-                        </button>
-
-                        {/* Pricing Info */}
-                        <div class="ah-fee-breakdown" style="max-width: 380px; margin: 24px auto 0;">
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Read-only (balance, network, leaderboard)</span>
-                                <span class="ah-fee-value">0.05 VCN</span>
-                            </div>
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Medium (transactions query)</span>
-                                <span class="ah-fee-value">0.1 VCN</span>
-                            </div>
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">On-chain write (transfer, stake, unstake)</span>
-                                <span class="ah-fee-value">0.5 VCN</span>
-                            </div>
-                            <div class="ah-fee-divider" />
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Initial funding</span>
-                                <span class="ah-fee-value" style="color: #34d399;">100 VCN FREE</span>
-                            </div>
-                        </div>
-                    </div>
-                </Show>
-
-                <Show when={!loading() && agents().length > 0}>
-                    <For each={agents()}>
-                        {(agent) => {
-                            const successRate = () => agent.execution_count > 0 ? Math.round(((agent.execution_count - (agent as any).error_count || 0) / agent.execution_count) * 100) : 0;
-                            const lastExecAgo = () => {
-                                if (!agent.last_execution) return 'Never';
-                                const diff = Date.now() - new Date(agent.last_execution).getTime();
-                                if (diff < 60000) return 'Just now';
-                                if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-                                if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-                                return `${Math.floor(diff / 86400000)}d ago`;
-                            };
-                            const balancePercent = () => Math.min(100, (parseFloat(agent.vcn_balance) / 100) * 100);
-                            const balanceColor = () => {
-                                const bal = parseFloat(agent.vcn_balance);
-                                if (bal > 20) return '#34d399';
-                                if (bal > 5) return '#fbbf24';
-                                return '#f87171';
-                            };
-
-                            return (
-                                <div class="ah-agent-card">
-                                    <div class="ah-agent-header">
-                                        <div class="ah-agent-name">
-                                            <Bot class="w-5 h-5 text-cyan-400" />
-                                            {agent.agent_name}
-                                            <span class={`ah-status-badge ah-status-${agent.status}`}>
-                                                {agent.status === 'active' && <><Play class="w-3 h-3" /> Running</>}
-                                                {agent.status === 'paused' && <><Pause class="w-3 h-3" /> Paused</>}
-                                                {agent.status === 'setup' && <><Settings class="w-3 h-3" /> Setup</>}
-                                                {agent.status === 'error' && <><AlertTriangle class="w-3 h-3" /> Error</>}
-                                                {agent.status === 'insufficient_balance' && <><AlertTriangle class="w-3 h-3" /> Low Balance</>}
-                                            </span>
-                                        </div>
-                                        <div style="display: flex; gap: 8px; align-items: center;">
-                                            <button
-                                                class={`ah-toggle-btn ${agent.status === 'active' ? 'ah-toggle-active' : 'ah-toggle-paused'}`}
-                                                onClick={() => handleToggleAgent(agent.agent_name, agent.status)}
-                                            >
-                                                {agent.status === 'active' ? <><Pause class="w-3.5 h-3.5" /> Pause</> : <><Play class="w-3.5 h-3.5" /> Start</>}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Wallet Address */}
-                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; padding: 8px 12px; background: rgba(6,182,212,0.05); border: 1px solid rgba(6,182,212,0.15); border-radius: 8px;">
-                                        <span style="font-size: 11px; color: #64748b; white-space: nowrap;">Wallet:</span>
-                                        <span style="font-size: 11px; color: #e2e8f0; font-family: monospace; overflow: hidden; text-overflow: ellipsis;">
-                                            {agent.wallet_address}
-                                        </span>
-                                        <button
-                                            style="flex-shrink: 0; background: none; border: none; cursor: pointer; padding: 2px; color: #64748b;"
-                                            onClick={() => { navigator.clipboard.writeText(agent.wallet_address); }}
-                                            title="Copy address"
-                                        >
-                                            <Copy class="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-
-                                    {/* VCN Balance Bar */}
-                                    <div style="margin-bottom: 16px;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                            <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">VCN Balance</span>
-                                            <span style={`font-size: 14px; font-weight: 800; color: ${balanceColor()};`}>{parseFloat(agent.vcn_balance).toFixed(2)} VCN</span>
-                                        </div>
-                                        <div style="height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
-                                            <div style={`height: 100%; width: ${balancePercent()}%; background: ${balanceColor()}; border-radius: 3px; transition: width 0.5s ease;`} />
-                                        </div>
-                                    </div>
-
-                                    <div class="ah-stats-grid">
-                                        <div class="ah-stat">
-                                            <div class="ah-stat-value">{agent.execution_count}</div>
-                                            <div class="ah-stat-label">Executions</div>
-                                        </div>
-                                        <div class="ah-stat">
-                                            <div class="ah-stat-value">{agent.total_vcn_spent.toFixed(1)}</div>
-                                            <div class="ah-stat-label">VCN Spent</div>
-                                        </div>
-                                        <div class="ah-stat">
-                                            <div class="ah-stat-value" style="color: #34d399;">{successRate()}%</div>
-                                            <div class="ah-stat-label">Success Rate</div>
-                                        </div>
-                                        <div class="ah-stat">
-                                            <div class="ah-stat-value" style="font-size: 14px;">{lastExecAgo()}</div>
-                                            <div class="ah-stat-label">Last Run</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Configuration Summary */}
-                                    <Show when={true}>
-                                        <div style="margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(255,255,255,0.04);">
-                                            <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Configuration</div>
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                                <div style="font-size: 12px;">
-                                                    <span style="color: #64748b;">AI: </span>
-                                                    <span style="color: #e2e8f0; font-weight: 600;">ZYNK AI</span>
-                                                </div>
-                                                <div style="font-size: 12px;">
-                                                    <span style="color: #64748b;">Schedule: </span>
-                                                    <span style="color: #e2e8f0; font-weight: 600;">Every {agent.interval_minutes}min</span>
-                                                </div>
-                                                <div style="font-size: 12px; grid-column: span 2;">
-                                                    <span style="color: #64748b;">Actions: </span>
-                                                    <span style="color: #e2e8f0; font-weight: 600;">
-                                                        {agent.allowed_actions.length > 0 ? agent.allowed_actions.join(', ') : 'None configured'}
-                                                    </span>
-                                                </div>
-                                                <Show when={agent.system_prompt}>
-                                                    <div style="font-size: 12px; grid-column: span 2;">
-                                                        <span style="color: #64748b;">Prompt: </span>
-                                                        <span style="color: #94a3b8; font-style: italic;">
-                                                            {agent.system_prompt.length > 80 ? agent.system_prompt.substring(0, 80) + '...' : agent.system_prompt}
-                                                        </span>
-                                                    </div>
-                                                </Show>
-                                            </div>
-                                            <div style="display: flex; gap: 8px; margin-top: 12px;">
-                                                <button
-                                                    style="padding: 6px 12px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 8px; color: #22d3ee; font-size: 11px; font-weight: 600; cursor: pointer;"
-                                                    onClick={() => { setSetupStep(2); setActiveTab('setup'); setSelectedModel(agent.llm_model); setSystemPrompt(agent.system_prompt); setSelectedActions(agent.allowed_actions); setTriggerInterval(agent.interval_minutes); }}
-                                                >
-                                                    <Settings class="w-3 h-3" style="display: inline; vertical-align: middle; margin-right: 4px;" /> Edit Config
-                                                </button>
-                                                <button
-                                                    style="padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #94a3b8; font-size: 11px; font-weight: 600; cursor: pointer;"
-                                                    onClick={() => { setActiveTab('logs'); loadLogs(); }}
-                                                >
-                                                    <Clock class="w-3 h-3" style="display: inline; vertical-align: middle; margin-right: 4px;" /> View Logs
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </Show>
-
-                                    {/* Delete Agent */}
-                                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
-                                        <Show when={showDeleteConfirm() !== agent.agent_name}>
-                                            <button
-                                                style="padding: 6px 12px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 8px; color: #f87171; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;"
-                                                onClick={() => setShowDeleteConfirm(agent.agent_name)}
-                                            >
-                                                <Trash2 class="w-3 h-3" /> Delete Agent
-                                            </button>
-                                        </Show>
-                                        <Show when={showDeleteConfirm() === agent.agent_name}>
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span style="font-size: 11px; color: #f87171; font-weight: 600;">Permanently delete this agent?</span>
-                                                <button
-                                                    style="padding: 5px 12px; background: #ef4444; border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: 700; cursor: pointer;"
-                                                    onClick={() => handleDeleteAgent(agent.agent_name)}
-                                                    disabled={deletingAgent() === agent.agent_name}
-                                                >
-                                                    {deletingAgent() === agent.agent_name ? 'Deleting...' : 'Confirm'}
-                                                </button>
-                                                <button
-                                                    style="padding: 5px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #94a3b8; font-size: 11px; cursor: pointer;"
-                                                    onClick={() => setShowDeleteConfirm('')}
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        </Show>
-                                    </div>
-                                </div>
-                            );
-                        }}
-                    </For>
-                </Show>
-            </Show>
-
-            {/* Setup Tab */}
-            <Show when={activeTab() === 'setup'}>
-                {/* Step Indicator */}
-                <div class="ah-step-indicator">
-                    <div class={`ah-step-dot ${setupStep() === 1 ? 'active' : setupStep() > 1 ? 'done' : ''}`} />
-                    <div class={`ah-step-dot ${setupStep() === 2 ? 'active' : setupStep() > 2 ? 'done' : ''}`} />
-                    <div class={`ah-step-dot ${setupStep() === 3 ? 'active' : setupStep() > 3 ? 'done' : ''}`} />
-                    <div class={`ah-step-dot ${setupStep() === 4 ? 'active' : ''}`} />
+                {/* Tabs */}
+                <div class="ah-tabs">
+                    <button
+                        class={`ah-tab ${activeTab() === 'overview' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('overview')}
+                    >
+                        <Bot class="w-4 h-4" /> My Agents
+                    </button>
+                    <button
+                        class={`ah-tab ${activeTab() === 'setup' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('setup')}
+                    >
+                        <Settings class="w-4 h-4" /> Setup
+                    </button>
+                    <button
+                        class={`ah-tab ${activeTab() === 'logs' ? 'active' : ''}`}
+                        onClick={() => { setActiveTab('logs'); loadLogs(); }}
+                    >
+                        <Clock class="w-4 h-4" /> Logs
+                    </button>
                 </div>
 
-                {/* Step 1: Name & Register */}
-                <Show when={setupStep() === 1}>
-                    <div class="ah-card">
-                        <div class="ah-card-title">
-                            <Bot class="w-5 h-5 text-cyan-400" />
-                            Step 1: Create Your Agent
+                {/* Overview Tab */}
+                <Show when={activeTab() === 'overview'}>
+                    <Show when={loading()}>
+                        <div class="ah-card" style="text-align: center; padding: 40px;">
+                            <RefreshCw class="w-6 h-6 text-cyan-400 animate-spin" style="margin: 0 auto 12px;" />
+                            <p style="color: #94a3b8; font-size: 13px;">Loading agents...</p>
                         </div>
-                        <div style="margin-bottom: 16px;">
-                            <label class="ah-label">Agent Name</label>
-                            <input
-                                type="text"
-                                class="ah-input"
-                                placeholder="e.g. my-trading-bot"
-                                value={agentName()}
-                                onInput={(e) => setAgentName(e.currentTarget.value)}
-                            />
-                        </div>
-                        <button
-                            class="ah-btn-primary"
-                            disabled={!agentName().trim() || isRegistering()}
-                            onClick={handleRegisterAndSetup}
-                        >
-                            {isRegistering() ? <><RefreshCw class="w-4 h-4 animate-spin" /> Registering...</> : <><Zap class="w-4 h-4" /> Register & Get 100 VCN</>}
-                        </button>
-                        <Show when={registerError()}>
-                            <div class="ah-error">{registerError()}</div>
-                        </Show>
-                    </div>
-                </Show>
+                    </Show>
 
-                {/* Step 2: Select ONE Action */}
-                <Show when={setupStep() === 2}>
-                    <div class="ah-card">
-                        <div class="ah-card-title">
-                            <Zap class="w-5 h-5 text-cyan-400" />
-                            Step 2: Choose an Action
-                        </div>
-                        <p style="font-size: 12px; color: #94a3b8; margin: -4px 0 16px; line-height: 1.5;">
-                            Select one action for your agent to perform. Each action has its own specialized configuration.
-                        </p>
+                    <Show when={!loading() && agents().length === 0}>
+                        <div class="ah-card ah-empty-state">
+                            <div class="ah-empty-icon">
+                                <Bot class="w-10 h-10 text-cyan-400" />
+                            </div>
+                            <h2 class="ah-empty-title">No Agents Yet</h2>
+                            <p class="ah-empty-desc">
+                                Deploy your first autonomous AI agent on Vision Chain.
+                                It runs 24/7, makes decisions, and executes on-chain actions -- all powered by VCN.
+                            </p>
+                            <button class="ah-btn-primary" onClick={() => setActiveTab('setup')}>
+                                <Zap class="w-4 h-4" /> Create Agent
+                            </button>
 
-                        {/* On-chain category */}
-                        <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">On-chain</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
-                            <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'on-chain')}>
-                                {(action) => (
-                                    <div
-                                        style={{
-                                            padding: '14px',
-                                            background: selectedAction() === action.id ? 'rgba(34, 211, 238, 0.08)' : 'rgba(255,255,255,0.02)',
-                                            border: selectedAction() === action.id ? '1.5px solid rgba(34, 211, 238, 0.5)' : '1px solid rgba(255,255,255,0.06)',
-                                            'border-radius': '10px',
-                                            cursor: action.status === 'coming_soon' ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            opacity: action.status === 'coming_soon' ? '0.45' : '1',
-                                            position: 'relative',
-                                        }}
-                                        onClick={() => action.status === 'live' && selectAction(action.id)}
-                                    >
-                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                            <div style="color: #22d3ee; flex-shrink: 0;" innerHTML={ACTION_ICONS[action.id]} />
-                                            <div style="font-size: 13px; font-weight: 600; color: white;">{action.label}</div>
+                            {/* Pricing Info */}
+                            <div class="ah-fee-breakdown" style="max-width: 380px; margin: 24px auto 0;">
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Read-only (balance, network, leaderboard)</span>
+                                    <span class="ah-fee-value">0.05 VCN</span>
+                                </div>
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Medium (transactions query)</span>
+                                    <span class="ah-fee-value">0.1 VCN</span>
+                                </div>
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">On-chain write (transfer, stake, unstake)</span>
+                                    <span class="ah-fee-value">0.5 VCN</span>
+                                </div>
+                                <div class="ah-fee-divider" />
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Initial funding</span>
+                                    <span class="ah-fee-value" style="color: #34d399;">100 VCN FREE</span>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    <Show when={!loading() && agents().length > 0}>
+                        <For each={agents()}>
+                            {(agent) => {
+                                const successRate = () => agent.execution_count > 0 ? Math.round(((agent.execution_count - (agent as any).error_count || 0) / agent.execution_count) * 100) : 0;
+                                const lastExecAgo = () => {
+                                    if (!agent.last_execution) return 'Never';
+                                    const diff = Date.now() - new Date(agent.last_execution).getTime();
+                                    if (diff < 60000) return 'Just now';
+                                    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                                    return `${Math.floor(diff / 86400000)}d ago`;
+                                };
+                                const balancePercent = () => Math.min(100, (parseFloat(agent.vcn_balance) / 100) * 100);
+                                const balanceColor = () => {
+                                    const bal = parseFloat(agent.vcn_balance);
+                                    if (bal > 20) return '#34d399';
+                                    if (bal > 5) return '#fbbf24';
+                                    return '#f87171';
+                                };
+
+                                return (
+                                    <div class="ah-agent-card">
+                                        <div class="ah-agent-header">
+                                            <div class="ah-agent-name">
+                                                <Bot class="w-5 h-5 text-cyan-400" />
+                                                {agent.agent_name}
+                                                <span class={`ah-status-badge ah-status-${agent.status}`}>
+                                                    {agent.status === 'active' && <><Play class="w-3 h-3" /> Running</>}
+                                                    {agent.status === 'paused' && <><Pause class="w-3 h-3" /> Paused</>}
+                                                    {agent.status === 'setup' && <><Settings class="w-3 h-3" /> Setup</>}
+                                                    {agent.status === 'error' && <><AlertTriangle class="w-3 h-3" /> Error</>}
+                                                    {agent.status === 'insufficient_balance' && <><AlertTriangle class="w-3 h-3" /> Low Balance</>}
+                                                </span>
+                                            </div>
+                                            <div style="display: flex; gap: 8px; align-items: center;">
+                                                <button
+                                                    class={`ah-toggle-btn ${agent.status === 'active' ? 'ah-toggle-active' : 'ah-toggle-paused'}`}
+                                                    onClick={() => handleToggleAgent(agent.agent_name, agent.status)}
+                                                >
+                                                    {agent.status === 'active' ? <><Pause class="w-3.5 h-3.5" /> Pause</> : <><Play class="w-3.5 h-3.5" /> Start</>}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">{action.desc}</div>
-                                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
-                                            <span style={{
-                                                'font-size': '10px',
-                                                padding: '2px 6px',
-                                                'border-radius': '4px',
-                                                'font-weight': '600',
-                                                background: `${COST_COLORS[action.costTier]}15`,
-                                                color: COST_COLORS[action.costTier],
-                                            }}>
-                                                {action.costVcn} VCN
+
+                                        {/* Wallet Address */}
+                                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; padding: 8px 12px; background: rgba(6,182,212,0.05); border: 1px solid rgba(6,182,212,0.15); border-radius: 8px;">
+                                            <span style="font-size: 11px; color: #64748b; white-space: nowrap;">Wallet:</span>
+                                            <span style="font-size: 11px; color: #e2e8f0; font-family: monospace; overflow: hidden; text-overflow: ellipsis;">
+                                                {agent.wallet_address}
                                             </span>
-                                            <Show when={action.status === 'coming_soon'}>
-                                                <span style="font-size: 10px; color: #64748b; font-weight: 500;">Coming Soon</span>
+                                            <button
+                                                style="flex-shrink: 0; background: none; border: none; cursor: pointer; padding: 2px; color: #64748b;"
+                                                onClick={() => { navigator.clipboard.writeText(agent.wallet_address); }}
+                                                title="Copy address"
+                                            >
+                                                <Copy class="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
+                                        {/* VCN Balance Bar */}
+                                        <div style="margin-bottom: 16px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                                <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">VCN Balance</span>
+                                                <span style={`font-size: 14px; font-weight: 800; color: ${balanceColor()};`}>{parseFloat(agent.vcn_balance).toFixed(2)} VCN</span>
+                                            </div>
+                                            <div style="height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
+                                                <div style={`height: 100%; width: ${balancePercent()}%; background: ${balanceColor()}; border-radius: 3px; transition: width 0.5s ease;`} />
+                                            </div>
+                                        </div>
+
+                                        <div class="ah-stats-grid">
+                                            <div class="ah-stat">
+                                                <div class="ah-stat-value">{agent.execution_count}</div>
+                                                <div class="ah-stat-label">Executions</div>
+                                            </div>
+                                            <div class="ah-stat">
+                                                <div class="ah-stat-value">{agent.total_vcn_spent.toFixed(1)}</div>
+                                                <div class="ah-stat-label">VCN Spent</div>
+                                            </div>
+                                            <div class="ah-stat">
+                                                <div class="ah-stat-value" style="color: #34d399;">{successRate()}%</div>
+                                                <div class="ah-stat-label">Success Rate</div>
+                                            </div>
+                                            <div class="ah-stat">
+                                                <div class="ah-stat-value" style="font-size: 14px;">{lastExecAgo()}</div>
+                                                <div class="ah-stat-label">Last Run</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Configuration Summary */}
+                                        <Show when={true}>
+                                            <div style="margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(255,255,255,0.04);">
+                                                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Configuration</div>
+                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                                    <div style="font-size: 12px;">
+                                                        <span style="color: #64748b;">AI: </span>
+                                                        <span style="color: #e2e8f0; font-weight: 600;">ZYNK AI</span>
+                                                    </div>
+                                                    <div style="font-size: 12px;">
+                                                        <span style="color: #64748b;">Schedule: </span>
+                                                        <span style="color: #e2e8f0; font-weight: 600;">Every {agent.interval_minutes}min</span>
+                                                    </div>
+                                                    <div style="font-size: 12px; grid-column: span 2;">
+                                                        <span style="color: #64748b;">Actions: </span>
+                                                        <span style="color: #e2e8f0; font-weight: 600;">
+                                                            {agent.allowed_actions.length > 0 ? agent.allowed_actions.join(', ') : 'None configured'}
+                                                        </span>
+                                                    </div>
+                                                    <Show when={agent.system_prompt}>
+                                                        <div style="font-size: 12px; grid-column: span 2;">
+                                                            <span style="color: #64748b;">Prompt: </span>
+                                                            <span style="color: #94a3b8; font-style: italic;">
+                                                                {agent.system_prompt.length > 80 ? agent.system_prompt.substring(0, 80) + '...' : agent.system_prompt}
+                                                            </span>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                                                    <button
+                                                        style="padding: 6px 12px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 8px; color: #22d3ee; font-size: 11px; font-weight: 600; cursor: pointer;"
+                                                        onClick={() => { setSetupStep(2); setActiveTab('setup'); setSelectedModel(agent.llm_model); setSystemPrompt(agent.system_prompt); setSelectedActions(agent.allowed_actions); setTriggerInterval(agent.interval_minutes); }}
+                                                    >
+                                                        <Settings class="w-3 h-3" style="display: inline; vertical-align: middle; margin-right: 4px;" /> Edit Config
+                                                    </button>
+                                                    <button
+                                                        style="padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #94a3b8; font-size: 11px; font-weight: 600; cursor: pointer;"
+                                                        onClick={() => { setActiveTab('logs'); loadLogs(); }}
+                                                    >
+                                                        <Clock class="w-3 h-3" style="display: inline; vertical-align: middle; margin-right: 4px;" /> View Logs
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </Show>
+
+                                        {/* Delete Agent */}
+                                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+                                            <Show when={showDeleteConfirm() !== agent.agent_name}>
+                                                <button
+                                                    style="padding: 6px 12px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 8px; color: #f87171; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;"
+                                                    onClick={() => setShowDeleteConfirm(agent.agent_name)}
+                                                >
+                                                    <Trash2 class="w-3 h-3" /> Delete Agent
+                                                </button>
+                                            </Show>
+                                            <Show when={showDeleteConfirm() === agent.agent_name}>
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <span style="font-size: 11px; color: #f87171; font-weight: 600;">Permanently delete this agent?</span>
+                                                    <button
+                                                        style="padding: 5px 12px; background: #ef4444; border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: 700; cursor: pointer;"
+                                                        onClick={() => handleDeleteAgent(agent.agent_name)}
+                                                        disabled={deletingAgent() === agent.agent_name}
+                                                    >
+                                                        {deletingAgent() === agent.agent_name ? 'Deleting...' : 'Confirm'}
+                                                    </button>
+                                                    <button
+                                                        style="padding: 5px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #94a3b8; font-size: 11px; cursor: pointer;"
+                                                        onClick={() => setShowDeleteConfirm('')}
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
                                             </Show>
                                         </div>
                                     </div>
-                                )}
-                            </For>
-                        </div>
-
-                        {/* Growth category */}
-                        <div style="font-size: 11px; color: #a78bfa; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">Growth & Marketing</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
-                            <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'growth')}>
-                                {(action) => (
-                                    <div
-                                        style={{
-                                            padding: '14px',
-                                            background: selectedAction() === action.id ? 'rgba(167, 139, 250, 0.08)' : 'rgba(255,255,255,0.02)',
-                                            border: selectedAction() === action.id ? '1.5px solid rgba(167, 139, 250, 0.5)' : '1px solid rgba(255,255,255,0.06)',
-                                            'border-radius': '10px',
-                                            cursor: action.status === 'coming_soon' ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            opacity: action.status === 'coming_soon' ? '0.45' : '1',
-                                        }}
-                                        onClick={() => action.status === 'live' && selectAction(action.id)}
-                                    >
-                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                            <div style="color: #a78bfa; flex-shrink: 0;" innerHTML={ACTION_ICONS[action.id]} />
-                                            <div style="font-size: 13px; font-weight: 600; color: white;">{action.label}</div>
-                                        </div>
-                                        <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">{action.desc}</div>
-                                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
-                                            <span style={{
-                                                'font-size': '10px',
-                                                padding: '2px 6px',
-                                                'border-radius': '4px',
-                                                'font-weight': '600',
-                                                background: `${COST_COLORS[action.costTier]}15`,
-                                                color: COST_COLORS[action.costTier],
-                                            }}>
-                                                {action.costVcn} VCN
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-                            </For>
-                        </div>
-
-                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                            <button class="ah-tab" onClick={() => setSetupStep(1)}>Back</button>
-                            <button
-                                class="ah-btn-primary"
-                                disabled={!selectedAction()}
-                                onClick={() => setSetupStep(3)}
-                            >
-                                Configure <ChevronRight class="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                                );
+                            }}
+                        </For>
+                    </Show>
                 </Show>
 
-                {/* Step 3: Per-Action Settings */}
-                <Show when={setupStep() === 3}>
-                    <div class="ah-card">
-                        <Show when={selectedActionConfig()}>
-                            {(config) => (
-                                <>
-                                    {/* Action header */}
-                                    <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px;">
-                                        <div style={{
-                                            width: '44px', height: '44px', 'border-radius': '12px',
-                                            background: config().category === 'on-chain' ? 'rgba(34, 211, 238, 0.1)' : 'rgba(167, 139, 250, 0.1)',
-                                            border: `1px solid ${config().category === 'on-chain' ? 'rgba(34, 211, 238, 0.2)' : 'rgba(167, 139, 250, 0.2)'}`,
-                                            display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'flex-shrink': '0',
-                                            color: config().category === 'on-chain' ? '#22d3ee' : '#a78bfa',
-                                        }} innerHTML={ACTION_ICONS[config().id]} />
-                                        <div>
-                                            <div style="font-size: 16px; font-weight: 700; color: white;">
-                                                {config().label}
+                {/* Setup Tab */}
+                <Show when={activeTab() === 'setup'}>
+                    {/* Step Indicator */}
+                    <div class="ah-step-indicator">
+                        <div class={`ah-step-dot ${setupStep() === 1 ? 'active' : setupStep() > 1 ? 'done' : ''}`} />
+                        <div class={`ah-step-dot ${setupStep() === 2 ? 'active' : setupStep() > 2 ? 'done' : ''}`} />
+                        <div class={`ah-step-dot ${setupStep() === 3 ? 'active' : setupStep() > 3 ? 'done' : ''}`} />
+                        <div class={`ah-step-dot ${setupStep() === 4 ? 'active' : ''}`} />
+                    </div>
+
+                    {/* Step 1: Name & Register */}
+                    <Show when={setupStep() === 1}>
+                        <div class="ah-card">
+                            <div class="ah-card-title">
+                                <Bot class="w-5 h-5 text-cyan-400" />
+                                Step 1: Create Your Agent
+                            </div>
+                            <div style="margin-bottom: 16px;">
+                                <label class="ah-label">Agent Name</label>
+                                <input
+                                    type="text"
+                                    class="ah-input"
+                                    placeholder="e.g. my-trading-bot"
+                                    value={agentName()}
+                                    onInput={(e) => setAgentName(e.currentTarget.value)}
+                                />
+                            </div>
+                            <button
+                                class="ah-btn-primary"
+                                disabled={!agentName().trim() || isRegistering()}
+                                onClick={handleRegisterAndSetup}
+                            >
+                                {isRegistering() ? <><RefreshCw class="w-4 h-4 animate-spin" /> Registering...</> : <><Zap class="w-4 h-4" /> Register & Get 100 VCN</>}
+                            </button>
+                            <Show when={registerError()}>
+                                <div class="ah-error">{registerError()}</div>
+                            </Show>
+                        </div>
+                    </Show>
+
+                    {/* Step 2: Select ONE Action */}
+                    <Show when={setupStep() === 2}>
+                        <div class="ah-card">
+                            <div class="ah-card-title">
+                                <Zap class="w-5 h-5 text-cyan-400" />
+                                Step 2: Choose an Action
+                            </div>
+                            <p style="font-size: 12px; color: #94a3b8; margin: -4px 0 16px; line-height: 1.5;">
+                                Select one action for your agent to perform. Each action has its own specialized configuration.
+                            </p>
+
+                            {/* On-chain category */}
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">On-chain</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                                <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'on-chain')}>
+                                    {(action) => (
+                                        <div
+                                            style={{
+                                                padding: '14px',
+                                                background: selectedAction() === action.id ? 'rgba(34, 211, 238, 0.08)' : 'rgba(255,255,255,0.02)',
+                                                border: selectedAction() === action.id ? '1.5px solid rgba(34, 211, 238, 0.5)' : '1px solid rgba(255,255,255,0.06)',
+                                                'border-radius': '10px',
+                                                cursor: action.status === 'coming_soon' ? 'not-allowed' : 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                opacity: action.status === 'coming_soon' ? '0.45' : '1',
+                                                position: 'relative',
+                                            }}
+                                            onClick={() => action.status === 'live' && selectAction(action.id)}
+                                        >
+                                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                                <div style="color: #22d3ee; flex-shrink: 0;" innerHTML={ACTION_ICONS[action.id]} />
+                                                <div style="font-size: 13px; font-weight: 600; color: white;">{action.label}</div>
                                             </div>
-                                            <div style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-top: 2px;">
-                                                {config().longDesc}
+                                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">{action.desc}</div>
+                                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+                                                <span style={{
+                                                    'font-size': '10px',
+                                                    padding: '2px 6px',
+                                                    'border-radius': '4px',
+                                                    'font-weight': '600',
+                                                    background: `${COST_COLORS[action.costTier]}15`,
+                                                    color: COST_COLORS[action.costTier],
+                                                }}>
+                                                    {action.costVcn} VCN
+                                                </span>
+                                                <Show when={action.status === 'coming_soon'}>
+                                                    <span style="font-size: 10px; color: #64748b; font-weight: 500;">Coming Soon</span>
+                                                </Show>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
+                                </For>
+                            </div>
 
-                                    {/* Cost badge */}
-                                    <div style={{
-                                        display: 'inline-flex', 'align-items': 'center', gap: '6px', padding: '4px 10px',
-                                        'border-radius': '6px', 'margin-bottom': '20px',
-                                        background: `${COST_COLORS[config().costTier]}10`,
-                                        border: `1px solid ${COST_COLORS[config().costTier]}30`,
-                                    }}>
-                                        <span style={{ 'font-size': '10px', color: '#94a3b8', 'font-weight': '600', 'text-transform': 'uppercase' }}>
-                                            {COST_LABELS[config().costTier]}
-                                        </span>
-                                        <span style={{ 'font-size': '12px', color: COST_COLORS[config().costTier], 'font-weight': '700' }}>
-                                            {config().costVcn} VCN / execution
-                                        </span>
-                                    </div>
+                            {/* Growth category */}
+                            <div style="font-size: 11px; color: #a78bfa; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">Growth & Marketing</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                                <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'growth')}>
+                                    {(action) => (
+                                        <div
+                                            style={{
+                                                padding: '14px',
+                                                background: selectedAction() === action.id ? 'rgba(167, 139, 250, 0.08)' : 'rgba(255,255,255,0.02)',
+                                                border: selectedAction() === action.id ? '1.5px solid rgba(167, 139, 250, 0.5)' : '1px solid rgba(255,255,255,0.06)',
+                                                'border-radius': '10px',
+                                                cursor: action.status === 'coming_soon' ? 'not-allowed' : 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                opacity: action.status === 'coming_soon' ? '0.45' : '1',
+                                            }}
+                                            onClick={() => action.status === 'live' && selectAction(action.id)}
+                                        >
+                                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                                <div style="color: #a78bfa; flex-shrink: 0;" innerHTML={ACTION_ICONS[action.id]} />
+                                                <div style="font-size: 13px; font-weight: 600; color: white;">{action.label}</div>
+                                            </div>
+                                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">{action.desc}</div>
+                                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+                                                <span style={{
+                                                    'font-size': '10px',
+                                                    padding: '2px 6px',
+                                                    'border-radius': '4px',
+                                                    'font-weight': '600',
+                                                    background: `${COST_COLORS[action.costTier]}15`,
+                                                    color: COST_COLORS[action.costTier],
+                                                }}>
+                                                    {action.costVcn} VCN
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
 
-                                    {/* Dynamic settings fields */}
-                                    <Show when={config().settingsFields.length > 0}>
-                                        <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;">
-                                            <For each={config().settingsFields}>
-                                                {(field) => (
-                                                    <div>
-                                                        <label class="ah-label" style="margin-bottom: 4px;">
-                                                            {field.label}
-                                                            <Show when={field.unit}>
-                                                                <span style="font-size: 10px; color: #64748b; margin-left: 4px;">({field.unit})</span>
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button class="ah-tab" onClick={() => setSetupStep(1)}>Back</button>
+                                <button
+                                    class="ah-btn-primary"
+                                    disabled={!selectedAction()}
+                                    onClick={() => setSetupStep(3)}
+                                >
+                                    Configure <ChevronRight class="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </Show>
+
+                    {/* Step 3: Per-Action Settings */}
+                    <Show when={setupStep() === 3}>
+                        <div class="ah-card">
+                            <Show when={selectedActionConfig()}>
+                                {(config) => (
+                                    <>
+                                        {/* Action header */}
+                                        <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px;">
+                                            <div style={{
+                                                width: '44px', height: '44px', 'border-radius': '12px',
+                                                background: config().category === 'on-chain' ? 'rgba(34, 211, 238, 0.1)' : 'rgba(167, 139, 250, 0.1)',
+                                                border: `1px solid ${config().category === 'on-chain' ? 'rgba(34, 211, 238, 0.2)' : 'rgba(167, 139, 250, 0.2)'}`,
+                                                display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'flex-shrink': '0',
+                                                color: config().category === 'on-chain' ? '#22d3ee' : '#a78bfa',
+                                            }} innerHTML={ACTION_ICONS[config().id]} />
+                                            <div>
+                                                <div style="font-size: 16px; font-weight: 700; color: white;">
+                                                    {config().label}
+                                                </div>
+                                                <div style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-top: 2px;">
+                                                    {config().longDesc}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Cost badge */}
+                                        <div style={{
+                                            display: 'inline-flex', 'align-items': 'center', gap: '6px', padding: '4px 10px',
+                                            'border-radius': '6px', 'margin-bottom': '20px',
+                                            background: `${COST_COLORS[config().costTier]}10`,
+                                            border: `1px solid ${COST_COLORS[config().costTier]}30`,
+                                        }}>
+                                            <span style={{ 'font-size': '10px', color: '#94a3b8', 'font-weight': '600', 'text-transform': 'uppercase' }}>
+                                                {COST_LABELS[config().costTier]}
+                                            </span>
+                                            <span style={{ 'font-size': '12px', color: COST_COLORS[config().costTier], 'font-weight': '700' }}>
+                                                {config().costVcn} VCN / execution
+                                            </span>
+                                        </div>
+
+                                        {/* Dynamic settings fields */}
+                                        <Show when={config().settingsFields.length > 0}>
+                                            <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;">
+                                                <For each={config().settingsFields}>
+                                                    {(field) => (
+                                                        <div>
+                                                            <label class="ah-label" style="margin-bottom: 4px;">
+                                                                {field.label}
+                                                                <Show when={field.unit}>
+                                                                    <span style="font-size: 10px; color: #64748b; margin-left: 4px;">({field.unit})</span>
+                                                                </Show>
+                                                            </label>
+                                                            <Show when={field.desc}>
+                                                                <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">{field.desc}</div>
                                                             </Show>
-                                                        </label>
-                                                        <Show when={field.desc}>
-                                                            <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">{field.desc}</div>
-                                                        </Show>
 
-                                                        {/* Number input */}
-                                                        <Show when={field.type === 'number'}>
-                                                            <input
-                                                                type="number"
-                                                                class="ah-input"
-                                                                style="max-width: 200px;"
-                                                                placeholder={field.placeholder}
-                                                                value={actionSettings()[field.key] ?? field.defaultValue}
-                                                                onInput={(e) => updateSetting(field.key, Number(e.currentTarget.value))}
-                                                                min={field.min}
-                                                                max={field.max}
-                                                            />
-                                                        </Show>
+                                                            {/* Number input */}
+                                                            <Show when={field.type === 'number'}>
+                                                                <input
+                                                                    type="number"
+                                                                    class="ah-input"
+                                                                    style="max-width: 200px;"
+                                                                    placeholder={field.placeholder}
+                                                                    value={actionSettings()[field.key] ?? field.defaultValue}
+                                                                    onInput={(e) => updateSetting(field.key, Number(e.currentTarget.value))}
+                                                                    min={field.min}
+                                                                    max={field.max}
+                                                                />
+                                                            </Show>
 
-                                                        {/* Text input */}
-                                                        <Show when={field.type === 'text'}>
-                                                            <input
-                                                                type="text"
-                                                                class="ah-input"
-                                                                placeholder={field.placeholder}
-                                                                value={actionSettings()[field.key] ?? ''}
-                                                                onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
-                                                            />
-                                                        </Show>
+                                                            {/* Text input */}
+                                                            <Show when={field.type === 'text'}>
+                                                                <input
+                                                                    type="text"
+                                                                    class="ah-input"
+                                                                    placeholder={field.placeholder}
+                                                                    value={actionSettings()[field.key] ?? ''}
+                                                                    onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
+                                                                />
+                                                            </Show>
 
-                                                        {/* Address input */}
-                                                        <Show when={field.type === 'address'}>
-                                                            <input
-                                                                type="text"
-                                                                class="ah-input"
-                                                                style="font-family: 'SF Mono', Monaco, monospace; font-size: 12px;"
-                                                                placeholder={field.placeholder}
-                                                                value={actionSettings()[field.key] ?? ''}
-                                                                onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
-                                                            />
-                                                        </Show>
+                                                            {/* Address input */}
+                                                            <Show when={field.type === 'address'}>
+                                                                <input
+                                                                    type="text"
+                                                                    class="ah-input"
+                                                                    style="font-family: 'SF Mono', Monaco, monospace; font-size: 12px;"
+                                                                    placeholder={field.placeholder}
+                                                                    value={actionSettings()[field.key] ?? ''}
+                                                                    onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
+                                                                />
+                                                            </Show>
 
-                                                        {/* Textarea */}
-                                                        <Show when={field.type === 'textarea'}>
-                                                            <textarea
-                                                                class="ah-textarea"
-                                                                style="min-height: 72px;"
-                                                                placeholder={field.placeholder}
-                                                                value={actionSettings()[field.key] ?? ''}
-                                                                onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
-                                                            />
-                                                        </Show>
+                                                            {/* Textarea */}
+                                                            <Show when={field.type === 'textarea'}>
+                                                                <textarea
+                                                                    class="ah-textarea"
+                                                                    style="min-height: 72px;"
+                                                                    placeholder={field.placeholder}
+                                                                    value={actionSettings()[field.key] ?? ''}
+                                                                    onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
+                                                                />
+                                                            </Show>
 
-                                                        {/* Select */}
-                                                        <Show when={field.type === 'select'}>
-                                                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                                                                <For each={field.options}>
-                                                                    {(opt) => (
-                                                                        <button
-                                                                            style={{
-                                                                                padding: '6px 14px',
-                                                                                'border-radius': '8px',
-                                                                                'font-size': '12px',
-                                                                                'font-weight': actionSettings()[field.key] === opt.value ? '600' : '400',
-                                                                                cursor: 'pointer',
-                                                                                border: actionSettings()[field.key] === opt.value ? '1px solid rgba(34, 211, 238, 0.4)' : '1px solid rgba(255,255,255,0.08)',
-                                                                                background: actionSettings()[field.key] === opt.value ? 'rgba(34, 211, 238, 0.1)' : 'rgba(255,255,255,0.03)',
-                                                                                color: actionSettings()[field.key] === opt.value ? '#22d3ee' : '#94a3b8',
-                                                                                transition: 'all 0.2s ease',
-                                                                            }}
-                                                                            onClick={() => updateSetting(field.key, opt.value)}
-                                                                        >
-                                                                            {opt.label}
-                                                                        </button>
-                                                                    )}
-                                                                </For>
-                                                            </div>
-                                                        </Show>
-
-                                                        {/* Toggle */}
-                                                        <Show when={field.type === 'toggle'}>
-                                                            <div
-                                                                style={{
-                                                                    display: 'flex', 'align-items': 'center', gap: '10px', cursor: 'pointer',
-                                                                    padding: '8px 14px', 'border-radius': '8px',
-                                                                    background: actionSettings()[field.key] ? 'rgba(34, 211, 238, 0.08)' : 'rgba(255,255,255,0.03)',
-                                                                    border: actionSettings()[field.key] ? '1px solid rgba(34, 211, 238, 0.3)' : '1px solid rgba(255,255,255,0.08)',
-                                                                    transition: 'all 0.2s ease',
-                                                                    'max-width': 'fit-content',
-                                                                }}
-                                                                onClick={() => updateSetting(field.key, !actionSettings()[field.key])}
-                                                            >
-                                                                <div style={{
-                                                                    width: '36px', height: '20px', 'border-radius': '10px', position: 'relative',
-                                                                    background: actionSettings()[field.key] ? '#22d3ee' : 'rgba(255,255,255,0.15)',
-                                                                    transition: 'background 0.2s ease',
-                                                                }}>
-                                                                    <div style={{
-                                                                        width: '16px', height: '16px', 'border-radius': '50%', background: 'white',
-                                                                        position: 'absolute', top: '2px',
-                                                                        left: actionSettings()[field.key] ? '18px' : '2px',
-                                                                        transition: 'left 0.2s ease',
-                                                                    }} />
-                                                                </div>
-                                                                <span style={{ 'font-size': '12px', color: actionSettings()[field.key] ? '#22d3ee' : '#94a3b8', 'font-weight': '500' }}>
-                                                                    {actionSettings()[field.key] ? 'Enabled' : 'Disabled'}
-                                                                </span>
-                                                            </div>
-                                                        </Show>
-
-                                                        {/* Multi-select */}
-                                                        <Show when={field.type === 'multi-select'}>
-                                                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                                                                <For each={field.options}>
-                                                                    {(opt) => {
-                                                                        const isSelected = () => (actionSettings()[field.key] || []).includes(opt.value);
-                                                                        return (
+                                                            {/* Select */}
+                                                            <Show when={field.type === 'select'}>
+                                                                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                                                    <For each={field.options}>
+                                                                        {(opt) => (
                                                                             <button
                                                                                 style={{
                                                                                     padding: '6px 14px',
                                                                                     'border-radius': '8px',
                                                                                     'font-size': '12px',
-                                                                                    'font-weight': isSelected() ? '600' : '400',
+                                                                                    'font-weight': actionSettings()[field.key] === opt.value ? '600' : '400',
                                                                                     cursor: 'pointer',
-                                                                                    border: isSelected() ? '1px solid rgba(34, 211, 238, 0.4)' : '1px solid rgba(255,255,255,0.08)',
-                                                                                    background: isSelected() ? 'rgba(34, 211, 238, 0.1)' : 'rgba(255,255,255,0.03)',
-                                                                                    color: isSelected() ? '#22d3ee' : '#94a3b8',
+                                                                                    border: actionSettings()[field.key] === opt.value ? '1px solid rgba(34, 211, 238, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                                                                                    background: actionSettings()[field.key] === opt.value ? 'rgba(34, 211, 238, 0.1)' : 'rgba(255,255,255,0.03)',
+                                                                                    color: actionSettings()[field.key] === opt.value ? '#22d3ee' : '#94a3b8',
                                                                                     transition: 'all 0.2s ease',
                                                                                 }}
-                                                                                onClick={() => toggleMultiSelect(field.key, opt.value)}
+                                                                                onClick={() => updateSetting(field.key, opt.value)}
                                                                             >
                                                                                 {opt.label}
                                                                             </button>
-                                                                        );
+                                                                        )}
+                                                                    </For>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Toggle */}
+                                                            <Show when={field.type === 'toggle'}>
+                                                                <div
+                                                                    style={{
+                                                                        display: 'flex', 'align-items': 'center', gap: '10px', cursor: 'pointer',
+                                                                        padding: '8px 14px', 'border-radius': '8px',
+                                                                        background: actionSettings()[field.key] ? 'rgba(34, 211, 238, 0.08)' : 'rgba(255,255,255,0.03)',
+                                                                        border: actionSettings()[field.key] ? '1px solid rgba(34, 211, 238, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                                                                        transition: 'all 0.2s ease',
+                                                                        'max-width': 'fit-content',
                                                                     }}
-                                                                </For>
-                                                            </div>
-                                                        </Show>
-                                                    </div>
+                                                                    onClick={() => updateSetting(field.key, !actionSettings()[field.key])}
+                                                                >
+                                                                    <div style={{
+                                                                        width: '36px', height: '20px', 'border-radius': '10px', position: 'relative',
+                                                                        background: actionSettings()[field.key] ? '#22d3ee' : 'rgba(255,255,255,0.15)',
+                                                                        transition: 'background 0.2s ease',
+                                                                    }}>
+                                                                        <div style={{
+                                                                            width: '16px', height: '16px', 'border-radius': '50%', background: 'white',
+                                                                            position: 'absolute', top: '2px',
+                                                                            left: actionSettings()[field.key] ? '18px' : '2px',
+                                                                            transition: 'left 0.2s ease',
+                                                                        }} />
+                                                                    </div>
+                                                                    <span style={{ 'font-size': '12px', color: actionSettings()[field.key] ? '#22d3ee' : '#94a3b8', 'font-weight': '500' }}>
+                                                                        {actionSettings()[field.key] ? 'Enabled' : 'Disabled'}
+                                                                    </span>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Multi-select */}
+                                                            <Show when={field.type === 'multi-select'}>
+                                                                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                                                    <For each={field.options}>
+                                                                        {(opt) => {
+                                                                            const isSelected = () => (actionSettings()[field.key] || []).includes(opt.value);
+                                                                            return (
+                                                                                <button
+                                                                                    style={{
+                                                                                        padding: '6px 14px',
+                                                                                        'border-radius': '8px',
+                                                                                        'font-size': '12px',
+                                                                                        'font-weight': isSelected() ? '600' : '400',
+                                                                                        cursor: 'pointer',
+                                                                                        border: isSelected() ? '1px solid rgba(34, 211, 238, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                                                                                        background: isSelected() ? 'rgba(34, 211, 238, 0.1)' : 'rgba(255,255,255,0.03)',
+                                                                                        color: isSelected() ? '#22d3ee' : '#94a3b8',
+                                                                                        transition: 'all 0.2s ease',
+                                                                                    }}
+                                                                                    onClick={() => toggleMultiSelect(field.key, opt.value)}
+                                                                                >
+                                                                                    {opt.label}
+                                                                                </button>
+                                                                            );
+                                                                        }}
+                                                                    </For>
+                                                                </div>
+                                                            </Show>
+                                                        </div>
+                                                    )}
+                                                </For>
+                                            </div>
+                                        </Show>
+
+                                        {/* System prompt (auto-populated, editable) */}
+                                        <div style="margin-bottom: 16px;">
+                                            <label class="ah-label">System Prompt</label>
+                                            <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">Auto-generated from your action. Edit to customize agent behavior.</div>
+                                            <textarea
+                                                class="ah-textarea"
+                                                style="min-height: 64px;"
+                                                value={systemPrompt()}
+                                                onInput={(e) => setSystemPrompt(e.currentTarget.value)}
+                                            />
+                                        </div>
+
+                                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                            <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
+                                            <button
+                                                class="ah-btn-primary"
+                                                disabled={!systemPrompt().trim()}
+                                                onClick={() => setSetupStep(4)}
+                                            >
+                                                Next <ChevronRight class="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </Show>
+                        </div>
+                    </Show>
+
+                    {/* Step 4: Schedule & Deploy */}
+                    <Show when={setupStep() === 4}>
+                        <div class="ah-card">
+                            <div class="ah-card-title">
+                                <Clock class="w-5 h-5 text-cyan-400" />
+                                Step 4: Schedule & Deploy
+                            </div>
+
+                            {/* Selected action recap */}
+                            <Show when={selectedActionConfig()}>
+                                {(config) => (
+                                    <div style={{
+                                        display: 'flex', 'align-items': 'center', gap: '10px', padding: '10px 14px',
+                                        background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                                        'border-radius': '10px', 'margin-bottom': '20px',
+                                    }}>
+                                        <div style={{ color: config().category === 'on-chain' ? '#22d3ee' : '#a78bfa', 'flex-shrink': '0' }} innerHTML={ACTION_ICONS[config().id]} />
+                                        <div>
+                                            <div style="font-size: 13px; font-weight: 600; color: white;">{config().label}</div>
+                                            <div style="font-size: 11px; color: #94a3b8;">{config().desc}</div>
+                                        </div>
+                                        <span style={{
+                                            'margin-left': 'auto', 'font-size': '10px', padding: '2px 6px', 'border-radius': '4px', 'font-weight': '600',
+                                            background: `${COST_COLORS[config().costTier]}15`, color: COST_COLORS[config().costTier],
+                                        }}>
+                                            {config().costVcn} VCN
+                                        </span>
+                                    </div>
+                                )}
+                            </Show>
+
+                            <div style="margin-bottom: 20px;">
+                                <label class="ah-label">Run Frequency</label>
+                                <div class="ah-trigger-grid">
+                                    <For each={TRIGGER_OPTIONS}>
+                                        {(opt) => (
+                                            <div
+                                                class={`ah-trigger-card ${triggerInterval() === opt.value ? 'selected' : ''}`}
+                                                onClick={() => setTriggerInterval(opt.value)}
+                                            >
+                                                <div class="ah-trigger-label">{opt.label}</div>
+                                                <div class="ah-trigger-cost">{opt.cost}</div>
+                                            </div>
+                                        )}
+                                    </For>
+                                </div>
+                            </div>
+
+                            {/* Cost Breakdown */}
+                            <div class="ah-cost-banner">
+                                <div>
+                                    <div class="ah-cost-label">Estimated Monthly Cost</div>
+                                    <div class="ah-cost-value">
+                                        {estimatedMonthlyCost()}
+                                        <span class="ah-cost-unit">VCN/mo</span>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 11px; color: #94a3b8;">Fee Distribution</div>
+                                    <div style="font-size: 12px; color: white; font-weight: 600;">70% Protocol / 30% Node Pool</div>
+                                </div>
+                            </div>
+
+                            <div class="ah-fee-breakdown">
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Cost per execution</span>
+                                    <span class="ah-fee-value">{selectedActionConfig()?.costVcn || 0.05} VCN</span>
+                                </div>
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Executions per month</span>
+                                    <span class="ah-fee-value">{Math.round((30 * 24 * 60) / triggerInterval())}</span>
+                                </div>
+                                <div class="ah-fee-divider" />
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Your initial balance</span>
+                                    <span class="ah-fee-value" style="color: #34d399;">100 VCN</span>
+                                </div>
+                                <div class="ah-fee-row">
+                                    <span class="ah-fee-label">Estimated runway</span>
+                                    <span class="ah-fee-value" style="color: #22d3ee;">
+                                        {Math.max(1, Math.floor(100 / parseFloat(estimatedMonthlyCost() || '1')))} months
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 20px;">
+                                <Show when={registerError()}>
+                                    <div style="padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #f87171; font-size: 12px;">
+                                        {registerError()}
+                                    </div>
+                                </Show>
+                                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                    <button class="ah-tab" onClick={() => setSetupStep(3)}>Back</button>
+                                    <button
+                                        class="ah-btn-primary"
+                                        onClick={handleStartAgent}
+                                        disabled={!systemPrompt().trim() || !selectedAction() || isRegistering()}
+                                    >
+                                        {isRegistering() ? 'Deploying...' : <><Play class="w-4 h-4" /> Deploy Agent</>}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
+                </Show>
+
+                {/* Logs Tab */}
+                <Show when={activeTab() === 'logs'}>
+                    {/* Stats Summary */}
+                    <Show when={logs().length > 0}>
+                        <div class="ah-card" style="margin-bottom: 16px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="font-size: 14px; font-weight: 700; color: white;">Execution History</div>
+                                <button
+                                    style="padding: 6px 12px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 8px; color: #22d3ee; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;"
+                                    onClick={() => loadLogs()}
+                                >
+                                    <RefreshCw class="w-3 h-3" /> Refresh
+                                </button>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+                                <div class="ah-stat">
+                                    <div class="ah-stat-value">{logs().length}</div>
+                                    <div class="ah-stat-label">Total Logs</div>
+                                </div>
+                                <div class="ah-stat">
+                                    <div class="ah-stat-value" style="color: #34d399;">{logs().filter((l: any) => l.status === 'success').length}</div>
+                                    <div class="ah-stat-label">Success</div>
+                                </div>
+                                <div class="ah-stat">
+                                    <div class="ah-stat-value" style="color: #f87171;">{logs().filter((l: any) => l.status !== 'success').length}</div>
+                                    <div class="ah-stat-label">Errors</div>
+                                </div>
+                                <div class="ah-stat">
+                                    <div class="ah-stat-value" style="color: #fbbf24;">{logs().reduce((sum: number, l: any) => sum + (l.vcn_cost || 0), 0).toFixed(1)}</div>
+                                    <div class="ah-stat-label">VCN Total</div>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    <Show when={logs().length === 0}>
+                        <div class="ah-card" style="text-align: center; padding: 40px;">
+                            <Clock class="w-8 h-8 text-gray-600" style="margin: 0 auto 12px;" />
+                            <p style="color: #64748b; font-size: 13px;">No execution logs yet.</p>
+                            <p style="color: #475569; font-size: 12px; margin-top: 4px;">Logs will appear here once your agent starts running.</p>
+                        </div>
+                    </Show>
+                    <Show when={logs().length > 0}>
+                        <For each={logs()}>
+                            {(log: any) => (
+                                <div class="ah-log-item" style="flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; align-items: flex-start; gap: 12px; width: 100%;">
+                                        <div class={`ah-log-dot ${log.status === 'success' ? 'ah-log-success' : 'ah-log-error'}`} />
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                                                <div class="ah-log-time">{new Date(log.timestamp).toLocaleString()}</div>
+                                                <Show when={log.llm_model}>
+                                                    <span style="font-size: 9px; padding: 2px 6px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 4px; color: #22d3ee; font-weight: 600;">
+                                                        ZYNK AI
+                                                    </span>
+                                                </Show>
+                                            </div>
+                                            <div class="ah-log-msg" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px;">
+                                                {log.llm_response
+                                                    ? (log.llm_response.length > 120 ? log.llm_response.substring(0, 120) + '...' : log.llm_response)
+                                                    : log.error_message || 'Execution completed'}
+                                            </div>
+                                        </div>
+                                        <div class="ah-log-cost">-{(log.vcn_cost || 0).toFixed(2)} VCN</div>
+                                    </div>
+                                    {/* Actions taken */}
+                                    <Show when={log.actions_taken && log.actions_taken.length > 0}>
+                                        <div style="margin-left: 20px; display: flex; flex-wrap: wrap; gap: 4px;">
+                                            <For each={log.actions_taken}>
+                                                {(action: string) => (
+                                                    <span style="font-size: 10px; padding: 2px 8px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); border-radius: 4px; color: #818cf8; font-weight: 600;">
+                                                        {action}
+                                                    </span>
                                                 )}
                                             </For>
                                         </div>
                                     </Show>
-
-                                    {/* System prompt (auto-populated, editable) */}
-                                    <div style="margin-bottom: 16px;">
-                                        <label class="ah-label">System Prompt</label>
-                                        <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">Auto-generated from your action. Edit to customize agent behavior.</div>
-                                        <textarea
-                                            class="ah-textarea"
-                                            style="min-height: 64px;"
-                                            value={systemPrompt()}
-                                            onInput={(e) => setSystemPrompt(e.currentTarget.value)}
-                                        />
-                                    </div>
-
-                                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                                        <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
-                                        <button
-                                            class="ah-btn-primary"
-                                            disabled={!systemPrompt().trim()}
-                                            onClick={() => setSetupStep(4)}
-                                        >
-                                            Next <ChevronRight class="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </Show>
-                    </div>
-                </Show>
-
-                {/* Step 4: Schedule & Deploy */}
-                <Show when={setupStep() === 4}>
-                    <div class="ah-card">
-                        <div class="ah-card-title">
-                            <Clock class="w-5 h-5 text-cyan-400" />
-                            Step 4: Schedule & Deploy
-                        </div>
-
-                        {/* Selected action recap */}
-                        <Show when={selectedActionConfig()}>
-                            {(config) => (
-                                <div style={{
-                                    display: 'flex', 'align-items': 'center', gap: '10px', padding: '10px 14px',
-                                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-                                    'border-radius': '10px', 'margin-bottom': '20px',
-                                }}>
-                                    <div style={{ color: config().category === 'on-chain' ? '#22d3ee' : '#a78bfa', 'flex-shrink': '0' }} innerHTML={ACTION_ICONS[config().id]} />
-                                    <div>
-                                        <div style="font-size: 13px; font-weight: 600; color: white;">{config().label}</div>
-                                        <div style="font-size: 11px; color: #94a3b8;">{config().desc}</div>
-                                    </div>
-                                    <span style={{
-                                        'margin-left': 'auto', 'font-size': '10px', padding: '2px 6px', 'border-radius': '4px', 'font-weight': '600',
-                                        background: `${COST_COLORS[config().costTier]}15`, color: COST_COLORS[config().costTier],
-                                    }}>
-                                        {config().costVcn} VCN
-                                    </span>
                                 </div>
                             )}
-                        </Show>
-
-                        <div style="margin-bottom: 20px;">
-                            <label class="ah-label">Run Frequency</label>
-                            <div class="ah-trigger-grid">
-                                <For each={TRIGGER_OPTIONS}>
-                                    {(opt) => (
-                                        <div
-                                            class={`ah-trigger-card ${triggerInterval() === opt.value ? 'selected' : ''}`}
-                                            onClick={() => setTriggerInterval(opt.value)}
-                                        >
-                                            <div class="ah-trigger-label">{opt.label}</div>
-                                            <div class="ah-trigger-cost">{opt.cost}</div>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
-                        </div>
-
-                        {/* Cost Breakdown */}
-                        <div class="ah-cost-banner">
-                            <div>
-                                <div class="ah-cost-label">Estimated Monthly Cost</div>
-                                <div class="ah-cost-value">
-                                    {estimatedMonthlyCost()}
-                                    <span class="ah-cost-unit">VCN/mo</span>
-                                </div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 11px; color: #94a3b8;">Fee Distribution</div>
-                                <div style="font-size: 12px; color: white; font-weight: 600;">70% Protocol / 30% Node Pool</div>
-                            </div>
-                        </div>
-
-                        <div class="ah-fee-breakdown">
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Cost per execution</span>
-                                <span class="ah-fee-value">{selectedActionConfig()?.costVcn || 0.05} VCN</span>
-                            </div>
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Executions per month</span>
-                                <span class="ah-fee-value">{Math.round((30 * 24 * 60) / triggerInterval())}</span>
-                            </div>
-                            <div class="ah-fee-divider" />
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Your initial balance</span>
-                                <span class="ah-fee-value" style="color: #34d399;">100 VCN</span>
-                            </div>
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">Estimated runway</span>
-                                <span class="ah-fee-value" style="color: #22d3ee;">
-                                    {Math.max(1, Math.floor(100 / parseFloat(estimatedMonthlyCost() || '1')))} months
-                                </span>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 20px;">
-                            <Show when={registerError()}>
-                                <div style="padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #f87171; font-size: 12px;">
-                                    {registerError()}
-                                </div>
-                            </Show>
-                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                                <button class="ah-tab" onClick={() => setSetupStep(3)}>Back</button>
-                                <button
-                                    class="ah-btn-primary"
-                                    onClick={handleStartAgent}
-                                    disabled={!systemPrompt().trim() || !selectedAction() || isRegistering()}
-                                >
-                                    {isRegistering() ? 'Deploying...' : <><Play class="w-4 h-4" /> Deploy Agent</>}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                        </For>
+                    </Show>
                 </Show>
-            </Show>
-
-            {/* Logs Tab */}
-            <Show when={activeTab() === 'logs'}>
-                {/* Stats Summary */}
-                <Show when={logs().length > 0}>
-                    <div class="ah-card" style="margin-bottom: 16px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                            <div style="font-size: 14px; font-weight: 700; color: white;">Execution History</div>
-                            <button
-                                style="padding: 6px 12px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 8px; color: #22d3ee; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;"
-                                onClick={() => loadLogs()}
-                            >
-                                <RefreshCw class="w-3 h-3" /> Refresh
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                            <div class="ah-stat">
-                                <div class="ah-stat-value">{logs().length}</div>
-                                <div class="ah-stat-label">Total Logs</div>
-                            </div>
-                            <div class="ah-stat">
-                                <div class="ah-stat-value" style="color: #34d399;">{logs().filter((l: any) => l.status === 'success').length}</div>
-                                <div class="ah-stat-label">Success</div>
-                            </div>
-                            <div class="ah-stat">
-                                <div class="ah-stat-value" style="color: #f87171;">{logs().filter((l: any) => l.status !== 'success').length}</div>
-                                <div class="ah-stat-label">Errors</div>
-                            </div>
-                            <div class="ah-stat">
-                                <div class="ah-stat-value" style="color: #fbbf24;">{logs().reduce((sum: number, l: any) => sum + (l.vcn_cost || 0), 0).toFixed(1)}</div>
-                                <div class="ah-stat-label">VCN Total</div>
-                            </div>
-                        </div>
-                    </div>
-                </Show>
-
-                <Show when={logs().length === 0}>
-                    <div class="ah-card" style="text-align: center; padding: 40px;">
-                        <Clock class="w-8 h-8 text-gray-600" style="margin: 0 auto 12px;" />
-                        <p style="color: #64748b; font-size: 13px;">No execution logs yet.</p>
-                        <p style="color: #475569; font-size: 12px; margin-top: 4px;">Logs will appear here once your agent starts running.</p>
-                    </div>
-                </Show>
-                <Show when={logs().length > 0}>
-                    <For each={logs()}>
-                        {(log: any) => (
-                            <div class="ah-log-item" style="flex-direction: column; gap: 8px;">
-                                <div style="display: flex; align-items: flex-start; gap: 12px; width: 100%;">
-                                    <div class={`ah-log-dot ${log.status === 'success' ? 'ah-log-success' : 'ah-log-error'}`} />
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                                            <div class="ah-log-time">{new Date(log.timestamp).toLocaleString()}</div>
-                                            <Show when={log.llm_model}>
-                                                <span style="font-size: 9px; padding: 2px 6px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 4px; color: #22d3ee; font-weight: 600;">
-                                                    ZYNK AI
-                                                </span>
-                                            </Show>
-                                        </div>
-                                        <div class="ah-log-msg" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px;">
-                                            {log.llm_response
-                                                ? (log.llm_response.length > 120 ? log.llm_response.substring(0, 120) + '...' : log.llm_response)
-                                                : log.error_message || 'Execution completed'}
-                                        </div>
-                                    </div>
-                                    <div class="ah-log-cost">-{(log.vcn_cost || 0).toFixed(2)} VCN</div>
-                                </div>
-                                {/* Actions taken */}
-                                <Show when={log.actions_taken && log.actions_taken.length > 0}>
-                                    <div style="margin-left: 20px; display: flex; flex-wrap: wrap; gap: 4px;">
-                                        <For each={log.actions_taken}>
-                                            {(action: string) => (
-                                                <span style="font-size: 10px; padding: 2px 8px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); border-radius: 4px; color: #818cf8; font-weight: 600;">
-                                                    {action}
-                                                </span>
-                                            )}
-                                        </For>
-                                    </div>
-                                </Show>
-                            </div>
-                        )}
-                    </For>
-                </Show>
-            </Show>
+            </div>
         </div>
     );
 }
