@@ -356,3 +356,91 @@ export async function batchGetIndexingStatus(
     }
     return result;
 }
+
+// ─── Phase 3: Embedding & Retrieval ────────────────────────────────────────
+
+/**
+ * Generate dual embeddings (OpenAI + Gemini) for a file's chunks.
+ * Calls aiGenerateEmbeddings Cloud Function.
+ */
+export interface GenerateEmbeddingsResult {
+    fileId: string;
+    chunksProcessed: number;
+    openaiEmbeddings: number;
+    geminiEmbeddings: number;
+    errors: number;
+}
+
+export async function generateEmbeddings(
+    fileId: string,
+    modelTarget: ModelTarget = 'both'
+): Promise<GenerateEmbeddingsResult | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable<
+            { fileId: string; modelTarget: string },
+            GenerateEmbeddingsResult
+        >(functions, 'aiGenerateEmbeddings', { timeout: 540000 });
+
+        const result = await fn({ fileId, modelTarget });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] generateEmbeddings error:', err);
+        return null;
+    }
+}
+
+/**
+ * Hybrid retrieval: vector search + keyword search + metadata filter.
+ * Calls aiRetrieve Cloud Function.
+ */
+export interface RetrievalFilters {
+    fileIds?: string[];
+    sourceType?: string;
+    language?: string;
+    tags?: string[];
+}
+
+export interface RetrievalHit {
+    chunkId: string;
+    fileId: string;
+    score: number;
+    vectorScore: number;
+    keywordScore: number;
+    text?: string;
+    summary?: string;
+    keywords?: string[];
+    chunkType?: string;
+    chunkIndex?: number;
+    matchType: 'vector' | 'keyword' | 'hybrid';
+}
+
+export interface RetrievalResponse {
+    results: RetrievalHit[];
+    query: string;
+    modelUsed: string;
+    totalChunksSearched: number;
+    searchTimeMs: number;
+}
+
+export async function retrieve(
+    query: string,
+    modelTarget: ModelTarget = 'openai',
+    topK: number = 10,
+    filters?: RetrievalFilters,
+    includeText: boolean = true
+): Promise<RetrievalResponse | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable<
+            { query: string; modelTarget: string; topK: number; filters?: RetrievalFilters; includeText: boolean },
+            RetrievalResponse
+        >(functions, 'aiRetrieve', { timeout: 60000 });
+
+        const result = await fn({ query, modelTarget, topK, filters, includeText });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] retrieve error:', err);
+        return null;
+    }
+}

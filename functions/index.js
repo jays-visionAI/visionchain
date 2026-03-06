@@ -21439,6 +21439,336 @@ exports.aiProcessIngestion = onCall({ cors: true, maxInstances: 5, timeoutSecond
   }
 });
 
+// ─── AI Memory Storage - Phase 3: Dual Index & Retrieval Layer ─────────────
+
+/**
+ * aiGenerateEmbeddings - Generate dual embeddings (OpenAI + Gemini) for file chunks
+ * Reads chunks from ai_chunks, generates vectors, stores in ai_embeddings_openai/gemini
+ */
+exports.aiGenerateEmbeddings = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId, modelTarget = "both" } = request.data || {};
+  if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
+
+  // Get chunks for this file
+  const chunksSnap = await db.collection("users").doc(email)
+    .collection("ai_chunks")
+    .where("fileId", "==", fileId)
+    .orderBy("chunkIndex")
+    .get();
+
+  if (chunksSnap.empty) {
+    return { fileId, chunksProcessed: 0, openaiEmbeddings: 0, geminiEmbeddings: 0, errors: 0 };
+  }
+
+  const chunks = chunksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const now = new Date().toISOString();
+  let openaiCount = 0, geminiCount = 0, errorCount = 0;
+
+  // Update IndexJob if exists
+  const jobSnap = await db.collection("users").doc(email)
+    .collection("ai_index_jobs")
+    .where("fileId", "==", fileId)
+    .orderBy("createdAt", "desc")
+    .limit(1).get();
+  const jobRef = jobSnap.empty ? null : jobSnap.docs[0].ref;
+
+  // ── OpenAI Embeddings ──
+  const doOpenai = modelTarget === "openai" || modelTarget === "both";
+  if (doOpenai) {
+    if (jobRef) await jobRef.update({ "stages.embed_openai": { status: "running", startedAt: now }, updatedAt: now });
+    const openaiKey = process.env.OPENAI_API_KEY || "";
+    if (openaiKey) {
+      try {
+        const OpenAI = require("openai");
+        const openai = new OpenAI({ apiKey: openaiKey });
+        const BATCH = 20; // OpenAI supports batch embedding
+        for (let i = 0; i < chunks.length; i += BATCH) {
+          const batch = chunks.slice(i, i + BATCH);
+          const texts = batch.map(c => (c.text || "").substring(0, 8000));
+          try {
+            const resp = await openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: texts,
+              dimensions: 1536,
+            });
+            const writeBatch = db.batch();
+            for (let j = 0; j < resp.data.length; j++) {
+              const embRef = db.collection("users").doc(email)
+                .collection("ai_embeddings_openai").doc(batch[j].id);
+              writeBatch.set(embRef, {
+                chunkId: batch[j].id,
+                fileId,
+                vector: resp.data[j].embedding,
+                model: "text-embedding-3-small",
+                dimensions: 1536,
+                createdAt: now,
+              });
+              // Update chunk status
+              const chunkRef = db.collection("users").doc(email)
+                .collection("ai_chunks").doc(batch[j].id);
+              writeBatch.update(chunkRef, { embeddingOpenAiStatus: "completed" });
+              openaiCount++;
+            }
+            await writeBatch.commit();
+          } catch (batchErr) {
+            console.warn(`[AI Storage] OpenAI embedding batch error:`, batchErr.message);
+            errorCount += batch.length;
+          }
+        }
+        if (jobRef) await jobRef.update({ "stages.embed_openai": { status: "completed", completedAt: new Date().toISOString(), itemCount: openaiCount }, updatedAt: new Date().toISOString() });
+      } catch (err) {
+        console.error("[AI Storage] OpenAI embedding error:", err.message);
+        if (jobRef) await jobRef.update({ "stages.embed_openai": { status: "error", errorMessage: err.message, completedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() });
+        errorCount += chunks.length;
+      }
+    } else {
+      console.warn("[AI Storage] OPENAI_API_KEY not set, skipping OpenAI embeddings");
+      if (jobRef) await jobRef.update({ "stages.embed_openai": { status: "skipped" }, updatedAt: new Date().toISOString() });
+    }
+  } else {
+    if (jobRef) await jobRef.update({ "stages.embed_openai": { status: "skipped" }, updatedAt: new Date().toISOString() });
+  }
+
+  // ── Gemini Embeddings ──
+  const doGemini = modelTarget === "gemini" || modelTarget === "both";
+  if (doGemini) {
+    if (jobRef) await jobRef.update({ "stages.embed_gemini": { status: "running", startedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() });
+    const geminiKey = process.env.GEMINI_API_KEY || "";
+    if (geminiKey) {
+      try {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(geminiKey);
+        const embModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+        const BATCH = 10;
+        for (let i = 0; i < chunks.length; i += BATCH) {
+          const batch = chunks.slice(i, i + BATCH);
+          const writeBatch = db.batch();
+          for (const chunk of batch) {
+            try {
+              const result = await embModel.embedContent(chunk.text.substring(0, 8000));
+              const vector = result.embedding.values;
+              const embRef = db.collection("users").doc(email)
+                .collection("ai_embeddings_gemini").doc(chunk.id);
+              writeBatch.set(embRef, {
+                chunkId: chunk.id,
+                fileId,
+                vector,
+                model: "text-embedding-004",
+                dimensions: vector.length,
+                createdAt: now,
+              });
+              const chunkRef = db.collection("users").doc(email)
+                .collection("ai_chunks").doc(chunk.id);
+              writeBatch.update(chunkRef, { embeddingGeminiStatus: "completed" });
+              geminiCount++;
+            } catch (chunkErr) {
+              console.warn(`[AI Storage] Gemini embedding error for chunk ${chunk.id}:`, chunkErr.message);
+              errorCount++;
+            }
+          }
+          await writeBatch.commit();
+        }
+        if (jobRef) await jobRef.update({ "stages.embed_gemini": { status: "completed", completedAt: new Date().toISOString(), itemCount: geminiCount }, updatedAt: new Date().toISOString() });
+      } catch (err) {
+        console.error("[AI Storage] Gemini embedding error:", err.message);
+        if (jobRef) await jobRef.update({ "stages.embed_gemini": { status: "error", errorMessage: err.message, completedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() });
+        errorCount += chunks.length;
+      }
+    } else {
+      console.warn("[AI Storage] GEMINI_API_KEY not set, skipping Gemini embeddings");
+      if (jobRef) await jobRef.update({ "stages.embed_gemini": { status: "skipped" }, updatedAt: new Date().toISOString() });
+    }
+  } else {
+    if (jobRef) await jobRef.update({ "stages.embed_gemini": { status: "skipped" }, updatedAt: new Date().toISOString() });
+  }
+
+  // Update vector_index stage
+  if (jobRef) {
+    await jobRef.update({
+      "stages.vector_index": { status: "completed", completedAt: new Date().toISOString(), itemCount: openaiCount + geminiCount },
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  console.log(`[AI Storage] Embeddings generated: ${openaiCount} OpenAI, ${geminiCount} Gemini for file ${fileId}`);
+  return { fileId, chunksProcessed: chunks.length, openaiEmbeddings: openaiCount, geminiEmbeddings: geminiCount, errors: errorCount };
+});
+
+/**
+ * aiRetrieve - Hybrid retrieval (vector + keyword + metadata filter)
+ * Searches embeddings via cosine similarity + keyword matching in ai_chunks
+ */
+exports.aiRetrieve = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 60, memory: "1GiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { query: queryText, modelTarget = "openai", topK = 10, filters = {}, includeText = true } = request.data || {};
+  if (!queryText) throw new HttpsError("invalid-argument", "query is required.");
+
+  const startTime = Date.now();
+
+  // ── 1. Generate query embedding ──
+  let queryVector = null;
+  let modelUsed = "";
+
+  if (modelTarget === "gemini") {
+    const geminiKey = process.env.GEMINI_API_KEY || "";
+    if (geminiKey) {
+      try {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(geminiKey);
+        const embModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+        const result = await embModel.embedContent(queryText.substring(0, 8000));
+        queryVector = result.embedding.values;
+        modelUsed = "text-embedding-004";
+      } catch (err) { console.warn("[AI Retrieve] Gemini embedding failed:", err.message); }
+    }
+  } else {
+    const openaiKey = process.env.OPENAI_API_KEY || "";
+    if (openaiKey) {
+      try {
+        const OpenAI = require("openai");
+        const openai = new OpenAI({ apiKey: openaiKey });
+        const resp = await openai.embeddings.create({ model: "text-embedding-3-small", input: queryText.substring(0, 8000), dimensions: 1536 });
+        queryVector = resp.data[0].embedding;
+        modelUsed = "text-embedding-3-small";
+      } catch (err) { console.warn("[AI Retrieve] OpenAI embedding failed:", err.message); }
+    }
+  }
+
+  // ── 2. Get all chunks with metadata filters ──
+  let chunksQuery = db.collection("users").doc(email).collection("ai_chunks");
+  // Apply file filter if specified
+  const fileFilter = filters.fileIds && filters.fileIds.length > 0;
+
+  const chunksSnap = fileFilter
+    ? await chunksQuery.where("fileId", "in", filters.fileIds.slice(0, 10)).get()
+    : await chunksQuery.get();
+
+  if (chunksSnap.empty) {
+    return { results: [], query: queryText, modelUsed, totalChunksSearched: 0, searchTimeMs: Date.now() - startTime };
+  }
+
+  const allChunks = chunksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Apply additional metadata filters
+  let filteredChunks = allChunks;
+  if (filters.language) {
+    // Need file metadata for language filter — batch lookup
+    const fileIds = [...new Set(filteredChunks.map(c => c.fileId))];
+    const fileLangs = {};
+    await Promise.all(fileIds.map(async fid => {
+      const fDoc = await db.collection("users").doc(email).collection("disk_files").doc(fid).get();
+      if (fDoc.exists) fileLangs[fid] = fDoc.data().language || "";
+    }));
+    filteredChunks = filteredChunks.filter(c => fileLangs[c.fileId] === filters.language);
+  }
+  if (filters.tags && filters.tags.length > 0) {
+    filteredChunks = filteredChunks.filter(c => {
+      const ck = c.keywords || [];
+      return filters.tags.some(t => ck.includes(t));
+    });
+  }
+
+  // ── 3. Vector search (cosine similarity) ──
+  const embCollection = modelTarget === "gemini" ? "ai_embeddings_gemini" : "ai_embeddings_openai";
+  const vectorScores = {};
+
+  if (queryVector) {
+    const chunkIds = filteredChunks.map(c => c.id);
+    // Batch load embeddings (Firestore getAll)
+    const embRefs = chunkIds.map(id => db.collection("users").doc(email).collection(embCollection).doc(id));
+
+    // Load in batches of 100
+    for (let i = 0; i < embRefs.length; i += 100) {
+      const batch = embRefs.slice(i, i + 100);
+      const docs = await db.getAll(...batch);
+      for (const embDoc of docs) {
+        if (embDoc.exists) {
+          const embData = embDoc.data();
+          const similarity = cosineSimilarity(queryVector, embData.vector);
+          vectorScores[embDoc.id] = similarity;
+        }
+      }
+    }
+  }
+
+  // ── 4. Keyword search (BM25-like scoring) ──
+  const queryTerms = queryText.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+  const keywordScores = {};
+
+  for (const chunk of filteredChunks) {
+    let score = 0;
+    const chunkText = (chunk.text || "").toLowerCase();
+    const chunkKeywords = (chunk.keywords || []).map(k => k.toLowerCase());
+
+    for (const term of queryTerms) {
+      // Keyword field match (high weight)
+      if (chunkKeywords.some(k => k.includes(term))) score += 0.3;
+      // Text match (lower weight, frequency-based)
+      const matches = (chunkText.match(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length;
+      if (matches > 0) score += Math.min(0.2, matches * 0.05);
+      // Summary match
+      if ((chunk.summary || "").toLowerCase().includes(term)) score += 0.15;
+    }
+    if (score > 0) keywordScores[chunk.id] = Math.min(1, score);
+  }
+
+  // ── 5. Merge & rerank ──
+  const VECTOR_WEIGHT = 0.7;
+  const KEYWORD_WEIGHT = 0.3;
+  const scoredResults = [];
+
+  for (const chunk of filteredChunks) {
+    const vs = vectorScores[chunk.id] || 0;
+    const ks = keywordScores[chunk.id] || 0;
+    if (vs === 0 && ks === 0) continue;
+
+    const combinedScore = (vs * VECTOR_WEIGHT) + (ks * KEYWORD_WEIGHT);
+    const matchType = vs > 0 && ks > 0 ? "hybrid" : vs > 0 ? "vector" : "keyword";
+
+    scoredResults.push({
+      chunkId: chunk.id,
+      fileId: chunk.fileId,
+      score: Math.round(combinedScore * 10000) / 10000,
+      vectorScore: Math.round(vs * 10000) / 10000,
+      keywordScore: Math.round(ks * 10000) / 10000,
+      text: includeText ? chunk.text : undefined,
+      summary: chunk.summary || undefined,
+      keywords: chunk.keywords || [],
+      chunkType: chunk.chunkType || "text",
+      chunkIndex: chunk.chunkIndex,
+      matchType,
+    });
+  }
+
+  // Sort by combined score descending
+  scoredResults.sort((a, b) => b.score - a.score);
+  const results = scoredResults.slice(0, topK);
+
+  return {
+    results,
+    query: queryText,
+    modelUsed,
+    totalChunksSearched: filteredChunks.length,
+    searchTimeMs: Date.now() - startTime,
+  };
+});
+
+/** Cosine similarity between two vectors */
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0;
+  let dot = 0, magA = 0, magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [

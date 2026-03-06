@@ -230,3 +230,75 @@ export interface ListChunksResponse {
     total: number;
     hasMore: boolean;
 }
+
+// ─── Phase 3: Embedding & Retrieval Types ──────────────────────────────────
+
+/**
+ * Embedding vector record.
+ * Stored in Firestore:
+ *   users/{email}/ai_embeddings_openai/{chunkId}
+ *   users/{email}/ai_embeddings_gemini/{chunkId}
+ */
+export interface EmbeddingRecord {
+    chunkId: string;
+    fileId: string;
+    vector: number[];               // Embedding vector
+    model: string;                  // e.g. 'text-embedding-3-small' or 'text-embedding-004'
+    dimensions: number;             // Vector dimensionality
+    createdAt: string;
+}
+
+/**
+ * Hybrid retrieval request.
+ */
+export interface RetrievalRequest {
+    query: string;
+    modelTarget: ModelTarget;       // Which embedding index to search
+    topK?: number;                  // Default: 10
+    filters?: {
+        fileIds?: string[];         // Restrict to specific files
+        sourceType?: SourceType;
+        language?: string;
+        tags?: string[];
+    };
+    includeText?: boolean;          // Include chunk text in results (default: true)
+}
+
+/**
+ * Single retrieval hit.
+ */
+export interface RetrievalHit {
+    chunkId: string;
+    fileId: string;
+    score: number;                  // Combined relevance score (0-1)
+    vectorScore: number;            // Cosine similarity score
+    keywordScore: number;           // Keyword match score
+    text?: string;
+    summary?: string;
+    keywords?: string[];
+    chunkType?: ChunkType;
+    chunkIndex?: number;
+    matchType: 'vector' | 'keyword' | 'hybrid';
+}
+
+/**
+ * Retrieval response.
+ */
+export interface RetrievalResponse {
+    results: RetrievalHit[];
+    query: string;
+    modelUsed: string;
+    totalChunksSearched: number;
+    searchTimeMs: number;
+}
+
+/**
+ * Embedding generation result.
+ */
+export interface GenerateEmbeddingsResult {
+    fileId: string;
+    chunksProcessed: number;
+    openaiEmbeddings: number;
+    geminiEmbeddings: number;
+    errors: number;
+}
