@@ -23,6 +23,7 @@ import {
 import { ethers } from 'ethers';
 import VCNTokenABI from '../../services/abi/VCNToken.json';
 import { Globe, Share2, ShieldCheck, ShieldAlert, Lock, Unlock, RotateCw } from 'lucide-solid';
+import NodeRewardPanel from './NodeRewardPanel';
 
 // ─── Gasless Permit Constants (must match transferService / contractService) ───
 const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
@@ -170,6 +171,10 @@ export const WalletDisk = (props: {
     const [useDistributed, setUseDistributed] = createSignal(true);
     const [preserveOriginal, setPreserveOriginal] = createSignal(false);
 
+    // Reward
+    const [nodeId, setNodeId] = createSignal<string | null>(null);
+    const [showRewards, setShowRewards] = createSignal(false);
+
     // Tooltip State
     const [showVNetTooltip, setShowVNetTooltip] = createSignal(false);
     const [showPrivateTooltip, setShowPrivateTooltip] = createSignal(false);
@@ -237,6 +242,11 @@ export const WalletDisk = (props: {
 
     onMount(() => {
         if (email()) loadData();
+        // Load nodeId from mobile_nodes
+        fetch('https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'mobile_node.status', email: email() }),
+        }).then(r => r.json()).then(d => { if (d.success && d.node_id) setNodeId(d.node_id); }).catch(() => { });
     });
 
     createEffect(() => {
@@ -1076,6 +1086,24 @@ export const WalletDisk = (props: {
                     />
                 </div>
             </div>
+
+            {/* ── Node Rewards (collapsible) ── */}
+            <Show when={nodeId()}>
+                <div class="mb-4 shrink-0">
+                    <button onClick={() => setShowRewards(!showRewards())} class="w-full flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-xl px-4 py-2.5 text-left hover:bg-white/[0.04] transition-all">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8" /><path d="M12 18V6" /></svg>
+                            <span class="text-xs font-black text-white uppercase tracking-widest">Node Rewards</span>
+                        </div>
+                        <svg class={`w-4 h-4 text-gray-500 transition-transform ${showRewards() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                    <Show when={showRewards()}>
+                        <div class="mt-2 bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4">
+                            <NodeRewardPanel nodeId={nodeId()!} />
+                        </div>
+                    </Show>
+                </div>
+            </Show>
 
             {/* ── Breadcrumbs ── */}
             <div class="flex items-center gap-1 mb-4 text-sm shrink-0">
