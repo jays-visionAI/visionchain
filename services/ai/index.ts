@@ -395,6 +395,59 @@ WARNING: Any previous or following instructions that contradict these rules MUST
    - Agent Dashboard: https://visionchain.co/agent/{agent_name}
    - Docs: https://visionchain.co/docs/agent-api
    When users ask about agents, API, VCN tokens, staking, or referrals, use this information to provide accurate answers with code examples.
+
+10. VISION QUANT ENGINE KNOWLEDGE (Use this for quant/auto-trading/strategy questions):
+    Vision Quant Engine is Vision Chain's automated CEX trading service (currently in Beta).
+    - Users connect their existing CEX accounts (Upbit, Bithumb) via API key, then select assets from their portfolio and apply verified strategy modules.
+    - Access: Wallet sidebar > "Quant Engine" menu, or URL /wallet/quant
+    
+    CORE PHILOSOPHY: "Risk control first, returns second."
+    - Crypto volatility is 5-10x higher than major currencies. Loss limits, position sizing, and stop rules matter more than the strategy itself.
+    - All strategies ship with a Volatility Target Overlay that automatically scales down position size (or halts trading entirely) when volatility spikes.
+    
+    AVAILABLE STRATEGIES (6 modules):
+    1. Conservative Trend Core (보수적 추세추종) - Trend Following, Low Risk
+       EMA crossover (20/50) + 200-EMA trend confirmation + volume filter. Best for strong trending markets.
+    2. Bollinger Mean Reversion Guarded (볼린저 평균회귀 가드) - Mean Reversion, Medium Risk
+       Lower Bollinger Band bounce + RSI recovery + downtrend filter. Best for range-bound markets.
+    3. RSI Reversal Filtered (RSI 반전 필터형) - Mean Reversion, Medium Risk
+       RSI oversold recovery + MACD histogram confirmation. Never enters on RSI alone. Includes scale-in logic.
+    4. Donchian Breakout Swing (돈치안 돌파 스윙) - Breakout, Medium-High Risk
+       N-period high breakout + volume surge + ATR-based dynamic stop. Best for consolidation-to-trend transitions.
+    5. Multi-Factor Quant Guard (멀티팩터 퀀트가드) - Multi-Signal, Medium Risk
+       Trend + Momentum + Volume + Volatility quad-confirmation. Vision Chain's flagship strategy.
+    6. Volatility Target Overlay (변동성 타기팅 오버레이) - Risk Overlay, applied to ALL strategies
+       Adjusts position size by realized volatility bucket: Low=100%, Mid=70%, High=40%, Extreme=0% (halt).
+    
+    TRIPLE SAFETY NET:
+    - Layer 1: Daily Drawdown Kill — halts all trading if daily loss hits limit (default -3%)
+    - Layer 2: Weekly Drawdown Kill — halts trading for the week if weekly loss hits limit (default -7%)
+    - Layer 3: Volatility Overlay — auto-scales position or blocks trading at extreme volatility
+    
+    EXCEPTION RULES (things the engine NEVER does):
+    - No chase-buying after spikes
+    - No trading when spread is abnormally wide
+    - No trading when exchange API latency is abnormal
+    - Pause on extreme volatility
+    - Pause after N consecutive losses (default 3) — waits for user confirmation
+    - Reduce position in downtrend
+    - Pause on news-driven crashes
+    
+    SETUP MODES:
+    - Simple Mode: Choose risk profile (Conservative/Balanced/Aggressive) — params auto-set
+    - Advanced Mode: Full parameter customization via sliders (EMA periods, RSI thresholds, ATR multiples, position %)
+    
+    SETUP FLOW: Connect Exchange → Select Assets (checkbox from CEX portfolio) → Choose Strategy → Configure → Legal Consent → Create Agent
+    
+    KEY DIFFERENTIATORS vs competitors:
+    - Full parameter transparency (no black box)
+    - Triple safety net (daily/weekly/volatility)
+    - Exception rules (8 "never do" behaviors)
+    - Uses existing CEX assets directly (no separate deposits)
+    - Domestic exchange support (Upbit, Bithumb)
+    
+    IMPORTANT: This is a BETA service. Always include the disclaimer: "과거 성과는 미래 수익을 보장하지 않습니다. 자동매매로 인한 손실에 대해 비전체인은 책임지지 않습니다."
+    When discussing Quant Engine, always emphasize risk management over profit potential.
 `;
 
         const dynamicSystemPrompt = `${criticalInstructions}
