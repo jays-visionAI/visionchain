@@ -60,6 +60,20 @@ export interface DiskFile {
     originalType?: string;
     originalSize?: number;
     originalExtension?: string;
+    // ─── AI Storage Extensions (Phase 1) ───
+    language?: string;              // ISO 639-1 (e.g. 'ko', 'en')
+    tags?: string[];                // User or auto-generated tags
+    sourceType?: 'document' | 'image' | 'audio' | 'video' | 'chat_log' | 'code' | 'data' | 'other';
+    parsedTextUri?: string;         // URI to extracted plain text
+    transcriptUri?: string;         // URI to audio/video transcript
+    version?: number;
+    parentVersionId?: string;
+    contentHash?: string;           // SHA-256 of raw content
+    indexingStatus?: 'none' | 'queued' | 'processing' | 'indexed' | 'error';
+    memoryEligibility?: boolean;
+    modelCompatibility?: 'openai' | 'gemini' | 'both';
+    indexedAt?: string;
+    lastRetrievedAt?: string;
 }
 
 export interface DiskFolder {

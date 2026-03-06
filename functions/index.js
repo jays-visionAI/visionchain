@@ -20875,6 +20875,175 @@ exports.diskGetChunk = onCall({ cors: true, maxInstances: 30, timeoutSeconds: 30
   throw new HttpsError("unavailable", "Chunk is currently being replicated to nodes.");
 });
 
+// ─── AI Memory Storage - Phase 1: Foundation Data Layer ────────────────────
+
+/**
+ * aiRequestIndexing - Request AI indexing for a file
+ * Creates an IndexJob and marks the file as queued for processing.
+ * Actual processing (parse/chunk/embed) will be implemented in Phase 2-3.
+ */
+exports.aiRequestIndexing = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId, modelTarget = "both", force = false } = request.data || {};
+
+  if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
+  if (!["openai", "gemini", "both"].includes(modelTarget)) {
+    throw new HttpsError("invalid-argument", "modelTarget must be 'openai', 'gemini', or 'both'.");
+  }
+
+  // Verify file exists
+  const fileRef = db.collection("users").doc(email).collection("disk_files").doc(fileId);
+  const fileSnap = await fileRef.get();
+  if (!fileSnap.exists) {
+    throw new HttpsError("not-found", "File not found.");
+  }
+
+  const fileData = fileSnap.data();
+
+  // Check if already indexed (unless force re-index)
+  if (!force && fileData.indexingStatus === "indexed") {
+    // Return existing job info
+    const existingJobs = await db.collection("users").doc(email)
+      .collection("ai_index_jobs")
+      .where("fileId", "==", fileId)
+      .where("status", "in", ["completed", "processing"])
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+
+    if (!existingJobs.empty) {
+      const job = existingJobs.docs[0].data();
+      return {
+        jobId: existingJobs.docs[0].id,
+        fileId,
+        status: job.status,
+        stages: job.stages,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        errorMessage: job.errorMessage || null,
+      };
+    }
+  }
+
+  // Check for already queued/processing job
+  if (!force) {
+    const pendingJobs = await db.collection("users").doc(email)
+      .collection("ai_index_jobs")
+      .where("fileId", "==", fileId)
+      .where("status", "in", ["queued", "processing"])
+      .limit(1)
+      .get();
+
+    if (!pendingJobs.empty) {
+      const job = pendingJobs.docs[0].data();
+      return {
+        jobId: pendingJobs.docs[0].id,
+        fileId,
+        status: job.status,
+        stages: job.stages,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt || null,
+        errorMessage: job.errorMessage || null,
+      };
+    }
+  }
+
+  // Create new IndexJob
+  const now = new Date().toISOString();
+  const defaultStage = { status: "pending" };
+  const jobRef = db.collection("users").doc(email).collection("ai_index_jobs").doc();
+  const jobData = {
+    jobId: jobRef.id,
+    fileId,
+    tenantId: email,
+    stages: {
+      parse: { ...defaultStage },
+      chunk: { ...defaultStage },
+      embed_openai: modelTarget === "gemini" ? { status: "skipped" } : { ...defaultStage },
+      embed_gemini: modelTarget === "openai" ? { status: "skipped" } : { ...defaultStage },
+      keyword_index: { ...defaultStage },
+      vector_index: { ...defaultStage },
+    },
+    status: "queued",
+    modelTarget,
+    startedAt: now,
+    completedAt: null,
+    errorMessage: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const batch = db.batch();
+  batch.set(jobRef, jobData);
+  batch.update(fileRef, {
+    indexingStatus: "queued",
+    modelCompatibility: modelTarget,
+    updatedAt: now,
+  });
+  await batch.commit();
+
+  console.log(`[AI Storage] IndexJob created: ${jobRef.id} for file ${fileId} (model: ${modelTarget})`);
+
+  return {
+    jobId: jobRef.id,
+    fileId,
+    status: "queued",
+    stages: jobData.stages,
+    startedAt: now,
+    completedAt: null,
+    errorMessage: null,
+  };
+});
+
+/**
+ * aiGetIndexStatus - Get indexing status for a file
+ * Returns the most recent IndexJob for the specified file.
+ */
+exports.aiGetIndexStatus = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 10 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId } = request.data || {};
+
+  if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
+
+  // Get most recent job for this file
+  const jobsSnap = await db.collection("users").doc(email)
+    .collection("ai_index_jobs")
+    .where("fileId", "==", fileId)
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
+
+  if (jobsSnap.empty) {
+    // No job exists — check file's indexingStatus
+    const fileRef = db.collection("users").doc(email).collection("disk_files").doc(fileId);
+    const fileSnap = await fileRef.get();
+    if (!fileSnap.exists) throw new HttpsError("not-found", "File not found.");
+
+    return {
+      jobId: null,
+      fileId,
+      status: "none",
+      stages: null,
+      startedAt: null,
+      completedAt: null,
+      errorMessage: null,
+    };
+  }
+
+  const job = jobsSnap.docs[0].data();
+  return {
+    jobId: jobsSnap.docs[0].id,
+    fileId,
+    status: job.status,
+    stages: job.stages,
+    startedAt: job.startedAt,
+    completedAt: job.completedAt || null,
+    errorMessage: job.errorMessage || null,
+  };
+});
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [
