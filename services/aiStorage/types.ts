@@ -471,3 +471,99 @@ export interface AuditLogEntry {
     ipAddress?: string;
     timestamp: string;
 }
+
+// ─── Phase 6: Monitoring & Analytics Types ─────────────────────────────────
+
+/**
+ * Daily usage metrics.
+ * Stored in Firestore: users/{email}/ai_usage_metrics/{date}
+ */
+export interface UsageMetrics {
+    date: string;                   // YYYY-MM-DD
+    tenantId: string;
+    apiCalls: {
+        indexing: number;
+        embedding: number;
+        retrieval: number;
+        memory: number;
+        cache: number;
+        total: number;
+    };
+    tokens: {
+        embeddingOpenai: number;
+        embeddingGemini: number;
+        enrichmentDeepseek: number;
+        cacheGemini: number;
+        total: number;
+    };
+    storage: {
+        chunksCreated: number;
+        embeddingsCreated: number;
+        memoriesCreated: number;
+        filesIndexed: number;
+    };
+    updatedAt: string;
+}
+
+/**
+ * System health status.
+ */
+export interface SystemHealth {
+    timestamp: string;
+    overall: 'healthy' | 'degraded' | 'down';
+    components: {
+        firestore: ComponentHealth;
+        openaiApi: ComponentHealth;
+        geminiApi: ComponentHealth;
+        deepseekApi: ComponentHealth;
+        contextCache: ComponentHealth;
+    };
+    latencyMs: {
+        firestoreRead: number;
+        firestoreWrite: number;
+        embeddingOpenai: number;
+        embeddingGemini: number;
+    };
+}
+
+export interface ComponentHealth {
+    status: 'healthy' | 'degraded' | 'down' | 'unconfigured';
+    latencyMs?: number;
+    message?: string;
+    lastChecked: string;
+}
+
+/**
+ * Cost breakdown by model and feature.
+ */
+export interface CostBreakdown {
+    period: string;                 // YYYY-MM or YYYY-MM-DD
+    tenantId: string;
+    byModel: {
+        openai: { tokens: number; estimatedCost: number };
+        gemini: { tokens: number; estimatedCost: number };
+        deepseek: { tokens: number; estimatedCost: number };
+    };
+    byFeature: {
+        indexing: number;
+        embedding: number;
+        retrieval: number;
+        memory: number;
+        cache: number;
+    };
+    totalEstimatedCost: number;
+}
+
+/**
+ * Storage analytics summary.
+ */
+export interface StorageAnalytics {
+    tenantId: string;
+    files: { total: number; indexed: number; pending: number; error: number };
+    chunks: { total: number; withOpenaiEmbedding: number; withGeminiEmbedding: number };
+    memories: { total: number; episodic: number; semantic: number; procedural: number; consolidated: number };
+    caches: { total: number; active: number; expired: number };
+    workspaces: { total: number; totalMembers: number };
+    shares: { total: number; active: number };
+    timestamp: string;
+}

@@ -22320,6 +22320,269 @@ async function logAudit(dbRef, tenantId, entry) {
   }
 }
 
+// ─── AI Memory Storage - Phase 6: Monitoring & Analytics ───────────────────
+
+/**
+ * aiAnalytics - Usage/cost/storage analytics
+ */
+exports.aiAnalytics = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 60 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { action, ...params } = request.data || {};
+
+  switch (action) {
+    case "getStorage": {
+      const userRef = db.collection("users").doc(email);
+      // Count collections in parallel
+      const [chunksSnap, embOaiSnap, embGemSnap, memSnap, cacheSnap, wsSnap, shareSnap] = await Promise.all([
+        userRef.collection("ai_chunks").count().get(),
+        userRef.collection("ai_embeddings_openai").count().get(),
+        userRef.collection("ai_embeddings_gemini").count().get(),
+        userRef.collection("ai_memories").count().get(),
+        userRef.collection("ai_context_cache").count().get(),
+        userRef.collection("ai_workspaces").count().get(),
+        userRef.collection("ai_data_shares").count().get(),
+      ]);
+
+      // Get memory type breakdown
+      const [episodicSnap, semanticSnap, proceduralSnap, consolidatedSnap] = await Promise.all([
+        userRef.collection("ai_memories").where("type", "==", "episodic").where("isConsolidated", "==", false).count().get(),
+        userRef.collection("ai_memories").where("type", "==", "semantic").where("isConsolidated", "==", false).count().get(),
+        userRef.collection("ai_memories").where("type", "==", "procedural").where("isConsolidated", "==", false).count().get(),
+        userRef.collection("ai_memories").where("isConsolidated", "==", true).count().get(),
+      ]);
+
+      // Get cache status breakdown
+      const [activeCacheSnap, expiredCacheSnap] = await Promise.all([
+        userRef.collection("ai_context_cache").where("status", "==", "active").count().get(),
+        userRef.collection("ai_context_cache").where("status", "==", "expired").count().get(),
+      ]);
+
+      // Get file indexing status
+      const diskSnap = await userRef.collection("disk_files").count().get();
+      const indexedSnap = await userRef.collection("disk_files").where("indexingStatus", "==", "indexed").count().get();
+      const pendingSnap = await userRef.collection("disk_files").where("indexingStatus", "==", "queued").count().get();
+      const errorSnap = await userRef.collection("disk_files").where("indexingStatus", "==", "error").count().get();
+
+      // Active shares
+      const activeShareSnap = await userRef.collection("ai_data_shares").where("isActive", "==", true).count().get();
+
+      // Workspace member count
+      const wsDocsSnap = await userRef.collection("ai_workspaces").get();
+      let totalMembers = 0;
+      wsDocsSnap.docs.forEach(d => { totalMembers += (d.data().members || []).length; });
+
+      return {
+        success: true,
+        analytics: {
+          tenantId: email,
+          files: { total: diskSnap.data().count, indexed: indexedSnap.data().count, pending: pendingSnap.data().count, error: errorSnap.data().count },
+          chunks: { total: chunksSnap.data().count, withOpenaiEmbedding: embOaiSnap.data().count, withGeminiEmbedding: embGemSnap.data().count },
+          memories: { total: memSnap.data().count, episodic: episodicSnap.data().count, semantic: semanticSnap.data().count, procedural: proceduralSnap.data().count, consolidated: consolidatedSnap.data().count },
+          caches: { total: cacheSnap.data().count, active: activeCacheSnap.data().count, expired: expiredCacheSnap.data().count },
+          workspaces: { total: wsSnap.data().count, totalMembers },
+          shares: { total: shareSnap.data().count, active: activeShareSnap.data().count },
+          timestamp: new Date().toISOString(),
+        },
+      };
+    }
+
+    case "getUsage": {
+      const { startDate, endDate, limit: pageSize = 30 } = params;
+      let q = db.collection("users").doc(email).collection("ai_usage_metrics").orderBy("date", "desc");
+      if (startDate) q = q.where("date", ">=", startDate);
+      if (endDate) q = q.where("date", "<=", endDate);
+      const snap = await q.limit(pageSize).get();
+      return { success: true, metrics: snap.docs.map(d => d.data()) };
+    }
+
+    case "recordUsage": {
+      const { category, count = 1, tokens = 0, model } = params;
+      if (!category) throw new HttpsError("invalid-argument", "category required.");
+      const today = new Date().toISOString().split("T")[0];
+      const metricRef = db.collection("users").doc(email).collection("ai_usage_metrics").doc(today);
+      const metricDoc = await metricRef.get();
+
+      if (metricDoc.exists) {
+        const data = metricDoc.data();
+        const apiCalls = data.apiCalls || {};
+        apiCalls[category] = (apiCalls[category] || 0) + count;
+        apiCalls.total = (apiCalls.total || 0) + count;
+        const tokenData = data.tokens || {};
+        if (tokens > 0 && model) {
+          const tokenKey = model.includes("openai") ? "embeddingOpenai" : model.includes("gemini") ? "embeddingGemini" : "enrichmentDeepseek";
+          tokenData[tokenKey] = (tokenData[tokenKey] || 0) + tokens;
+          tokenData.total = (tokenData.total || 0) + tokens;
+        }
+        await metricRef.update({ apiCalls, tokens: tokenData, updatedAt: new Date().toISOString() });
+      } else {
+        const apiCalls = { indexing: 0, embedding: 0, retrieval: 0, memory: 0, cache: 0, total: count };
+        apiCalls[category] = count;
+        const tokenData = { embeddingOpenai: 0, embeddingGemini: 0, enrichmentDeepseek: 0, cacheGemini: 0, total: tokens };
+        if (tokens > 0 && model) {
+          const tokenKey = model.includes("openai") ? "embeddingOpenai" : model.includes("gemini") ? "embeddingGemini" : "enrichmentDeepseek";
+          tokenData[tokenKey] = tokens;
+        }
+        await metricRef.set({
+          date: today, tenantId: email, apiCalls, tokens: tokenData,
+          storage: { chunksCreated: 0, embeddingsCreated: 0, memoriesCreated: 0, filesIndexed: 0 },
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return { success: true };
+    }
+
+    case "getCost": {
+      const { period } = params; // YYYY-MM
+      const month = period || new Date().toISOString().substring(0, 7);
+      const startDate = `${month}-01`;
+      const endDate = `${month}-31`;
+      const snap = await db.collection("users").doc(email).collection("ai_usage_metrics")
+        .where("date", ">=", startDate).where("date", "<=", endDate).get();
+
+      let oaiTokens = 0, gemTokens = 0, dsTokens = 0;
+      snap.docs.forEach(d => {
+        const t = d.data().tokens || {};
+        oaiTokens += t.embeddingOpenai || 0;
+        gemTokens += (t.embeddingGemini || 0) + (t.cacheGemini || 0);
+        dsTokens += t.enrichmentDeepseek || 0;
+      });
+
+      // Estimated costs (per 1M tokens)
+      const oaiCost = (oaiTokens / 1000000) * 0.02;   // text-embedding-3-small
+      const gemCost = (gemTokens / 1000000) * 0.00;    // free tier for embedding
+      const dsCost = (dsTokens / 1000000) * 0.14;      // deepseek-chat
+
+      return {
+        success: true,
+        cost: {
+          period: month, tenantId: email,
+          byModel: {
+            openai: { tokens: oaiTokens, estimatedCost: Math.round(oaiCost * 100) / 100 },
+            gemini: { tokens: gemTokens, estimatedCost: Math.round(gemCost * 100) / 100 },
+            deepseek: { tokens: dsTokens, estimatedCost: Math.round(dsCost * 100) / 100 },
+          },
+          totalEstimatedCost: Math.round((oaiCost + gemCost + dsCost) * 100) / 100,
+        },
+      };
+    }
+
+    default:
+      throw new HttpsError("invalid-argument", "action must be: getStorage, getUsage, recordUsage, getCost");
+  }
+});
+
+/**
+ * aiHealthCheck - System health check
+ */
+exports.aiHealthCheck = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const now = new Date().toISOString();
+
+  const components = {};
+  const latencyMs = {};
+
+  // 1. Firestore read check
+  try {
+    const start = Date.now();
+    await db.collection("users").doc(email).get();
+    latencyMs.firestoreRead = Date.now() - start;
+    components.firestore = { status: latencyMs.firestoreRead < 1000 ? "healthy" : "degraded", latencyMs: latencyMs.firestoreRead, lastChecked: now };
+  } catch (err) {
+    latencyMs.firestoreRead = -1;
+    components.firestore = { status: "down", message: err.message, lastChecked: now };
+  }
+
+  // 2. Firestore write check
+  try {
+    const start = Date.now();
+    const healthRef = db.collection("users").doc(email).collection("ai_health_logs").doc();
+    await healthRef.set({ type: "ping", timestamp: now });
+    latencyMs.firestoreWrite = Date.now() - start;
+    await healthRef.delete(); // Cleanup
+  } catch {
+    latencyMs.firestoreWrite = -1;
+  }
+
+  // 3. OpenAI API check
+  const openaiKey = process.env.OPENAI_API_KEY || "";
+  if (openaiKey) {
+    try {
+      const start = Date.now();
+      const OpenAI = require("openai");
+      const openai = new OpenAI({ apiKey: openaiKey });
+      await openai.embeddings.create({ model: "text-embedding-3-small", input: "health check", dimensions: 1536 });
+      latencyMs.embeddingOpenai = Date.now() - start;
+      components.openaiApi = { status: latencyMs.embeddingOpenai < 5000 ? "healthy" : "degraded", latencyMs: latencyMs.embeddingOpenai, lastChecked: now };
+    } catch (err) {
+      latencyMs.embeddingOpenai = -1;
+      components.openaiApi = { status: "down", message: err.message, lastChecked: now };
+    }
+  } else {
+    latencyMs.embeddingOpenai = -1;
+    components.openaiApi = { status: "unconfigured", message: "OPENAI_API_KEY not set", lastChecked: now };
+  }
+
+  // 4. Gemini API check
+  const geminiKey = process.env.GEMINI_API_KEY || "";
+  if (geminiKey) {
+    try {
+      const start = Date.now();
+      const { GoogleGenerativeAI } = require("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const embModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+      await embModel.embedContent("health check");
+      latencyMs.embeddingGemini = Date.now() - start;
+      components.geminiApi = { status: latencyMs.embeddingGemini < 5000 ? "healthy" : "degraded", latencyMs: latencyMs.embeddingGemini, lastChecked: now };
+    } catch (err) {
+      latencyMs.embeddingGemini = -1;
+      components.geminiApi = { status: "down", message: err.message, lastChecked: now };
+    }
+  } else {
+    latencyMs.embeddingGemini = -1;
+    components.geminiApi = { status: "unconfigured", message: "GEMINI_API_KEY not set", lastChecked: now };
+  }
+
+  // 5. DeepSeek API check
+  const deepseekKey = process.env.DEEPSEEK_API_KEY || "";
+  if (deepseekKey) {
+    try {
+      const axios = require("axios");
+      const start = Date.now();
+      await axios.post("https://api.deepseek.com/chat/completions", {
+        model: "deepseek-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5,
+      }, { headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" }, timeout: 10000 });
+      const lat = Date.now() - start;
+      components.deepseekApi = { status: lat < 5000 ? "healthy" : "degraded", latencyMs: lat, lastChecked: now };
+    } catch (err) {
+      components.deepseekApi = { status: "down", message: err.message, lastChecked: now };
+    }
+  } else {
+    components.deepseekApi = { status: "unconfigured", message: "DEEPSEEK_API_KEY not set", lastChecked: now };
+  }
+
+  // 6. Context cache check
+  const cacheSnap = await db.collection("users").doc(email).collection("ai_context_cache")
+    .where("status", "==", "active").limit(1).get();
+  components.contextCache = {
+    status: cacheSnap.empty ? "healthy" : "healthy",
+    message: cacheSnap.empty ? "No active caches" : "Active caches exist",
+    lastChecked: now,
+  };
+
+  // Overall status
+  const statuses = Object.values(components).map(c => c.status);
+  const overall = statuses.includes("down") ? "down" : statuses.includes("degraded") ? "degraded" : "healthy";
+
+  // Save health log
+  await db.collection("users").doc(email).collection("ai_health_logs").doc().set({
+    timestamp: now, overall, components, latencyMs,
+  });
+
+  return { success: true, health: { timestamp: now, overall, components, latencyMs } };
+});
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [

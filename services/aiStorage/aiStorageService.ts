@@ -639,3 +639,38 @@ export async function queryAuditLogs(
         return null;
     }
 }
+
+// ─── Phase 6: Monitoring & Analytics ───────────────────────────────────────
+
+/**
+ * Get analytics data (storage/usage/cost).
+ */
+export async function getAnalytics(
+    action: 'getStorage' | 'getUsage' | 'getCost' | 'recordUsage',
+    params: Record<string, any> = {}
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiAnalytics', { timeout: 60000 });
+        const result = await fn({ action, ...params });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] getAnalytics error:', err);
+        return null;
+    }
+}
+
+/**
+ * Run system health check.
+ */
+export async function runHealthCheck(): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiHealthCheck', { timeout: 30000 });
+        const result = await fn({});
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] runHealthCheck error:', err);
+        return null;
+    }
+}
