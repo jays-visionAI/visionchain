@@ -444,3 +444,137 @@ export async function retrieve(
         return null;
     }
 }
+
+// ─── Phase 4: Context Caching & Long-Term Memory ───────────────────────────
+
+/**
+ * Create a Gemini context cache from indexed files.
+ */
+export async function createContextCache(
+    fileIds: string[],
+    modelId: string = 'gemini-2.0-flash',
+    ttlSeconds: number = 3600,
+    displayName?: string
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiCreateContextCache', { timeout: 120000 });
+        const result = await fn({ fileIds, modelId, ttlSeconds, displayName });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] createContextCache error:', err);
+        return null;
+    }
+}
+
+/**
+ * Store a new memory entry.
+ */
+export async function storeMemory(
+    content: string,
+    type?: 'episodic' | 'semantic' | 'procedural',
+    importance?: number,
+    source?: { type: string; referenceId?: string },
+    keywords?: string[]
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiMemoryStore', { timeout: 60000 });
+        const result = await fn({ action: 'create', content, type, importance, source, keywords });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] storeMemory error:', err);
+        return null;
+    }
+}
+
+/**
+ * Search memories by query with relevance scoring.
+ */
+export async function searchMemories(
+    query: string,
+    type?: 'episodic' | 'semantic' | 'procedural',
+    topK: number = 10,
+    minImportance: number = 0
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiMemoryStore', { timeout: 60000 });
+        const result = await fn({ action: 'search', query, type, topK, minImportance });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] searchMemories error:', err);
+        return null;
+    }
+}
+
+/**
+ * List memories by type.
+ */
+export async function listMemories(
+    type?: 'episodic' | 'semantic' | 'procedural',
+    limit: number = 20
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiMemoryStore', { timeout: 30000 });
+        const result = await fn({ action: 'list', type, limit });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] listMemories error:', err);
+        return null;
+    }
+}
+
+/**
+ * Update a memory entry.
+ */
+export async function updateMemory(
+    memoryId: string,
+    updates: { content?: string; type?: string; importance?: number; keywords?: string[] }
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiMemoryStore', { timeout: 30000 });
+        const result = await fn({ action: 'update', memoryId, updates });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] updateMemory error:', err);
+        return null;
+    }
+}
+
+/**
+ * Delete a memory entry.
+ */
+export async function deleteMemory(memoryId: string): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiMemoryStore', { timeout: 30000 });
+        const result = await fn({ action: 'delete', memoryId });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] deleteMemory error:', err);
+        return null;
+    }
+}
+
+/**
+ * Consolidate old/duplicate memories.
+ */
+export async function consolidateMemories(
+    strategy: 'summarize' | 'deduplicate' | 'importance_prune' = 'summarize',
+    maxAge: number = 30,
+    minCount: number = 5,
+    importanceThreshold: number = 0.3
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiMemoryConsolidate', { timeout: 300000 });
+        const result = await fn({ strategy, maxAge, minCount, importanceThreshold });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] consolidateMemories error:', err);
+        return null;
+    }
+}

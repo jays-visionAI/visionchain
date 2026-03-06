@@ -21769,6 +21769,356 @@ function cosineSimilarity(a, b) {
   return denom === 0 ? 0 : dot / denom;
 }
 
+// ─── AI Memory Storage - Phase 4: Context Caching & Long-Term Memory ───────
+
+/**
+ * aiCreateContextCache - Create a Gemini context cache for files
+ * Aggregates chunks from specified files and creates a Gemini cached content resource.
+ */
+exports.aiCreateContextCache = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 120, memory: "1GiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileIds, modelId = "gemini-2.0-flash", ttlSeconds = 3600, displayName } = request.data || {};
+
+  if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+    throw new HttpsError("invalid-argument", "fileIds array is required.");
+  }
+
+  // Collect all chunk texts for the specified files
+  const allTexts = [];
+  let totalTokens = 0;
+  for (const fid of fileIds.slice(0, 20)) {
+    const chunks = await db.collection("users").doc(email)
+      .collection("ai_chunks")
+      .where("fileId", "==", fid)
+      .orderBy("chunkIndex")
+      .get();
+    chunks.docs.forEach(d => {
+      const text = d.data().text || "";
+      allTexts.push(text);
+      totalTokens += d.data().tokenCount || Math.ceil(text.length / 4);
+    });
+  }
+
+  if (allTexts.length === 0) {
+    throw new HttpsError("failed-precondition", "No indexed chunks found for the specified files. Index files first.");
+  }
+
+  const now = new Date().toISOString();
+  const expireAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  let geminiCacheName = null;
+
+  // Try to create Gemini cached content
+  const geminiKey = process.env.GEMINI_API_KEY || "";
+  if (geminiKey) {
+    try {
+      const axios = require("axios");
+      const cacheContent = allTexts.join("\n\n---\n\n");
+      const resp = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${geminiKey}`,
+        {
+          model: `models/${modelId}`,
+          displayName: displayName || `cache-${fileIds[0]}-${Date.now()}`,
+          contents: [{ parts: [{ text: cacheContent.substring(0, 500000) }], role: "user" }],
+          ttl: `${ttlSeconds}s`,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 60000 }
+      );
+      geminiCacheName = resp.data?.name || null;
+      totalTokens = resp.data?.usageMetadata?.totalTokenCount || totalTokens;
+      console.log(`[AI Storage] Gemini cache created: ${geminiCacheName}`);
+    } catch (err) {
+      console.warn("[AI Storage] Gemini cache creation failed:", err.response?.data?.error?.message || err.message);
+      // Continue without Gemini cache — store metadata anyway
+    }
+  }
+
+  // Store cache metadata in Firestore
+  const cacheRef = db.collection("users").doc(email).collection("ai_context_cache").doc();
+  const cacheData = {
+    cacheId: cacheRef.id,
+    tenantId: email,
+    displayName: displayName || `Cache for ${fileIds.length} files`,
+    modelId,
+    sourceFileIds: fileIds,
+    tokenCount: totalTokens,
+    ttlSeconds,
+    geminiCacheName,
+    status: geminiCacheName ? "active" : "error",
+    createdAt: now,
+    expireAt,
+    lastUsedAt: null,
+  };
+  await cacheRef.set(cacheData);
+
+  return cacheData;
+});
+
+/**
+ * aiMemoryStore - CRUD for long-term memory entries
+ * Supports: create, read, search, update, delete
+ */
+exports.aiMemoryStore = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 60, memory: "512MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { action, ...params } = request.data || {};
+
+  const memCol = db.collection("users").doc(email).collection("ai_memories");
+  const now = new Date().toISOString();
+
+  switch (action) {
+    case "create": {
+      const { content, type, importance, source, keywords, expiresAt } = params;
+      if (!content) throw new HttpsError("invalid-argument", "content is required.");
+
+      // Auto-classify memory type if not specified
+      let memType = type || "semantic";
+      let memImportance = importance ?? 0.5;
+      let memKeywords = keywords || [];
+
+      // Use DeepSeek for auto-classification and keyword extraction
+      const deepseekKey = process.env.DEEPSEEK_API_KEY || "";
+      if (deepseekKey && !type && content.length > 20) {
+        try {
+          const axios = require("axios");
+          const resp = await axios.post("https://api.deepseek.com/chat/completions", {
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: 'Classify this memory. Output JSON: {"type":"episodic|semantic|procedural","importance":0.0-1.0,"keywords":["..."]}. episodic=conversation/event, semantic=fact/knowledge, procedural=preference/habit. Respond with ONLY valid JSON.' },
+              { role: "user", content: content.substring(0, 1000) },
+            ],
+            temperature: 0.1, max_tokens: 150,
+          }, {
+            headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
+            timeout: 10000,
+          });
+          const parsed = JSON.parse(
+            (resp.data?.choices?.[0]?.message?.content || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+          );
+          memType = parsed.type || memType;
+          memImportance = parsed.importance ?? memImportance;
+          memKeywords = parsed.keywords || memKeywords;
+        } catch { /* keep defaults */ }
+      }
+
+      const memRef = memCol.doc();
+      const memData = {
+        memoryId: memRef.id,
+        tenantId: email,
+        type: memType,
+        content,
+        summary: content.length > 200 ? content.substring(0, 200) + "..." : content,
+        importance: Math.max(0, Math.min(1, memImportance)),
+        source: source || { type: "user_input" },
+        keywords: memKeywords,
+        accessCount: 0,
+        lastAccessedAt: null,
+        expiresAt: expiresAt || null,
+        isConsolidated: false,
+        consolidatedInto: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await memRef.set(memData);
+      return { success: true, memory: memData };
+    }
+
+    case "search": {
+      const { query, type: searchType, topK = 10, minImportance = 0 } = params;
+      if (!query) throw new HttpsError("invalid-argument", "query is required for search.");
+
+      let q = memCol.where("isConsolidated", "==", false);
+      if (searchType) q = q.where("type", "==", searchType);
+
+      const snap = await q.orderBy("importance", "desc").limit(100).get();
+      const memories = snap.docs.map(d => ({ memoryId: d.id, ...d.data() }));
+
+      // Keyword matching for relevance
+      const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+      const scored = memories
+        .filter(m => m.importance >= minImportance)
+        .map(m => {
+          let score = 0;
+          const content = (m.content || "").toLowerCase();
+          const kws = (m.keywords || []).map(k => k.toLowerCase());
+          for (const term of queryTerms) {
+            if (kws.some(k => k.includes(term))) score += 0.4;
+            if (content.includes(term)) score += 0.2;
+            if ((m.summary || "").toLowerCase().includes(term)) score += 0.2;
+          }
+          score += m.importance * 0.2;
+          return { ...m, relevanceScore: Math.round(score * 1000) / 1000 };
+        })
+        .filter(m => m.relevanceScore > 0)
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .slice(0, topK);
+
+      // Update access counts
+      const batch = db.batch();
+      for (const m of scored) {
+        batch.update(memCol.doc(m.memoryId), { accessCount: (m.accessCount || 0) + 1, lastAccessedAt: now });
+      }
+      await batch.commit();
+
+      return { success: true, results: scored, total: scored.length };
+    }
+
+    case "update": {
+      const { memoryId, updates } = params;
+      if (!memoryId) throw new HttpsError("invalid-argument", "memoryId is required.");
+      const allowedFields = ["content", "type", "importance", "keywords", "expiresAt"];
+      const safeUpdates = {};
+      for (const key of allowedFields) {
+        if (updates[key] !== undefined) safeUpdates[key] = updates[key];
+      }
+      safeUpdates.updatedAt = now;
+      await memCol.doc(memoryId).update(safeUpdates);
+      return { success: true, memoryId };
+    }
+
+    case "delete": {
+      const { memoryId } = params;
+      if (!memoryId) throw new HttpsError("invalid-argument", "memoryId is required.");
+      await memCol.doc(memoryId).delete();
+      return { success: true, memoryId };
+    }
+
+    case "list": {
+      const { type: listType, limit: pageSize = 20 } = params;
+      let q = memCol.where("isConsolidated", "==", false);
+      if (listType) q = q.where("type", "==", listType);
+      const snap = await q.orderBy("createdAt", "desc").limit(pageSize).get();
+      return { success: true, memories: snap.docs.map(d => ({ memoryId: d.id, ...d.data() })), total: snap.docs.length };
+    }
+
+    default:
+      throw new HttpsError("invalid-argument", "action must be one of: create, search, update, delete, list");
+  }
+});
+
+/**
+ * aiMemoryConsolidate - Consolidate old/duplicate memories
+ * Merges low-importance and old memories into summarized entries.
+ */
+exports.aiMemoryConsolidate = onCall({ cors: true, maxInstances: 3, timeoutSeconds: 300, memory: "1GiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { strategy = "summarize", maxAge = 30, minCount = 5, importanceThreshold = 0.3 } = request.data || {};
+
+  const memCol = db.collection("users").doc(email).collection("ai_memories");
+  const consCol = db.collection("users").doc(email).collection("ai_memory_consolidations");
+  const now = new Date().toISOString();
+
+  let candidateSnap;
+  if (strategy === "importance_prune") {
+    // Remove low-importance, unconsolidated memories
+    candidateSnap = await memCol
+      .where("isConsolidated", "==", false)
+      .where("importance", "<", importanceThreshold)
+      .orderBy("importance")
+      .limit(50)
+      .get();
+  } else {
+    // Get old, unconsolidated memories for summarization/dedup
+    const cutoff = new Date(Date.now() - maxAge * 24 * 60 * 60 * 1000).toISOString();
+    candidateSnap = await memCol
+      .where("isConsolidated", "==", false)
+      .where("createdAt", "<", cutoff)
+      .orderBy("createdAt")
+      .limit(50)
+      .get();
+  }
+
+  if (candidateSnap.empty || candidateSnap.docs.length < minCount) {
+    return { success: true, consolidated: 0, message: "Not enough memories to consolidate." };
+  }
+
+  const candidates = candidateSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Group by type for better consolidation
+  const grouped = {};
+  for (const m of candidates) {
+    const key = m.type || "semantic";
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(m);
+  }
+
+  let totalConsolidated = 0;
+  const deepseekKey = process.env.DEEPSEEK_API_KEY || "";
+
+  for (const [memType, memories] of Object.entries(grouped)) {
+    if (memories.length < 2) continue;
+
+    // Merge via DeepSeek
+    let mergedContent = memories.map(m => m.content).join("\n---\n");
+
+    if (deepseekKey) {
+      try {
+        const axios = require("axios");
+        const resp = await axios.post("https://api.deepseek.com/chat/completions", {
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: "You are a memory consolidation assistant. Merge the following memory entries into a single, concise summary that preserves all important information. Output ONLY the merged text, nothing else." },
+            { role: "user", content: mergedContent.substring(0, 5000) },
+          ],
+          temperature: 0.2, max_tokens: 500,
+        }, {
+          headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
+          timeout: 15000,
+        });
+        mergedContent = resp.data?.choices?.[0]?.message?.content || mergedContent.substring(0, 500);
+      } catch { /* use raw concatenation */ }
+    } else {
+      mergedContent = mergedContent.substring(0, 1000);
+    }
+
+    // Create merged memory
+    const newMemRef = memCol.doc();
+    const maxImportance = Math.max(...memories.map(m => m.importance || 0));
+    await newMemRef.set({
+      memoryId: newMemRef.id,
+      tenantId: email,
+      type: memType,
+      content: mergedContent,
+      summary: mergedContent.substring(0, 200),
+      importance: Math.min(1, maxImportance + 0.1), // Slightly boost consolidated memories
+      source: { type: "consolidation" },
+      keywords: [...new Set(memories.flatMap(m => m.keywords || []))].slice(0, 15),
+      accessCount: 0,
+      isConsolidated: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Mark source memories as consolidated
+    const batch = db.batch();
+    for (const m of memories) {
+      batch.update(memCol.doc(m.id), {
+        isConsolidated: true,
+        consolidatedInto: newMemRef.id,
+        updatedAt: now,
+      });
+    }
+    await batch.commit();
+
+    // Record consolidation
+    await consCol.doc().set({
+      tenantId: email,
+      sourceMemoryIds: memories.map(m => m.id),
+      mergedContent,
+      mergedMemoryId: newMemRef.id,
+      strategy,
+      memoriesRemoved: memories.length,
+      createdAt: now,
+    });
+
+    totalConsolidated += memories.length;
+  }
+
+  console.log(`[AI Storage] Memory consolidation: ${totalConsolidated} memories consolidated for ${email}`);
+  return { success: true, consolidated: totalConsolidated, strategy };
+});
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [

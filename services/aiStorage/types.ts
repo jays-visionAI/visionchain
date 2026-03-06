@@ -302,3 +302,98 @@ export interface GenerateEmbeddingsResult {
     geminiEmbeddings: number;
     errors: number;
 }
+
+// ─── Phase 4: Context Caching & Long-Term Memory Types ─────────────────────
+
+export type MemoryType = 'episodic' | 'semantic' | 'procedural';
+
+/**
+ * Gemini context cache reference.
+ * Stored in Firestore: users/{email}/ai_context_cache/{cacheId}
+ */
+export interface ContextCache {
+    cacheId: string;
+    tenantId: string;
+    displayName?: string;
+    modelId: string;                // e.g. 'gemini-2.0-flash'
+    sourceFileIds: string[];        // Files included in this cache
+    tokenCount: number;
+    ttlSeconds: number;
+    geminiCacheName?: string;       // Gemini API cache resource name
+    status: 'active' | 'expired' | 'error';
+    createdAt: string;
+    expireAt: string;
+    lastUsedAt?: string;
+}
+
+/**
+ * Long-term memory entry.
+ * Stored in Firestore: users/{email}/ai_memories/{memoryId}
+ */
+export interface MemoryEntry {
+    memoryId: string;
+    tenantId: string;
+    type: MemoryType;
+    content: string;                // The memory text
+    summary?: string;               // Condensed version
+    importance: number;             // 0-1 relevance score
+    source: {
+        type: 'conversation' | 'file' | 'user_input' | 'system' | 'consolidation';
+        referenceId?: string;       // Conversation ID, file ID, etc.
+    };
+    keywords?: string[];
+    accessCount: number;
+    lastAccessedAt?: string;
+    expiresAt?: string;             // Optional auto-expiry
+    isConsolidated: boolean;        // Whether merged into another memory
+    consolidatedInto?: string;      // ID of the merged memory
+    createdAt: string;
+    updatedAt?: string;
+}
+
+/**
+ * Memory consolidation record.
+ * Stored in Firestore: users/{email}/ai_memory_consolidations/{id}
+ */
+export interface MemoryConsolidation {
+    id: string;
+    tenantId: string;
+    sourceMemoryIds: string[];
+    mergedContent: string;
+    mergedMemoryId: string;         // New memory created from merge
+    strategy: 'summarize' | 'deduplicate' | 'importance_prune';
+    memoriesRemoved: number;
+    createdAt: string;
+}
+
+/**
+ * Store memory request.
+ */
+export interface StoreMemoryParams {
+    content: string;
+    type?: MemoryType;
+    importance?: number;
+    source?: MemoryEntry['source'];
+    keywords?: string[];
+    expiresAt?: string;
+}
+
+/**
+ * Search memories request.
+ */
+export interface SearchMemoriesParams {
+    query: string;
+    type?: MemoryType;
+    topK?: number;
+    minImportance?: number;
+}
+
+/**
+ * Create context cache request.
+ */
+export interface CreateContextCacheParams {
+    fileIds: string[];
+    modelId?: string;
+    ttlSeconds?: number;
+    displayName?: string;
+}
