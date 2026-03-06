@@ -695,9 +695,9 @@ const WalletCexPortfolio = (): JSX.Element => {
                 {/* Add Exchange Modal */}
                 <Show when={showAddModal()}>
                     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
-                        <div class="w-full max-w-md bg-[#111113] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl pb-[50px]">
+                        <div class="w-full max-w-md bg-[#111113] border border-white/[0.06] rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
                             {/* Header */}
-                            <div class="flex items-center justify-between p-5 border-b border-white/[0.04]">
+                            <div class="flex items-center justify-between p-5 border-b border-white/[0.04] flex-shrink-0">
                                 <div class="flex items-center gap-3">
                                     <div class="p-2 bg-cyan-500/10 rounded-xl">
                                         <Key class="w-5 h-5 text-cyan-400" />
@@ -713,7 +713,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                             </div>
 
                             {/* Body */}
-                            <div class="p-5 space-y-4">
+                            <div class="p-5 space-y-4 overflow-y-auto min-h-0">
                                 {/* Exchange Selection */}
                                 <div>
                                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">{t('cex.exchange')}</label>
@@ -828,7 +828,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                             </div>
 
                             {/* Footer */}
-                            <div class="flex items-center gap-3 p-5 border-t border-white/[0.04]">
+                            <div class="flex items-center gap-3 p-5 border-t border-white/[0.04] flex-shrink-0">
                                 <button
                                     onClick={() => setShowAddModal(false)}
                                     class="flex-1 px-4 py-2.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors"
