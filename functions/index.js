@@ -21044,6 +21044,401 @@ exports.aiGetIndexStatus = onCall({ cors: true, maxInstances: 10, timeoutSeconds
   };
 });
 
+/**
+ * aiProcessIngestion - Full ingestion pipeline for AI storage
+ * Pipeline: parse → chunk → enrich → save
+ *
+ * Supports: PDF, TXT, MD, HTML, CSV, JSON, DOCX, code files
+ * Enrichment: summary + keywords via DeepSeek API
+ */
+exports.aiProcessIngestion = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 540, memory: "2GiB", secrets: ["DEEPSEEK_API_KEY"] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId, jobId, modelTarget = "both" } = request.data || {};
+
+  if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
+
+  const fileRef = db.collection("users").doc(email).collection("disk_files").doc(fileId);
+  const fileSnap = await fileRef.get();
+  if (!fileSnap.exists) throw new HttpsError("not-found", "File not found.");
+  const fileData = fileSnap.data();
+
+  // Resolve or create IndexJob
+  let jobRef;
+  if (jobId) {
+    jobRef = db.collection("users").doc(email).collection("ai_index_jobs").doc(jobId);
+  } else {
+    const existingJobs = await db.collection("users").doc(email)
+      .collection("ai_index_jobs")
+      .where("fileId", "==", fileId)
+      .where("status", "in", ["queued", "processing"])
+      .limit(1).get();
+    if (!existingJobs.empty) {
+      jobRef = existingJobs.docs[0].ref;
+    } else {
+      // Create one
+      jobRef = db.collection("users").doc(email).collection("ai_index_jobs").doc();
+      const now = new Date().toISOString();
+      const defaultStage = { status: "pending" };
+      await jobRef.set({
+        jobId: jobRef.id, fileId, tenantId: email,
+        stages: { parse: { ...defaultStage }, chunk: { ...defaultStage }, embed_openai: { ...defaultStage }, embed_gemini: { ...defaultStage }, keyword_index: { ...defaultStage }, vector_index: { ...defaultStage } },
+        status: "queued", modelTarget, startedAt: now, createdAt: now, updatedAt: now,
+      });
+    }
+  }
+
+  const updateStage = async (stageName, stageData) => {
+    const now = new Date().toISOString();
+    await jobRef.update({ [`stages.${stageName}`]: { ...stageData, ...(stageData.status === "running" ? { startedAt: now } : {}), ...(["completed", "error"].includes(stageData.status) ? { completedAt: now } : {}) }, status: "processing", updatedAt: now });
+  };
+
+  try {
+    await jobRef.update({ status: "processing", updatedAt: new Date().toISOString() });
+    await fileRef.update({ indexingStatus: "processing" });
+
+    // ── STAGE 1: PARSE ─────────────────────────────────────
+    await updateStage("parse", { status: "running" });
+    let rawText = "";
+    const mimeType = fileData.type || "";
+    const fileName = fileData.name || "";
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+
+    // Get file buffer from storage
+    let buffer;
+    try {
+      if (fileData.storagePath && fileData.storagePath.startsWith("distributed://")) {
+        // Distributed storage: reassemble from chunks
+        const chunkHashes = fileData.chunkHashes || [];
+        if (chunkHashes.length === 0) throw new Error("No chunk data available");
+        const chunks = [];
+        for (const hash of chunkHashes) {
+          const staging = await db.collection("staging_chunks").doc(hash).get();
+          if (staging.exists && staging.data().data) {
+            chunks.push(Buffer.from(staging.data().data, "base64"));
+          }
+        }
+        buffer = Buffer.concat(chunks);
+      } else if (fileData.storagePath) {
+        const file = admin.storage().bucket().file(fileData.storagePath);
+        const [data] = await file.download();
+        buffer = data;
+      } else if (fileData.downloadURL) {
+        const axios = require("axios");
+        const resp = await axios.get(fileData.downloadURL, { responseType: "arraybuffer", timeout: 30000 });
+        buffer = Buffer.from(resp.data);
+      }
+    } catch (dlErr) {
+      await updateStage("parse", { status: "error", errorMessage: "Failed to download file: " + dlErr.message });
+      throw new HttpsError("internal", "Failed to download file for parsing.");
+    }
+
+    if (!buffer || buffer.length === 0) {
+      await updateStage("parse", { status: "error", errorMessage: "Empty file buffer" });
+      throw new HttpsError("internal", "Empty file buffer.");
+    }
+
+    // MIME-based parsing
+    const textExts = ["txt", "md", "markdown", "csv", "json", "log", "yaml", "yml", "toml", "ini", "cfg", "env", "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd"];
+    const codeExts = ["js", "jsx", "ts", "tsx", "py", "rb", "go", "rs", "java", "kt", "swift", "c", "cpp", "h", "hpp", "cs", "php", "r", "sql", "sol", "vue", "svelte"];
+    const isPdf = mimeType.includes("pdf") || ext === "pdf";
+    const isHtml = mimeType.includes("html") || ["html", "htm"].includes(ext);
+    const isDocx = mimeType.includes("wordprocessingml") || mimeType.includes("msword") || ext === "docx";
+    const isText = mimeType.startsWith("text/") || textExts.includes(ext) || codeExts.includes(ext);
+
+    if (isPdf) {
+      try {
+        const pdfParse = require("pdf-parse");
+        const pdfData = await pdfParse(buffer);
+        rawText = pdfData.text || "";
+      } catch (pdfErr) {
+        rawText = buffer.toString("utf8").replace(/[^\x20-\x7E\n\rㄱ-힣가-힣]/g, " ");
+      }
+    } else if (isHtml) {
+      rawText = buffer.toString("utf8")
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ")
+        .trim();
+    } else if (isDocx) {
+      // Extract text from DOCX XML
+      try {
+        const AdmZip = require("adm-zip");
+        const zip = new AdmZip(buffer);
+        const docXml = zip.readAsText("word/document.xml");
+        rawText = docXml
+          .replace(/<w:br[^>]*\/>/g, "\n")
+          .replace(/<w:p[^>]*>/g, "\n")
+          .replace(/<[^>]+>/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      } catch {
+        rawText = buffer.toString("utf8").replace(/[^\x20-\x7E\n\rㄱ-힣가-힣]/g, " ");
+      }
+    } else if (isText) {
+      rawText = buffer.toString("utf8");
+    } else {
+      // Unsupported type: try raw UTF-8 extraction
+      rawText = buffer.toString("utf8").replace(/[^\x20-\x7E\n\rㄱ-힣가-힣]/g, " ").substring(0, 50000);
+    }
+
+    if (!rawText || rawText.trim().length < 10) {
+      await updateStage("parse", { status: "completed", itemCount: 0 });
+      await updateStage("chunk", { status: "skipped" });
+      await jobRef.update({ status: "completed", completedAt: new Date().toISOString() });
+      await fileRef.update({ indexingStatus: "indexed", parsedTextUri: "", indexedAt: new Date().toISOString() });
+      return { jobId: jobRef.id, fileId, status: "completed", chunksCreated: 0, message: "No extractable text." };
+    }
+
+    // Detect language
+    const koCount = (rawText.match(/[\uAC00-\uD7AF]/g) || []).length;
+    const enCount = (rawText.match(/[a-zA-Z]/g) || []).length;
+    const detectedLang = koCount > enCount * 0.3 ? "ko" : "en";
+
+    await updateStage("parse", { status: "completed", itemCount: rawText.length });
+    await fileRef.update({ language: detectedLang, parsedTextUri: `firestore://parsed` });
+
+    // ── STAGE 2: CHUNK ─────────────────────────────────────
+    await updateStage("chunk", { status: "running" });
+    const MAX_CHUNK_CHARS = detectedLang === "ko" ? 2000 : 4000; // ~1000-1500 tokens
+    const MIN_CHUNK_CHARS = 100;
+
+    const semanticChunk = (text) => {
+      const chunks = [];
+      // Try heading-aware splitting first
+      const headingPattern = /^(#{1,4}\s.+|[A-Z][A-Z\s]{5,}$)/gm;
+      const sections = [];
+      let lastIdx = 0;
+      let match;
+      while ((match = headingPattern.exec(text)) !== null) {
+        if (match.index > lastIdx) {
+          sections.push({ heading: "", text: text.substring(lastIdx, match.index) });
+        }
+        lastIdx = match.index;
+      }
+      if (lastIdx < text.length) {
+        sections.push({ heading: "", text: text.substring(lastIdx) });
+      }
+
+      if (sections.length <= 1) {
+        // Fallback: paragraph-based splitting
+        const paragraphs = text.split(/\n\s*\n/);
+        let currentChunk = "";
+        for (const para of paragraphs) {
+          if ((currentChunk + "\n\n" + para).length > MAX_CHUNK_CHARS && currentChunk.length >= MIN_CHUNK_CHARS) {
+            chunks.push(currentChunk.trim());
+            currentChunk = para;
+          } else {
+            currentChunk += (currentChunk ? "\n\n" : "") + para;
+          }
+        }
+        if (currentChunk.trim().length >= MIN_CHUNK_CHARS) {
+          chunks.push(currentChunk.trim());
+        } else if (currentChunk.trim() && chunks.length > 0) {
+          chunks[chunks.length - 1] += "\n\n" + currentChunk.trim();
+        } else if (currentChunk.trim()) {
+          chunks.push(currentChunk.trim());
+        }
+      } else {
+        // Heading-aware: each section is a chunk candidate
+        let currentChunk = "";
+        for (const section of sections) {
+          const sectionText = section.text.trim();
+          if (!sectionText) continue;
+          if ((currentChunk + "\n\n" + sectionText).length > MAX_CHUNK_CHARS && currentChunk.length >= MIN_CHUNK_CHARS) {
+            chunks.push(currentChunk.trim());
+            currentChunk = sectionText;
+          } else {
+            currentChunk += (currentChunk ? "\n\n" : "") + sectionText;
+          }
+        }
+        if (currentChunk.trim()) chunks.push(currentChunk.trim());
+      }
+
+      // Safety: split any oversized chunks
+      const finalChunks = [];
+      for (const chunk of chunks) {
+        if (chunk.length > MAX_CHUNK_CHARS * 1.5) {
+          const words = chunk.split(/\s+/);
+          let sub = "";
+          for (const word of words) {
+            if ((sub + " " + word).length > MAX_CHUNK_CHARS) {
+              if (sub.trim()) finalChunks.push(sub.trim());
+              sub = word;
+            } else {
+              sub += (sub ? " " : "") + word;
+            }
+          }
+          if (sub.trim()) finalChunks.push(sub.trim());
+        } else {
+          finalChunks.push(chunk);
+        }
+      }
+
+      return finalChunks;
+    };
+
+    const chunkTexts = semanticChunk(rawText);
+
+    if (chunkTexts.length === 0) {
+      await updateStage("chunk", { status: "completed", itemCount: 0 });
+      await jobRef.update({ status: "completed", completedAt: new Date().toISOString() });
+      await fileRef.update({ indexingStatus: "indexed", indexedAt: new Date().toISOString() });
+      return { jobId: jobRef.id, fileId, status: "completed", chunksCreated: 0 };
+    }
+
+    const estimateTokens = (text) => {
+      const koChars = (text.match(/[\uAC00-\uD7AF]/g) || []).length;
+      const otherChars = text.length - koChars;
+      return Math.ceil(koChars / 1.5 + otherChars / 4);
+    };
+
+    await updateStage("chunk", { status: "completed", itemCount: chunkTexts.length });
+
+    // ── STAGE 3: ENRICH (summary + keywords via DeepSeek) ──
+    await updateStage("embed_openai", { status: "skipped" }); // Phase 3
+    await updateStage("embed_gemini", { status: "skipped" }); // Phase 3
+    await updateStage("keyword_index", { status: "running" });
+
+    const deepseekKey = process.env.DEEPSEEK_API_KEY || "";
+    const axios = require("axios");
+    const chunksCol = db.collection("users").doc(email).collection("ai_chunks");
+    const now = new Date().toISOString();
+    const savedChunks = [];
+
+    // Process in batches of 5 to avoid API rate limits
+    const ENRICH_BATCH = 5;
+    for (let i = 0; i < chunkTexts.length; i += ENRICH_BATCH) {
+      const batch = chunkTexts.slice(i, i + ENRICH_BATCH);
+      const enrichResults = await Promise.all(batch.map(async (text, batchIdx) => {
+        const chunkIndex = i + batchIdx;
+        let summary = "";
+        let keywords = [];
+
+        // Enrich via DeepSeek (if key available and text is substantial)
+        if (deepseekKey && text.length > 50) {
+          try {
+            const resp = await axios.post("https://api.deepseek.com/chat/completions", {
+              model: "deepseek-chat",
+              messages: [
+                { role: "system", content: "You are a document analysis assistant. Given a text chunk, output JSON with exactly two fields: \"summary\" (a 1-2 sentence summary, max 200 chars) and \"keywords\" (array of 3-8 relevant keywords). Respond with ONLY valid JSON, nothing else." },
+                { role: "user", content: text.substring(0, 3000) },
+              ],
+              temperature: 0.2,
+              max_tokens: 300,
+            }, {
+              headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
+              timeout: 15000,
+            });
+
+            const content = resp.data?.choices?.[0]?.message?.content || "";
+            try {
+              const parsed = JSON.parse(content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+              summary = parsed.summary || "";
+              keywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
+            } catch {
+              summary = content.substring(0, 200);
+            }
+          } catch (aiErr) {
+            console.warn(`[AI Storage] Enrichment failed for chunk ${chunkIndex}:`, aiErr.message);
+          }
+        }
+
+        // Determine chunk type
+        let chunkType = "text";
+        if (text.match(/^\|.*\|$/m)) chunkType = "table";
+        else if (text.match(/^(#{1,4}\s)/m)) chunkType = "heading";
+        else if (text.match(/^(\s*([-*]|\d+\.)\s)/m)) chunkType = "list";
+        else if (codeExts.includes(ext) || text.match(/^(function |class |const |import |export |def |async )/m)) chunkType = "code";
+
+        const sourceHash = require("crypto").createHash("sha256").update(text).digest("hex").substring(0, 16);
+
+        return {
+          chunkIndex,
+          text,
+          summary,
+          keywords,
+          chunkType,
+          tokenCount: estimateTokens(text),
+          sourceHash,
+        };
+      }));
+
+      // Batch write to Firestore
+      const writeBatch = db.batch();
+      for (const result of enrichResults) {
+        const chunkRef = chunksCol.doc();
+        const chunkDoc = {
+          chunkId: chunkRef.id,
+          fileId,
+          tenantId: email,
+          chunkIndex: result.chunkIndex,
+          chunkType: result.chunkType,
+          text: result.text,
+          summary: result.summary,
+          keywords: result.keywords,
+          tokenCount: result.tokenCount,
+          sourceHash: result.sourceHash,
+          embeddingOpenAiStatus: "pending",
+          embeddingGeminiStatus: "pending",
+          aclInheritance: true,
+          createdAt: now,
+        };
+        writeBatch.set(chunkRef, chunkDoc);
+        savedChunks.push(chunkDoc);
+      }
+      await writeBatch.commit();
+    }
+
+    await updateStage("keyword_index", { status: "completed", itemCount: savedChunks.length });
+    await updateStage("vector_index", { status: "skipped" }); // Phase 3
+
+    // ── FINALIZE ───────────────────────────────────────────
+    const completedAt = new Date().toISOString();
+    await jobRef.update({
+      status: "completed",
+      completedAt,
+      updatedAt: completedAt,
+    });
+    await fileRef.update({
+      indexingStatus: "indexed",
+      indexedAt: completedAt,
+      updatedAt: completedAt,
+    });
+
+    console.log(`[AI Storage] Ingestion complete: ${savedChunks.length} chunks for file ${fileId}`);
+
+    return {
+      jobId: jobRef.id,
+      fileId,
+      status: "completed",
+      chunksCreated: savedChunks.length,
+      language: detectedLang,
+      totalTokens: savedChunks.reduce((sum, c) => sum + c.tokenCount, 0),
+    };
+
+  } catch (err) {
+    console.error(`[AI Storage] Ingestion failed for ${fileId}:`, err);
+    const errorMsg = err.message || "Unknown ingestion error";
+    await jobRef.update({
+      status: "error",
+      errorMessage: errorMsg,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => { });
+    await fileRef.update({
+      indexingStatus: "error",
+      updatedAt: new Date().toISOString(),
+    }).catch(() => { });
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", errorMsg);
+  }
+});
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [

@@ -224,6 +224,40 @@ export async function getIndexStatus(
 }
 
 /**
+ * Trigger the full ingestion pipeline for a file.
+ * Calls aiProcessIngestion Cloud Function which runs: parse → chunk → enrich → save.
+ */
+export interface IngestionResult {
+    jobId: string;
+    fileId: string;
+    status: string;
+    chunksCreated: number;
+    language?: string;
+    totalTokens?: number;
+    message?: string;
+}
+
+export async function triggerIngestion(
+    fileId: string,
+    jobId?: string,
+    modelTarget: ModelTarget = 'both'
+): Promise<IngestionResult | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable<
+            { fileId: string; jobId?: string; modelTarget: string },
+            IngestionResult
+        >(functions, 'aiProcessIngestion', { timeout: 540000 });
+
+        const result = await fn({ fileId, jobId, modelTarget });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] triggerIngestion error:', err);
+        return null;
+    }
+}
+
+/**
  * List all index jobs for a user (most recent first).
  */
 export async function listIndexJobs(
