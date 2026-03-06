@@ -7507,25 +7507,686 @@ class BithumbClient {
   }
 }
 
+// =============================================================================
+// CEX API CLIENTS - Global Exchanges (Binance, Bybit, Bitget, OKX, KuCoin, MEXC, Bitkub)
+// =============================================================================
+
+/**
+ * Supported exchange list
+ */
+const SUPPORTED_EXCHANGES = [
+  "upbit", "bithumb", "binance", "bybit", "bitget", "okx", "kucoin", "mexc", "bitkub",
+];
+
+/**
+ * Exchange capabilities matrix
+ */
+const EXCHANGE_CAPABILITIES = {
+  upbit: { spot: true, futures: false, margin: false, baseCurrency: "KRW" },
+  bithumb: { spot: true, futures: false, margin: false, baseCurrency: "KRW" },
+  binance: { spot: true, futures: true, margin: true, baseCurrency: "USDT" },
+  bybit: { spot: true, futures: true, margin: true, baseCurrency: "USDT" },
+  bitget: { spot: true, futures: true, margin: false, baseCurrency: "USDT" },
+  okx: { spot: true, futures: true, margin: true, baseCurrency: "USDT" },
+  kucoin: { spot: true, futures: true, margin: false, baseCurrency: "USDT" },
+  mexc: { spot: true, futures: true, margin: false, baseCurrency: "USDT" },
+  bitkub: { spot: true, futures: false, margin: false, baseCurrency: "THB" },
+};
+
+// --- Exchange Rate Cache ---
+let _exchangeRateCache = { USDT_KRW: 1400, THB_KRW: 40 };
+let _exchangeRateCacheAt = 0;
+const RATE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Get USDT→KRW and THB→KRW exchange rates
+ * @return {Promise<{USDT_KRW: number, THB_KRW: number}>}
+ */
+async function getExchangeRates() {
+  if (Date.now() - _exchangeRateCacheAt < RATE_CACHE_TTL) {
+    return _exchangeRateCache;
+  }
+  try {
+    const http = getAxios();
+    const resp = await http.get(
+      "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw,thb,usd",
+      { timeout: 5000 },
+    );
+    const usdtKrw = resp.data?.tether?.krw || 1400;
+    const usdtThb = resp.data?.tether?.thb || 35;
+    _exchangeRateCache = {
+      USDT_KRW: usdtKrw,
+      THB_KRW: usdtKrw / usdtThb,
+    };
+    _exchangeRateCacheAt = Date.now();
+    console.log(`[CEX] Exchange rates updated: USDT/KRW=${usdtKrw}, THB/KRW=${(_exchangeRateCache.THB_KRW).toFixed(2)}`);
+    return _exchangeRateCache;
+  } catch (err) {
+    console.warn("[CEX] Exchange rate fetch failed, using cached/fallback:", err.message);
+    return _exchangeRateCache;
+  }
+}
+
+class BinanceClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   */
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.spotBaseUrl = "https://api.binance.com";
+    this.futuresBaseUrl = "https://fapi.binance.com";
+    this.coinFuturesBaseUrl = "https://dapi.binance.com";
+  }
+
+  /**
+   * Generate HMAC-SHA256 signature (hex)
+   * @param {string} queryString
+   * @return {string} hex signature
+   */
+  _sign(queryString) {
+    return crypto.createHmac("sha256", this.secretKey)
+      .update(queryString).digest("hex");
+  }
+
+  /**
+   * Build signed query string
+   * @param {object} params
+   * @return {string}
+   */
+  _signedQuery(params = {}) {
+    params.timestamp = Date.now();
+    const qs = Object.entries(params).map(([k, v]) => `${k}=${v}`).join("&");
+    return `${qs}&signature=${this._sign(qs)}`;
+  }
+
+  // --- Spot ---
+  async getAccounts() {
+    const http = getAxios();
+    const qs = this._signedQuery({ recvWindow: 10000 });
+    const response = await http.get(`${this.spotBaseUrl}/api/v3/account?${qs}`, {
+      headers: { "X-MBX-APIKEY": this.accessKey },
+      timeout: 10000,
+    });
+    // Normalize to [{currency, balance, locked, avg_buy_price}]
+    return (response.data.balances || [])
+      .filter((b) => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0)
+      .map((b) => ({
+        currency: b.asset,
+        balance: String(parseFloat(b.free)),
+        locked: String(parseFloat(b.locked)),
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    // Use individual price query if few symbols, else fetch all
+    let tickers;
+    if (symbols.length <= 20) {
+      const symbolList = JSON.stringify(symbols.map((s) => s.replace("KRW-", "").replace("-", "") + "USDT"));
+      const response = await http.get(`${this.spotBaseUrl}/api/v3/ticker/price?symbols=${encodeURIComponent(symbolList)}`, { timeout: 10000 });
+      tickers = response.data;
+    } else {
+      const response = await http.get(`${this.spotBaseUrl}/api/v3/ticker/price`, { timeout: 10000 });
+      tickers = response.data;
+    }
+    // Normalize to [{market, trade_price}]
+    return tickers
+      .filter((t) => t.symbol.endsWith("USDT"))
+      .map((t) => ({
+        market: `USDT-${t.symbol.replace("USDT", "")}`,
+        trade_price: parseFloat(t.price),
+        _baseCurrency: "USDT",
+      }));
+  }
+
+  // --- Futures (USDT-M) ---
+  async getFuturesBalance() {
+    const http = getAxios();
+    const qs = this._signedQuery({ recvWindow: 10000 });
+    const response = await http.get(`${this.futuresBaseUrl}/fapi/v3/balance?${qs}`, {
+      headers: { "X-MBX-APIKEY": this.accessKey },
+      timeout: 10000,
+    });
+    return response.data || [];
+  }
+
+  async getFuturesPositions() {
+    const http = getAxios();
+    const qs = this._signedQuery({ recvWindow: 10000 });
+    const response = await http.get(`${this.futuresBaseUrl}/fapi/v3/positionRisk?${qs}`, {
+      headers: { "X-MBX-APIKEY": this.accessKey },
+      timeout: 10000,
+    });
+    return (response.data || []).filter((p) => parseFloat(p.positionAmt) !== 0);
+  }
+
+  // --- Margin ---
+  async getMarginBalance() {
+    const http = getAxios();
+    const qs = this._signedQuery({ recvWindow: 10000 });
+    const response = await http.get(`${this.spotBaseUrl}/sapi/v1/margin/account?${qs}`, {
+      headers: { "X-MBX-APIKEY": this.accessKey },
+      timeout: 10000,
+    });
+    return response.data || {};
+  }
+}
+
+class BybitClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   */
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.bybit.com";
+  }
+
+  /**
+   * Generate HMAC-SHA256 signature for Bybit v5
+   * @param {string} timestamp
+   * @param {string} queryString
+   * @return {string}
+   */
+  _sign(timestamp, queryString) {
+    const preHash = `${timestamp}${this.accessKey}10000${queryString}`;
+    return crypto.createHmac("sha256", this.secretKey).update(preHash).digest("hex");
+  }
+
+  _headers(timestamp, queryString) {
+    return {
+      "X-BAPI-API-KEY": this.accessKey,
+      "X-BAPI-TIMESTAMP": timestamp,
+      "X-BAPI-SIGN": this._sign(timestamp, queryString),
+      "X-BAPI-RECV-WINDOW": "10000",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const ts = String(Date.now());
+    const qs = "accountType=UNIFIED";
+    const response = await http.get(`${this.baseUrl}/v5/account/wallet-balance?${qs}`, {
+      headers: this._headers(ts, qs),
+      timeout: 10000,
+    });
+    const list = response.data?.result?.list?.[0]?.coin || [];
+    return list
+      .filter((c) => parseFloat(c.walletBalance) > 0)
+      .map((c) => ({
+        currency: c.coin,
+        balance: c.walletBalance,
+        locked: String(parseFloat(c.totalOrderIM || "0")),
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/v5/market/tickers?category=spot`, { timeout: 10000 });
+    const list = response.data?.result?.list || [];
+    return list
+      .filter((t) => t.symbol.endsWith("USDT"))
+      .map((t) => ({
+        market: `USDT-${t.symbol.replace("USDT", "")}`,
+        trade_price: parseFloat(t.lastPrice),
+        _baseCurrency: "USDT",
+      }));
+  }
+
+  async getFuturesPositions() {
+    const http = getAxios();
+    const ts = String(Date.now());
+    const qs = "category=linear&settleCoin=USDT";
+    const response = await http.get(`${this.baseUrl}/v5/position/list?${qs}`, {
+      headers: this._headers(ts, qs),
+      timeout: 10000,
+    });
+    return (response.data?.result?.list || []).filter((p) => parseFloat(p.size) !== 0);
+  }
+}
+
+class BitgetClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   * @param {string} passphrase
+   */
+  constructor(accessKey, secretKey, passphrase) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.passphrase = passphrase || "";
+    this.baseUrl = "https://api.bitget.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const preHash = `${timestamp}${method.toUpperCase()}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(preHash).digest("base64");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = String(Date.now());
+    return {
+      "ACCESS-KEY": this.accessKey,
+      "ACCESS-TIMESTAMP": ts,
+      "ACCESS-PASSPHRASE": this.passphrase,
+      "ACCESS-SIGN": this._sign(ts, method, path, body),
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/api/v2/spot/account/assets";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    const data = response.data?.data || [];
+    return data
+      .filter((a) => parseFloat(a.available || "0") > 0 || parseFloat(a.frozen || "0") > 0)
+      .map((a) => ({
+        currency: a.coin,
+        balance: a.available || "0",
+        locked: a.frozen || "0",
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/api/v2/spot/market/tickers`, { timeout: 10000 });
+    const data = response.data?.data || [];
+    return data
+      .filter((t) => (t.symbol || "").endsWith("USDT"))
+      .map((t) => ({
+        market: `USDT-${(t.symbol || "").replace("USDT", "")}`,
+        trade_price: parseFloat(t.lastPr || t.close || "0"),
+        _baseCurrency: "USDT",
+      }));
+  }
+
+  async getFuturesBalance() {
+    const http = getAxios();
+    const path = "/api/v2/mix/account/accounts?productType=USDT-FUTURES";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return response.data?.data || [];
+  }
+
+  async getFuturesPositions() {
+    const http = getAxios();
+    const path = "/api/v2/mix/position/all-position?productType=USDT-FUTURES";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return (response.data?.data || []).filter((p) => parseFloat(p.total || "0") !== 0);
+  }
+}
+
+class OkxClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   * @param {string} passphrase
+   */
+  constructor(accessKey, secretKey, passphrase) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.passphrase = passphrase || "";
+    this.baseUrl = "https://www.okx.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const preHash = `${timestamp}${method.toUpperCase()}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(preHash).digest("base64");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = new Date().toISOString();
+    return {
+      "OK-ACCESS-KEY": this.accessKey,
+      "OK-ACCESS-SIGN": this._sign(ts, method, path, body),
+      "OK-ACCESS-TIMESTAMP": ts,
+      "OK-ACCESS-PASSPHRASE": this.passphrase,
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/api/v5/account/balance";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    const details = response.data?.data?.[0]?.details || [];
+    return details
+      .filter((d) => parseFloat(d.cashBal || d.availBal || "0") > 0)
+      .map((d) => ({
+        currency: d.ccy,
+        balance: d.cashBal || d.availBal || "0",
+        locked: d.frozenBal || "0",
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/api/v5/market/tickers?instType=SPOT`, { timeout: 10000 });
+    const data = response.data?.data || [];
+    return data
+      .filter((t) => (t.instId || "").endsWith("-USDT"))
+      .map((t) => ({
+        market: `USDT-${(t.instId || "").replace("-USDT", "")}`,
+        trade_price: parseFloat(t.last || "0"),
+        _baseCurrency: "USDT",
+      }));
+  }
+
+  async getFuturesPositions() {
+    const http = getAxios();
+    const path = "/api/v5/account/positions?instType=SWAP";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return (response.data?.data || []).filter((p) => parseFloat(p.pos || "0") !== 0);
+  }
+}
+
+class KucoinClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   * @param {string} passphrase
+   */
+  constructor(accessKey, secretKey, passphrase) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.passphrase = passphrase || "";
+    this.spotBaseUrl = "https://api.kucoin.com";
+    this.futuresBaseUrl = "https://api-futures.kucoin.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const preHash = `${timestamp}${method.toUpperCase()}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(preHash).digest("base64");
+  }
+
+  _signPassphrase() {
+    return crypto.createHmac("sha256", this.secretKey).update(this.passphrase).digest("base64");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = String(Date.now());
+    return {
+      "KC-API-KEY": this.accessKey,
+      "KC-API-SIGN": this._sign(ts, method, path, body),
+      "KC-API-TIMESTAMP": ts,
+      "KC-API-PASSPHRASE": this._signPassphrase(),
+      "KC-API-KEY-VERSION": "2",
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/api/v1/accounts?type=trade";
+    const response = await http.get(`${this.spotBaseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    const data = response.data?.data || [];
+    return data
+      .filter((a) => parseFloat(a.balance || "0") > 0)
+      .map((a) => ({
+        currency: a.currency,
+        balance: a.available || a.balance || "0",
+        locked: a.holds || "0",
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    const response = await http.get(`${this.spotBaseUrl}/api/v1/market/allTickers`, { timeout: 10000 });
+    const list = response.data?.data?.ticker || [];
+    return list
+      .filter((t) => (t.symbol || "").endsWith("-USDT"))
+      .map((t) => ({
+        market: `USDT-${(t.symbol || "").replace("-USDT", "")}`,
+        trade_price: parseFloat(t.last || "0"),
+        _baseCurrency: "USDT",
+      }));
+  }
+
+  async getFuturesBalance() {
+    const http = getAxios();
+    const path = "/api/v1/account-overview?currency=USDT";
+    const response = await http.get(`${this.futuresBaseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return response.data?.data || {};
+  }
+
+  async getFuturesPositions() {
+    const http = getAxios();
+    const path = "/api/v1/positions";
+    const response = await http.get(`${this.futuresBaseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return (response.data?.data || []).filter((p) => p.isOpen === true);
+  }
+}
+
+class MexcClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   */
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.spotBaseUrl = "https://api.mexc.com";
+    this.futuresBaseUrl = "https://contract.mexc.com";
+  }
+
+  _sign(queryString) {
+    return crypto.createHmac("sha256", this.secretKey)
+      .update(queryString).digest("hex");
+  }
+
+  _signedQuery(params = {}) {
+    params.timestamp = Date.now();
+    const qs = Object.entries(params).map(([k, v]) => `${k}=${v}`).join("&");
+    return `${qs}&signature=${this._sign(qs)}`;
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const qs = this._signedQuery({ recvWindow: 10000 });
+    const response = await http.get(`${this.spotBaseUrl}/api/v3/account?${qs}`, {
+      headers: { "X-MEXC-APIKEY": this.accessKey },
+      timeout: 10000,
+    });
+    return (response.data.balances || [])
+      .filter((b) => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0)
+      .map((b) => ({
+        currency: b.asset,
+        balance: String(parseFloat(b.free)),
+        locked: String(parseFloat(b.locked)),
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    const response = await http.get(`${this.spotBaseUrl}/api/v3/ticker/price`, { timeout: 10000 });
+    return (response.data || [])
+      .filter((t) => t.symbol.endsWith("USDT"))
+      .map((t) => ({
+        market: `USDT-${t.symbol.replace("USDT", "")}`,
+        trade_price: parseFloat(t.price),
+        _baseCurrency: "USDT",
+      }));
+  }
+
+  async getFuturesBalance() {
+    const http = getAxios();
+    const ts = String(Date.now());
+    const paramStr = `${this.accessKey}${ts}`;
+    const sig = crypto.createHmac("sha256", this.secretKey).update(paramStr).digest("hex");
+    const response = await http.get(`${this.futuresBaseUrl}/api/v1/private/account/assets`, {
+      headers: { "ApiKey": this.accessKey, "Request-Time": ts, "Signature": sig, "Content-Type": "application/json" },
+      timeout: 10000,
+    });
+    return response.data?.data || [];
+  }
+
+  async getFuturesPositions() {
+    const http = getAxios();
+    const ts = String(Date.now());
+    const paramStr = `${this.accessKey}${ts}`;
+    const sig = crypto.createHmac("sha256", this.secretKey).update(paramStr).digest("hex");
+    const response = await http.get(`${this.futuresBaseUrl}/api/v1/private/position/open_positions`, {
+      headers: { "ApiKey": this.accessKey, "Request-Time": ts, "Signature": sig, "Content-Type": "application/json" },
+      timeout: 10000,
+    });
+    return response.data?.data || [];
+  }
+}
+
+class BitkubClient2 {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   */
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.bitkub.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const preHash = `${timestamp}${method.toUpperCase()}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(preHash).digest("hex");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = String(Date.now());
+    return {
+      "X-BTK-APIKEY": this.accessKey,
+      "X-BTK-TIMESTAMP": ts,
+      "X-BTK-SIGN": this._sign(ts, method, path, body),
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/api/v3/market/wallet";
+    const body = "{}";
+    const response = await http.post(`${this.baseUrl}${path}`, {}, {
+      headers: this._headers("POST", path, body),
+      timeout: 10000,
+    });
+    const result = response.data?.result || {};
+    return Object.entries(result)
+      .filter(([, val]) => parseFloat(val) > 0)
+      .map(([currency, balance]) => ({
+        currency: currency.toUpperCase(),
+        balance: String(balance),
+        locked: "0",
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers(symbols) {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/api/v3/market/ticker`, { timeout: 10000 });
+    const data = response.data || {};
+    return Object.entries(data)
+      .filter(([key]) => key.startsWith("THB_"))
+      .map(([key, val]) => ({
+        market: key.replace("THB_", "THB-"),
+        trade_price: parseFloat(val.last || "0"),
+        _baseCurrency: "THB",
+      }));
+  }
+}
+
+// =============================================================================
+// EXCHANGE CLIENT FACTORY
+// =============================================================================
+
+/**
+ * Create an exchange client based on exchange name
+ * @param {string} exchange Exchange identifier
+ * @param {string} accessKey API access key
+ * @param {string} secretKey API secret key
+ * @param {string|null} passphrase API passphrase (Bitget, OKX, KuCoin)
+ * @return {object} Exchange client instance
+ */
+function createExchangeClient(exchange, accessKey, secretKey, passphrase = null) {
+  switch (exchange) {
+    case "upbit": return new UpbitClient(accessKey, secretKey);
+    case "bithumb": return new BithumbClient(accessKey, secretKey);
+    case "binance": return new BinanceClient(accessKey, secretKey);
+    case "bybit": return new BybitClient(accessKey, secretKey);
+    case "bitget": return new BitgetClient(accessKey, secretKey, passphrase);
+    case "okx": return new OkxClient(accessKey, secretKey, passphrase);
+    case "kucoin": return new KucoinClient(accessKey, secretKey, passphrase);
+    case "mexc": return new MexcClient(accessKey, secretKey);
+    case "bitkub": return new BitkubClient2(accessKey, secretKey);
+    default: throw new Error(`Unsupported exchange: ${exchange}`);
+  }
+}
+
+/**
+ * Check if exchange requires a passphrase
+ * @param {string} exchange
+ * @return {boolean}
+ */
+function exchangeRequiresPassphrase(exchange) {
+  return ["bitget", "okx", "kucoin"].includes(exchange);
+}
+
+// =============================================================================
+// VALIDATE CEX API KEY (supports all exchanges)
+// =============================================================================
+
 /**
  * Validate a CEX API key by attempting a balance query
- * @param {string} exchange 'upbit' | 'bithumb'
+ * @param {string} exchange Exchange identifier
  * @param {string} accessKey
  * @param {string} secretKey
+ * @param {string|null} passphrase
  * @return {Promise<{success: boolean, error?: string}>}
  */
-async function validateCexApiKey(exchange, accessKey, secretKey) {
+async function validateCexApiKey(exchange, accessKey, secretKey, passphrase = null) {
   try {
-    const client = exchange === "upbit" ?
-      new UpbitClient(accessKey, secretKey) :
-      new BithumbClient(accessKey, secretKey);
+    const client = createExchangeClient(exchange, accessKey, secretKey, passphrase);
     await client.getAccounts();
     return { success: true };
   } catch (error) {
     const status = error.response?.status;
-    const msg = error.response?.data?.error?.message || error.message;
-    if (status === 401) return { success: false, error: "Invalid API key or secret." };
-    if (status === 403) return { success: false, error: "Insufficient API permissions. Please enable balance read access." };
+    const msg = error.response?.data?.error?.message ||
+      error.response?.data?.msg ||
+      error.response?.data?.message ||
+      error.message;
+    if (status === 401 || status === 403) {
+      return { success: false, error: "Invalid API key, secret, or passphrase." };
+    }
     return { success: false, error: `Validation failed: ${msg}` };
   }
 }
@@ -7553,30 +8214,48 @@ async function performCexSync(uid, credentialId) {
     cred.encryptedSecretKey, cred.secretKeyIv, cred.secretKeyAuthTag,
   );
 
-  // Create exchange client
-  const client = cred.exchange === "upbit" ?
-    new UpbitClient(accessKey, secretKey) :
-    new BithumbClient(accessKey, secretKey);
+  // Decrypt passphrase if present
+  let passphrase = null;
+  if (cred.encryptedPassphrase) {
+    passphrase = cexDecrypt(
+      cred.encryptedPassphrase, cred.passphraseIv, cred.passphraseAuthTag,
+    );
+  }
+
+  // Create exchange client via factory
+  const client = createExchangeClient(cred.exchange, accessKey, secretKey, passphrase);
+  const capabilities = EXCHANGE_CAPABILITIES[cred.exchange] || { spot: true, futures: false, margin: false, baseCurrency: "KRW" };
+  const baseCurrency = capabilities.baseCurrency;
 
   const startTime = Date.now();
 
-  // 1. Fetch balances
+  // 1. Fetch exchange rates
+  const rates = await getExchangeRates();
+  const USD_KRW_RATE = rates.USDT_KRW || 1400;
+  const THB_KRW_RATE = rates.THB_KRW || 40;
+
+  // 2. Fetch balances
   const accounts = await client.getAccounts();
 
-  // 2. Filter non-zero assets
+  // 3. Filter non-zero assets
   const nonZeroAssets = accounts.filter((a) =>
     parseFloat(a.balance || "0") > 0 || parseFloat(a.locked || "0") > 0,
   );
 
-  // 3. Fetch tickers for KRW-paired markets
-  const markets = nonZeroAssets
-    .filter((a) => a.currency !== "KRW")
-    .map((a) => `KRW-${a.currency}`);
+  // 4. Fetch tickers
+  const stablecoins = ["KRW", "USDT", "USDC", "BUSD", "DAI", "THB", "USD"];
+  const tickerSymbols = nonZeroAssets
+    .filter((a) => !stablecoins.includes(a.currency.toUpperCase()))
+    .map((a) => {
+      if (baseCurrency === "KRW") return `KRW-${a.currency}`;
+      if (baseCurrency === "THB") return `THB-${a.currency}`;
+      return `USDT-${a.currency}`;
+    });
 
   let tickers = [];
-  if (markets.length > 0) {
+  if (tickerSymbols.length > 0) {
     try {
-      tickers = await client.getTickers(markets);
+      tickers = await client.getTickers(tickerSymbols);
     } catch (tickerErr) {
       console.warn(`[CEX] Ticker fetch partial failure:`, tickerErr.message);
     }
@@ -7584,14 +8263,19 @@ async function performCexSync(uid, credentialId) {
 
   const tickerMap = {};
   tickers.forEach((t) => {
-    const currency = (t.market || "").replace("KRW-", "");
+    const marketStr = t.market || "";
+    let currency;
+    if (baseCurrency === "KRW") {
+      currency = marketStr.replace("KRW-", "");
+    } else if (baseCurrency === "THB") {
+      currency = marketStr.replace("THB-", "");
+    } else {
+      currency = marketStr.replace("USDT-", "");
+    }
     tickerMap[currency] = t;
   });
 
-  // 4. USD/KRW rate (simple estimation; can upgrade to real-time API later)
-  const USD_KRW_RATE = 1400;
-
-  // 5. Build asset list
+  // 5. Build asset list with multi-currency support
   let totalValueKrw = 0;
   const assets = nonZeroAssets.map((a) => {
     const balance = parseFloat(a.balance || "0");
@@ -7600,18 +8284,43 @@ async function performCexSync(uid, credentialId) {
     const totalBalance = balance + locked;
 
     let currentPriceKrw = 0;
-    if (a.currency === "KRW") {
+    const currencyUpper = a.currency.toUpperCase();
+
+    if (currencyUpper === "KRW") {
       currentPriceKrw = 1;
+    } else if (currencyUpper === "USDT" || currencyUpper === "USDC" || currencyUpper === "BUSD" || currencyUpper === "DAI") {
+      currentPriceKrw = USD_KRW_RATE;
+    } else if (currencyUpper === "THB") {
+      currentPriceKrw = THB_KRW_RATE;
     } else if (tickerMap[a.currency]) {
-      currentPriceKrw = tickerMap[a.currency].trade_price ||
+      const tickerPrice = tickerMap[a.currency].trade_price ||
         tickerMap[a.currency].closing_price || 0;
+      // Convert ticker price to KRW based on base currency
+      if (baseCurrency === "KRW") {
+        currentPriceKrw = tickerPrice;
+      } else if (baseCurrency === "THB") {
+        currentPriceKrw = tickerPrice * THB_KRW_RATE;
+      } else {
+        // USDT base
+        currentPriceKrw = tickerPrice * USD_KRW_RATE;
+      }
     }
 
     const valueKrw = totalBalance * currentPriceKrw;
     const valueUsd = valueKrw / USD_KRW_RATE;
-    const costBasis = totalBalance * avgBuyPrice;
-    const profitLoss = a.currency === "KRW" ? 0 : (valueKrw - costBasis);
-    const profitLossPercent = (a.currency !== "KRW" && costBasis > 0) ?
+
+    // For KRW-based exchanges, avgBuyPrice is in KRW
+    // For USDT-based exchanges, avgBuyPrice is in USDT (convert to KRW)
+    let avgBuyPriceKrw = avgBuyPrice;
+    if (baseCurrency === "USDT" && avgBuyPrice > 0) {
+      avgBuyPriceKrw = avgBuyPrice * USD_KRW_RATE;
+    } else if (baseCurrency === "THB" && avgBuyPrice > 0) {
+      avgBuyPriceKrw = avgBuyPrice * THB_KRW_RATE;
+    }
+
+    const costBasis = totalBalance * avgBuyPriceKrw;
+    const profitLoss = stablecoins.includes(currencyUpper) ? 0 : (valueKrw - costBasis);
+    const profitLossPercent = (!stablecoins.includes(currencyUpper) && costBasis > 0) ?
       ((valueKrw - costBasis) / costBasis) * 100 : 0;
 
     totalValueKrw += valueKrw;
@@ -7620,7 +8329,7 @@ async function performCexSync(uid, credentialId) {
       currency: a.currency,
       balance: totalBalance,
       locked,
-      avgBuyPrice,
+      avgBuyPrice: avgBuyPriceKrw,
       currentPrice: currentPriceKrw,
       currentPriceUsd: currentPriceKrw / USD_KRW_RATE,
       valueKrw,
@@ -7641,13 +8350,43 @@ async function performCexSync(uid, credentialId) {
   assets.sort((a, b) => b.valueKrw - a.valueKrw);
 
   const totalProfitLoss = assets
-    .filter((a) => a.currency !== "KRW")
+    .filter((a) => !stablecoins.includes(a.currency.toUpperCase()))
     .reduce((sum, a) => sum + a.profitLoss, 0);
   const totalCostBasis = assets
-    .filter((a) => a.currency !== "KRW")
+    .filter((a) => !stablecoins.includes(a.currency.toUpperCase()))
     .reduce((sum, a) => sum + (a.balance * a.avgBuyPrice), 0);
 
-  // 6. Save snapshot (overwrite per credentialId)
+  // 6. Fetch Futures data (if supported)
+  let futuresPositions = [];
+  let futuresBalance = null;
+  if (capabilities.futures && typeof client.getFuturesPositions === "function") {
+    try {
+      const rawPositions = await client.getFuturesPositions();
+      futuresPositions = rawPositions.map((p) => ({
+        symbol: p.symbol || p.instId || p.pair || "",
+        side: p.positionSide || p.side || p.posSide || "BOTH",
+        size: parseFloat(p.positionAmt || p.size || p.pos || p.total || "0"),
+        entryPrice: parseFloat(p.entryPrice || p.avgPrice || p.avgCost || "0"),
+        markPrice: parseFloat(p.markPrice || p.mark_price || "0"),
+        unrealizedPnl: parseFloat(p.unRealizedProfit || p.unrealisedPnl || p.upl || p.unrealizedPnl || "0"),
+        leverage: parseFloat(p.leverage || "1"),
+        marginMode: p.marginType || p.tradeMode || p.marginMode || "cross",
+      }));
+      console.log(`[CEX] Fetched ${futuresPositions.length} futures positions for ${cred.exchange}`);
+    } catch (futErr) {
+      console.warn(`[CEX] Futures position fetch failed for ${cred.exchange}:`, futErr.message);
+    }
+
+    if (typeof client.getFuturesBalance === "function") {
+      try {
+        futuresBalance = await client.getFuturesBalance();
+      } catch (futBalErr) {
+        console.warn(`[CEX] Futures balance fetch failed for ${cred.exchange}:`, futBalErr.message);
+      }
+    }
+  }
+
+  // 7. Save snapshot (overwrite per credentialId)
   const snapshotData = {
     exchange: cred.exchange,
     credentialId,
@@ -7657,13 +8396,16 @@ async function performCexSync(uid, credentialId) {
     totalProfitLoss,
     totalProfitLossPercent: totalCostBasis > 0 ?
       (totalProfitLoss / totalCostBasis) * 100 : 0,
+    capabilities,
+    futuresPositions,
+    futuresBalance,
     snapshotAt: admin.firestore.FieldValue.serverTimestamp(),
     syncDurationMs: Date.now() - startTime,
   };
 
   await db.doc(`users/${uid}/cex_snapshots/${credentialId}`).set(snapshotData);
 
-  // 7. Update credential status
+  // 8. Update credential status
   await credDoc.ref.update({
     lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSyncStatus: "success",
@@ -7693,11 +8435,11 @@ exports.registerCexApiKey = onCall({
     throw new HttpsError("unauthenticated", "Email not found in auth token.");
   }
 
-  const { exchange, accessKey, secretKey, label } = request.data;
+  const { exchange, accessKey, secretKey, passphrase, label } = request.data;
 
   // Input validation
-  if (!["upbit", "bithumb"].includes(exchange)) {
-    throw new HttpsError("invalid-argument", "Unsupported exchange. Use 'upbit' or 'bithumb'.");
+  if (!SUPPORTED_EXCHANGES.includes(exchange)) {
+    throw new HttpsError("invalid-argument", `Unsupported exchange. Supported: ${SUPPORTED_EXCHANGES.join(", ")}`);
   }
   if (!accessKey || typeof accessKey !== "string" || accessKey.trim().length < 10) {
     throw new HttpsError("invalid-argument", "Invalid Access Key.");
@@ -7705,16 +8447,25 @@ exports.registerCexApiKey = onCall({
   if (!secretKey || typeof secretKey !== "string" || secretKey.trim().length < 10) {
     throw new HttpsError("invalid-argument", "Invalid Secret Key.");
   }
+  // Passphrase required for certain exchanges
+  if (exchangeRequiresPassphrase(exchange)) {
+    if (!passphrase || typeof passphrase !== "string" || passphrase.trim().length < 1) {
+      throw new HttpsError("invalid-argument", "Passphrase is required for this exchange.");
+    }
+  }
 
-  // Check max credentials (4 per user)
+  // Check max credentials (9 per user — one per exchange)
   const existing = await db.collection(`users/${userEmail}/cex_credentials`).get();
-  if (existing.size >= 4) {
-    throw new HttpsError("resource-exhausted", "Maximum 4 API keys allowed per account.");
+  if (existing.size >= 9) {
+    throw new HttpsError("resource-exhausted", "Maximum 9 API keys allowed per account.");
   }
 
   // Validate key against exchange
   console.log(`[CEX] Validating ${exchange} API key for user ${userEmail}`);
-  const validation = await validateCexApiKey(exchange, accessKey.trim(), secretKey.trim());
+  const validation = await validateCexApiKey(
+    exchange, accessKey.trim(), secretKey.trim(),
+    passphrase ? passphrase.trim() : null,
+  );
   if (!validation.success) {
     throw new HttpsError("invalid-argument", validation.error);
   }
@@ -7723,7 +8474,7 @@ exports.registerCexApiKey = onCall({
   const encAccess = cexEncrypt(accessKey.trim());
   const encSecret = cexEncrypt(secretKey.trim());
 
-  const docRef = await db.collection(`users/${userEmail}/cex_credentials`).add({
+  const credentialData = {
     exchange,
     encryptedAccessKey: encAccess.encrypted,
     accessKeyIv: encAccess.iv,
@@ -7735,10 +8486,21 @@ exports.registerCexApiKey = onCall({
     permissions: ["balance"],
     status: "active",
     statusMessage: "",
+    capabilities: EXCHANGE_CAPABILITIES[exchange] || {},
     registeredAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSyncAt: null,
     lastSyncStatus: null,
-  });
+  };
+
+  // Encrypt passphrase if provided
+  if (passphrase && passphrase.trim()) {
+    const encPass = cexEncrypt(passphrase.trim());
+    credentialData.encryptedPassphrase = encPass.encrypted;
+    credentialData.passphraseIv = encPass.iv;
+    credentialData.passphraseAuthTag = encPass.authTag;
+  }
+
+  const docRef = await db.collection(`users/${userEmail}/cex_credentials`).add(credentialData);
 
   console.log(`[CEX] Registered ${exchange} key ${docRef.id} for user ${userEmail}`);
 
@@ -7754,7 +8516,7 @@ exports.registerCexApiKey = onCall({
     success: true,
     credentialId: docRef.id,
     exchange,
-    label: label || `My ${exchange.charAt(0).toUpperCase() + exchange.slice(1)}`,
+    label: credentialData.label,
   };
 });
 

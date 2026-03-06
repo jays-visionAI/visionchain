@@ -30,6 +30,10 @@ import {
     formatUsd,
     getCoinIconUrl,
     getRelativeTime,
+    SUPPORTED_EXCHANGES,
+    PASSPHRASE_EXCHANGES,
+    EXCHANGE_LABELS,
+    type SupportedExchange,
     type CexCredential,
     type AggregatedPortfolio,
     type CexPortfolioSnapshot,
@@ -160,10 +164,12 @@ const WalletCexPortfolio = (): JSX.Element => {
 
     // Modal state
     const [showAddModal, setShowAddModal] = createSignal(false);
-    const [addExchange, setAddExchange] = createSignal<'upbit' | 'bithumb'>('upbit');
+    const [addExchange, setAddExchange] = createSignal<SupportedExchange>('upbit');
     const [addAccessKey, setAddAccessKey] = createSignal('');
     const [addSecretKey, setAddSecretKey] = createSignal('');
+    const [addPassphrase, setAddPassphrase] = createSignal('');
     const [addLabel, setAddLabel] = createSignal('');
+    const needsPassphrase = () => PASSPHRASE_EXCHANGES.includes(addExchange());
     const [isRegistering, setIsRegistering] = createSignal(false);
     const [showSecretKey, setShowSecretKey] = createSignal(false);
     const [registerError, setRegisterError] = createSignal('');
@@ -220,6 +226,10 @@ const WalletCexPortfolio = (): JSX.Element => {
             setRegisterError(t('cex.fillBothKeys'));
             return;
         }
+        if (needsPassphrase() && !addPassphrase().trim()) {
+            setRegisterError('Passphrase is required for this exchange.');
+            return;
+        }
         setIsRegistering(true);
         setRegisterError('');
         setRegisterSuccess('');
@@ -228,11 +238,13 @@ const WalletCexPortfolio = (): JSX.Element => {
                 exchange: addExchange(),
                 accessKey: addAccessKey(),
                 secretKey: addSecretKey(),
+                passphrase: needsPassphrase() ? addPassphrase() : undefined,
                 label: addLabel() || undefined,
             });
             setRegisterSuccess(`${result.label} ${t('cex.connectedSuccess')}`);
             setAddAccessKey('');
             setAddSecretKey('');
+            setAddPassphrase('');
             setAddLabel('');
             // Reload data
             await loadData();
@@ -436,8 +448,18 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     const snapshot = portfolios().find(p => p.credentialId === cred.id);
                                     return (
                                         <div class="flex items-center gap-3 p-3 bg-[#111113]/60 rounded-2xl border border-white/[0.04] hover:border-white/[0.08] transition-all group">
-                                            <div class={`p-2 rounded-xl ${cred.exchange === 'upbit' ? 'bg-[#093687]/15' : 'bg-[#F37021]/15'}`}>
-                                                {cred.exchange === 'upbit' ? <UpbitIcon /> : <BithumbIcon />}
+                                            <div class={`p-2 rounded-xl ${cred.exchange === 'upbit' ? 'bg-[#093687]/15' : cred.exchange === 'bithumb' ? 'bg-[#F37021]/15' : 'bg-cyan-500/10'}`}>
+                                                <Show when={cred.exchange === 'upbit'} fallback={
+                                                    <Show when={cred.exchange === 'bithumb'} fallback={
+                                                        <div class="w-5 h-5 rounded-md bg-cyan-500/15 flex items-center justify-center text-[9px] font-black text-cyan-300">
+                                                            {(EXCHANGE_LABELS[cred.exchange as SupportedExchange] || cred.exchange).charAt(0).toUpperCase()}
+                                                        </div>
+                                                    }>
+                                                        <BithumbIcon />
+                                                    </Show>
+                                                }>
+                                                    <UpbitIcon />
+                                                </Show>
                                             </div>
                                             <div class="flex-1 min-w-0">
                                                 <div class="text-sm font-bold text-white truncate">{cred.label}</div>
@@ -695,23 +717,47 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 {/* Exchange Selection */}
                                 <div>
                                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">{t('cex.exchange')}</label>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setAddExchange('upbit')}
-                                            class={`flex items-center gap-2 p-3 rounded-xl border transition-all ${addExchange() === 'upbit' ? 'bg-[#093687]/10 border-[#093687]/30' : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'}`}
-                                        >
-                                            <UpbitIcon />
-                                            <span class={`text-xs font-bold ${addExchange() === 'upbit' ? 'text-white' : 'text-gray-400'}`}>Upbit</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setAddExchange('bithumb')}
-                                            class={`flex items-center gap-2 p-3 rounded-xl border transition-all ${addExchange() === 'bithumb' ? 'bg-[#F37021]/10 border-[#F37021]/30' : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'}`}
-                                        >
-                                            <BithumbIcon />
-                                            <span class={`text-xs font-bold ${addExchange() === 'bithumb' ? 'text-white' : 'text-gray-400'}`}>Bithumb</span>
-                                        </button>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <For each={SUPPORTED_EXCHANGES}>{(ex) => (
+                                            <button
+                                                onClick={() => { setAddExchange(ex); setAddPassphrase(''); }}
+                                                class={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${addExchange() === ex ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'}`}
+                                            >
+                                                <Show when={ex === 'upbit'} fallback={
+                                                    <Show when={ex === 'bithumb'} fallback={
+                                                        <div class={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black ${addExchange() === ex ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/[0.06] text-gray-500'}`}>
+                                                            {EXCHANGE_LABELS[ex].charAt(0).toUpperCase()}
+                                                        </div>
+                                                    }>
+                                                        <BithumbIcon />
+                                                    </Show>
+                                                }>
+                                                    <UpbitIcon />
+                                                </Show>
+                                                <span class={`text-[11px] font-bold ${addExchange() === ex ? 'text-white' : 'text-gray-400'}`}>{EXCHANGE_LABELS[ex]}</span>
+                                            </button>
+                                        )}</For>
                                     </div>
                                 </div>
+
+                                {/* Passphrase (Bitget, OKX, KuCoin) */}
+                                <Show when={needsPassphrase()}>
+                                    <div>
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                            Passphrase
+                                            <span class="text-[9px] font-medium text-amber-400/70">(Required)</span>
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={addPassphrase()}
+                                            onInput={(e) => setAddPassphrase(e.currentTarget.value)}
+                                            placeholder="Enter your API passphrase"
+                                            class="w-full px-3 py-2.5 bg-white/[0.03] border border-amber-500/15 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 transition-colors font-mono"
+                                            spellcheck={false}
+                                            autocomplete="off"
+                                        />
+                                    </div>
+                                </Show>
 
                                 {/* Label */}
                                 <div>
@@ -720,7 +766,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                         type="text"
                                         value={addLabel()}
                                         onInput={(e) => setAddLabel(e.currentTarget.value)}
-                                        placeholder={`My ${addExchange() === 'upbit' ? 'Upbit' : 'Bithumb'}`}
+                                        placeholder={`My ${EXCHANGE_LABELS[addExchange()]}`}
                                         class="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors"
                                     />
                                 </div>

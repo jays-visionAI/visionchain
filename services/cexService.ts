@@ -8,13 +8,41 @@ const cexFunctions = getFunctions(getFirebaseApp(), 'asia-northeast3');
 // Type Definitions
 // =============================================================================
 
+export type SupportedExchange = 'upbit' | 'bithumb' | 'binance' | 'bybit' | 'bitget' | 'okx' | 'kucoin' | 'mexc' | 'bitkub';
+
+export const SUPPORTED_EXCHANGES: SupportedExchange[] = [
+    'upbit', 'bithumb', 'binance', 'bybit', 'bitget', 'okx', 'kucoin', 'mexc', 'bitkub',
+];
+
+export const PASSPHRASE_EXCHANGES: SupportedExchange[] = ['bitget', 'okx', 'kucoin'];
+
+export const EXCHANGE_LABELS: Record<SupportedExchange, string> = {
+    upbit: 'Upbit',
+    bithumb: 'Bithumb',
+    binance: 'Binance',
+    bybit: 'Bybit',
+    bitget: 'Bitget',
+    okx: 'OKX',
+    kucoin: 'KuCoin',
+    mexc: 'MEXC',
+    bitkub: 'Bitkub',
+};
+
+export interface ExchangeCapabilities {
+    spot: boolean;
+    futures: boolean;
+    margin: boolean;
+    baseCurrency: 'KRW' | 'USDT' | 'THB';
+}
+
 export interface CexCredential {
     id: string;
-    exchange: 'upbit' | 'bithumb';
+    exchange: SupportedExchange;
     label: string;
     status: 'active' | 'validating' | 'expired' | 'error';
     statusMessage: string;
     permissions: string[];
+    capabilities?: ExchangeCapabilities;
     lastSyncAt: string | null;
     lastSyncStatus: 'success' | 'error' | null;
     registeredAt: string | null;
@@ -35,6 +63,17 @@ export interface CexAsset {
     sources?: string[];
 }
 
+export interface FuturesPosition {
+    symbol: string;
+    side: string;
+    size: number;
+    entryPrice: number;
+    markPrice: number;
+    unrealizedPnl: number;
+    leverage: number;
+    marginMode: string;
+}
+
 export interface CexPortfolioSnapshot {
     id: string;
     exchange: string;
@@ -44,6 +83,9 @@ export interface CexPortfolioSnapshot {
     totalValueUsd: number;
     totalProfitLoss: number;
     totalProfitLossPercent: number;
+    capabilities?: ExchangeCapabilities;
+    futuresPositions?: FuturesPosition[];
+    futuresBalance?: unknown;
     snapshotAt: string | null;
     syncDurationMs: number;
 }
@@ -65,9 +107,10 @@ export interface AggregatedPortfolio {
  * An initial portfolio sync is triggered automatically.
  */
 export async function registerCexApiKey(params: {
-    exchange: 'upbit' | 'bithumb';
+    exchange: SupportedExchange;
     accessKey: string;
     secretKey: string;
+    passphrase?: string;
     label?: string;
 }): Promise<{ success: boolean; credentialId: string; exchange: string; label: string }> {
     const fn = httpsCallable(cexFunctions, 'registerCexApiKey');

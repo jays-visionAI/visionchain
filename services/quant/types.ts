@@ -12,7 +12,7 @@ export type RiskLevel = 'low' | 'medium' | 'medium_high' | 'high';
 
 export type Timeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
 
-export type Exchange = 'upbit' | 'bithumb';
+export type Exchange = 'upbit' | 'bithumb' | 'binance' | 'bybit' | 'bitget' | 'okx' | 'kucoin' | 'mexc' | 'bitkub';
 
 export interface EntryRule {
     indicator: string;
