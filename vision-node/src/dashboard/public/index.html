@@ -312,6 +312,64 @@
                 </div>
             </div>
 
+            <!-- Storage Allocation Settings -->
+            <div class="panel storage-config-panel">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <ellipse cx="12" cy="5" rx="9" ry="3" />
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                    </svg>
+                    <h2>Storage Allocation</h2>
+                    <span class="panel-badge storage-badge" id="storageAllocBadge">-- GB</span>
+                </div>
+                <div class="storage-config-body">
+                    <div class="storage-config-info">
+                        <p class="storage-config-desc">
+                            Adjust how much disk space your node contributes to Vision Chain's distributed storage
+                            network.
+                            More storage = higher weight = more VCN rewards.
+                        </p>
+                    </div>
+                    <div class="storage-slider-section">
+                        <div class="storage-slider-header">
+                            <span class="storage-slider-label">Allocation</span>
+                            <span class="storage-slider-value" id="storageSliderValue">50 GB</span>
+                        </div>
+                        <input type="range" id="storageAllocSlider" class="storage-alloc-slider" min="1" max="100"
+                            value="50" step="1" />
+                        <div class="storage-slider-range">
+                            <span id="storageSliderMin">1 GB</span>
+                            <span id="storageSliderMax">100 GB</span>
+                        </div>
+                    </div>
+                    <div class="storage-config-stats">
+                        <div class="storage-config-stat">
+                            <div class="storage-config-stat-label">Current Usage</div>
+                            <div class="storage-config-stat-value" id="storageAllocUsed">0 B</div>
+                        </div>
+                        <div class="storage-config-stat">
+                            <div class="storage-config-stat-label">Max Allocation</div>
+                            <div class="storage-config-stat-value" id="storageAllocMax">50 GB</div>
+                        </div>
+                        <div class="storage-config-stat">
+                            <div class="storage-config-stat-label">Usage</div>
+                            <div class="storage-config-stat-value" id="storageAllocPct">0%</div>
+                        </div>
+                    </div>
+                    <div class="storage-config-actions">
+                        <button class="btn-storage-apply" id="storageApplyBtn" onclick="applyStorageAllocation()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Apply
+                        </button>
+                        <span class="storage-apply-status" id="storageApplyStatus"></span>
+                    </div>
+                </div>
+            </div>
+
             <!-- P2P Network -->
             <div class="panel p2p-panel">
                 <div class="panel-header">

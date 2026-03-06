@@ -134,6 +134,7 @@ const WalletReferralDocs = lazy(() => import('./wallet/WalletReferralDocs').then
 const Bridge = lazy(() => import('./Bridge'));
 const ValidatorStaking = lazy(() => import('./ValidatorStaking'));
 const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
+const VisionQuantEngine = lazy(() => import('./quant/VisionQuantEngine'));
 const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
 const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
 const VisionMarket = lazy(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
@@ -148,7 +149,7 @@ const PhoneAccountResolver = lazy(() => import('./auth/PhoneAccountResolver'));
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight' | 'disk' | 'market';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'quant' | 'agent' | 'insight' | 'disk' | 'market';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -4547,6 +4548,15 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                                     <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
                                         <WalletCexPortfolio />
+                                    </Suspense>
+                                </div>
+                            </Show>
+
+                            {/* Vision Quant Engine View */}
+                            <Show when={activeView() === 'quant'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                        <VisionQuantEngine />
                                     </Suspense>
                                 </div>
                             </Show>

@@ -27,6 +27,7 @@ export interface AppSettings {
     cellularAllowed: boolean;
     autoPauseBelowBattery: number; // percentage, 0 = disabled
     maxCacheSizeMb: number;
+    storageAllocationMb: number; // distributed storage allocation in MB, 0 = disabled
     notificationsEnabled: boolean;
 }
 
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     cellularAllowed: false,
     autoPauseBelowBattery: 20,
     maxCacheSizeMb: 50,
+    storageAllocationMb: 10240, // 10 GB default
     notificationsEnabled: true,
 };
 

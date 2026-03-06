@@ -29,6 +29,7 @@ export const AdminVisionNodes = lazy(() => import('../components/admin/AdminVisi
 export const AdminDailyTips = lazy(() => import('../components/admin/AdminDailyTips'));
 export const AdminRPConfig = lazy(() => import('../components/admin/AdminRPConfig'));
 export const AdminUserAnalytics = lazy(() => import('../components/admin/AdminUserAnalytics'));
+export const AdminRewardHub = lazy(() => import('../components/admin/AdminRewardHub'));
 
 
 // Loading spinner component
@@ -332,6 +333,17 @@ export function AdminUserAnalyticsPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminUserAnalytics />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminRewardHubPage() {
+    document.title = 'Reward Engine | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminRewardHub />
             </AdminLayout>
         </Suspense>
     );

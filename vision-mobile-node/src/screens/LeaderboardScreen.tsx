@@ -30,8 +30,10 @@ const LeaderboardScreen: React.FC<Props> = ({ onBack }) => {
         try {
             const result = await getLeaderboard();
             if (result.success) {
-                setEntries(result.leaderboard);
-                setTotalNodes(result.total_nodes);
+                // Support both 'leaderboard' and legacy 'rankings' response keys
+                const list = result.leaderboard || (result as any).rankings || [];
+                setEntries(Array.isArray(list) ? list : []);
+                setTotalNodes(result.total_nodes || 0);
             }
         } catch (err) {
             console.error('Failed to load leaderboard:', err);
@@ -93,12 +95,12 @@ const LeaderboardScreen: React.FC<Props> = ({ onBack }) => {
 
                 {/* Info */}
                 <View style={styles.infoCol}>
-                    <Text style={styles.emailText}>{item.email_masked}</Text>
+                    <Text style={styles.emailText}>{item.email_masked || '***'}</Text>
                     <View style={styles.metaRow}>
                         <View style={styles.metaItem}>
                             <View style={[styles.metaDot, { backgroundColor: '#00b894' }]} />
                             <Text style={styles.metaText}>
-                                {formatUptime(item.total_uptime_seconds)}
+                                {formatUptime(item.total_uptime_seconds || 0)}
                             </Text>
                         </View>
                         <View style={styles.metaItem}>
@@ -113,7 +115,7 @@ const LeaderboardScreen: React.FC<Props> = ({ onBack }) => {
                 {/* Reward */}
                 <View style={styles.rewardCol}>
                     <Text style={[styles.rewardText, isTop3 && { color: rankStyle.color }]}>
-                        {parseFloat(item.total_earned).toFixed(2)}
+                        {parseFloat(item.total_earned || '0').toFixed(2)}
                     </Text>
                     <Text style={styles.rewardLabel}>VCN</Text>
                 </View>

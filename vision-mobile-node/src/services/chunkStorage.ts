@@ -281,6 +281,67 @@ class ChunkStorageService {
         return { ...this.stats };
     }
 
+    /**
+     * Resize storage allocation (in MB). If new size is smaller than
+     * current usage, LRU eviction is performed to fit within bounds.
+     * Returns the number of bytes freed (0 if no eviction needed).
+     */
+    async resize(newMaxMb: number): Promise<number> {
+        const newMaxBytes = newMaxMb * 1024 * 1024;
+        const oldMax = this.stats.maxSizeBytes;
+        this.stats.maxSizeBytes = newMaxBytes;
+
+        let totalFreed = 0;
+
+        // If new limit is smaller than current usage, evict
+        if (this.stats.totalSizeBytes > newMaxBytes) {
+            const excess = this.stats.totalSizeBytes - newMaxBytes;
+            const sorted = Array.from(this.index.values()).sort(
+                (a, b) => a.lastAccessed - b.lastAccessed,
+            );
+
+            for (const meta of sorted) {
+                if (totalFreed >= excess) break;
+
+                try {
+                    const chunkPath = this.getChunkPath(meta.hash);
+                    await RNFS.unlink(chunkPath);
+                } catch { /* file may not exist */ }
+
+                totalFreed += meta.size;
+                this.index.delete(meta.hash);
+                console.log(`[ChunkStorage] Evicted during resize: ${meta.hash.slice(0, 12)}...`);
+            }
+        }
+
+        this.recalcStats();
+        await this.saveIndex();
+        this.notify();
+
+        console.log(
+            `[ChunkStorage] Resized: ${(oldMax / (1024 * 1024)).toFixed(0)} MB -> ${newMaxMb} MB (freed ${(totalFreed / (1024 * 1024)).toFixed(1)} MB)`,
+        );
+
+        return totalFreed;
+    }
+
+    /**
+     * Clear all stored chunks and reset (for disabling storage participation)
+     */
+    async clearAll(): Promise<void> {
+        for (const meta of this.index.values()) {
+            try {
+                const chunkPath = this.getChunkPath(meta.hash);
+                await RNFS.unlink(chunkPath);
+            } catch { /* file may not exist */ }
+        }
+        this.index.clear();
+        this.recalcStats();
+        await this.saveIndex();
+        this.notify();
+        console.log('[ChunkStorage] All chunks cleared');
+    }
+
     onChange(callback: StatsCallback): () => void {
         this.listeners.push(callback);
         return () => {

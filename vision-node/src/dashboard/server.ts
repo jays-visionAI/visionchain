@@ -114,6 +114,39 @@ export function startDashboard(port: number): void {
         res.json(safeConfig);
     });
 
+    // API: Update storage allocation
+    app.post('/api/config/storage', (req, res) => {
+        try {
+            const { storageMaxGB } = req.body;
+            if (storageMaxGB === undefined || typeof storageMaxGB !== 'number') {
+                return res.status(400).json({ error: 'storageMaxGB (number) is required' });
+            }
+
+            const config = configManager.get();
+            const minGB = config.nodeClass === 'lite' ? 0.1 : config.nodeClass === 'full' ? 100 : 1;
+            const maxGB = config.nodeClass === 'lite' ? 1 : config.nodeClass === 'full' ? 1000 : 100;
+            const clamped = Math.max(minGB, Math.min(maxGB, storageMaxGB));
+
+            configManager.update({ storageMaxGB: clamped });
+            configManager.save();
+
+            const stats = storageService.getStats();
+            res.json({
+                success: true,
+                storageMaxGB: clamped,
+                currentUsageBytes: stats.totalSizeBytes,
+                usagePercent: clamped > 0
+                    ? Math.round((stats.totalSizeBytes / (clamped * 1024 * 1024 * 1024)) * 100)
+                    : 0,
+            });
+
+            console.log(`[Dashboard] Storage allocation updated to ${clamped} GB`);
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            res.status(500).json({ error: errMsg });
+        }
+    });
+
     // SSE: Live updates (push every 5 seconds)
     app.get('/api/events', (_req, res) => {
         res.writeHead(200, {

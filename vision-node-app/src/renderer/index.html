@@ -275,6 +275,59 @@
                     <h2>Settings</h2>
                 </div>
 
+                <!-- Storage Allocation -->
+                <div class="info-card">
+                    <div class="info-header">Storage Allocation</div>
+                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 16px; line-height: 1.6;">
+                        Adjust how much disk space your node contributes to Vision Chain's distributed storage network.
+                        More storage = higher weight = more VCN rewards.
+                    </p>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span
+                            style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Allocation</span>
+                        <span id="settings-storage-value" style="font-size: 20px; font-weight: 800; color: #22c55e;">50
+                            GB</span>
+                    </div>
+                    <input type="range" id="settings-storage-slider" min="1" max="100" value="50" step="1"
+                        style="width: 100%; margin-bottom: 6px; accent-color: #22c55e;" />
+                    <div
+                        style="display: flex; justify-content: space-between; font-size: 10px; color: #6b7280; margin-bottom: 16px;">
+                        <span id="settings-storage-min">1 GB</span>
+                        <span id="settings-storage-max">100 GB</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;">
+                        <div
+                            style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px; text-align: center;">
+                            <div
+                                style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">
+                                Current Usage</div>
+                            <div id="settings-storage-used" style="font-size: 16px; font-weight: 700;">0 B</div>
+                        </div>
+                        <div
+                            style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px; text-align: center;">
+                            <div
+                                style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">
+                                Max Allocation</div>
+                            <div id="settings-storage-alloc" style="font-size: 16px; font-weight: 700;">50 GB</div>
+                        </div>
+                        <div
+                            style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px; text-align: center;">
+                            <div
+                                style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">
+                                Usage</div>
+                            <div id="settings-storage-pct" style="font-size: 16px; font-weight: 700;">0%</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button id="settings-storage-apply-btn" class="btn-primary" onclick="applyStorageSettings()"
+                            style="padding: 8px 20px; font-size: 12px;">
+                            Apply
+                        </button>
+                        <span id="settings-storage-status" style="font-size: 12px;"></span>
+                    </div>
+                </div>
+
                 <div class="info-card">
                     <div class="info-header">Node Configuration</div>
                     <div class="info-grid">

@@ -1,0 +1,20 @@
+{
+    "version": 1,
+    "effectiveFrom": "2026-04-01T00:00:00Z",
+    "effectiveTo": "",
+    "rewardPoolRatio": 0.40,
+    "allocPoolRatio": 0.40,
+    "usePoolRatio": 0.35,
+    "qualityPoolRatio": 0.25,
+    "allocationCapLambda": 0.50,
+    "uptimeCutoff": 0.90,
+    "auditCutoff": 0.95,
+    "latencyMinMs": 50,
+    "latencyMaxMs": 2000,
+    "qualityWeightUptime": 0.50,
+    "qualityWeightAudit": 0.30,
+    "qualityWeightLatency": 0.20,
+    "minPayoutUsd": 1.00,
+    "isActive": true,
+    "_comment": "Default reward policy v1. allocPool(40%) + usePool(35%) + qualityPool(25%) = 100%. qualityWeights sum = 100%."
+}

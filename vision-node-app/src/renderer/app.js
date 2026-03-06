@@ -14,6 +14,7 @@ async function init() {
     } else {
         showView('dashboard-view');
         await refreshStatus();
+        initStorageSettings();
     }
 
     // Listen for events from main process
@@ -277,3 +278,71 @@ function escapeHtml(str) {
 
 // ── Start ──
 document.addEventListener('DOMContentLoaded', init);
+
+// ── Storage Settings ──
+async function initStorageSettings() {
+    try {
+        const status = await window.visionNode.getStatus();
+        if (!status) return;
+
+        const slider = document.getElementById('settings-storage-slider');
+        if (!slider) return;
+
+        const nodeClass = status.nodeClass || 'standard';
+        const classRanges = {
+            lite: { min: 0.1, max: 1, step: 0.1 },
+            standard: { min: 1, max: 100, step: 1 },
+            full: { min: 100, max: 1000, step: 10 },
+        };
+        const range = classRanges[nodeClass] || classRanges.standard;
+
+        slider.min = range.min;
+        slider.max = range.max;
+        slider.step = range.step;
+        slider.value = status.storageMaxGB || range.min;
+
+        const formatGB = (gb) => gb < 1 ? (gb * 1024).toFixed(0) + ' MB' : gb >= 1000 ? (gb / 1024).toFixed(1) + ' TB' : gb + ' GB';
+
+        document.getElementById('settings-storage-min').textContent = formatGB(range.min);
+        document.getElementById('settings-storage-max').textContent = formatGB(range.max);
+        document.getElementById('settings-storage-value').textContent = formatGB(status.storageMaxGB || range.min);
+        document.getElementById('settings-storage-alloc').textContent = formatGB(status.storageMaxGB || range.min);
+
+        slider.addEventListener('input', function () {
+            document.getElementById('settings-storage-value').textContent = formatGB(parseFloat(this.value));
+        });
+    } catch (err) {
+        console.warn('[Storage Settings] Init failed:', err);
+    }
+}
+
+async function applyStorageSettings() {
+    const slider = document.getElementById('settings-storage-slider');
+    const statusEl = document.getElementById('settings-storage-status');
+    const btn = document.getElementById('settings-storage-apply-btn');
+    if (!slider || !btn) return;
+
+    const newGB = parseFloat(slider.value);
+    btn.disabled = true;
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#a0aec0';
+
+    try {
+        const result = await window.visionNode.updateStorage(newGB);
+        if (result && result.success) {
+            const formatGB = (gb) => gb < 1 ? (gb * 1024).toFixed(0) + ' MB' : gb + ' GB';
+            statusEl.textContent = 'Applied: ' + formatGB(result.storageMaxGB);
+            statusEl.style.color = '#22c55e';
+            document.getElementById('settings-storage-alloc').textContent = formatGB(result.storageMaxGB);
+        } else {
+            statusEl.textContent = 'Error: ' + (result?.error || 'Unknown');
+            statusEl.style.color = '#ef4444';
+        }
+    } catch (err) {
+        statusEl.textContent = 'Failed';
+        statusEl.style.color = '#ef4444';
+    } finally {
+        btn.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+    }
+}

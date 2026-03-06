@@ -9011,6 +9011,19 @@ exports.agentGateway = onRequest({
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
+      "reward_policy.get_active", "reward_policy.list", "reward_policy.create", "reward_policy.activate",
+      "reward_policy.update", "reward_policy.deactivate",
+      "node_metrics.ingest", "node_metrics.query", "node_metrics.aggregate_month",
+      "node_metrics.get_monthly", "node_metrics.list_monthly",
+      "reward_engine.run", "reward_engine.get_snapshot", "reward_engine.list_snapshots", "reward_engine.update_status",
+      "revenue.set", "revenue.confirm", "revenue.get", "revenue.list",
+      "snapshot.approve", "snapshot.reject",
+      "fx_rate.set", "fx_rate.get",
+      "payout.generate", "payout.list", "payout.update_status",
+      "rollover.get", "rollover.list", "rollover.apply",
+      "bootstrap.get", "bootstrap.set",
+      "abuse.scan", "abuse.list", "abuse.exclude", "abuse.resolve",
+      "ops.monthly_report",
     ];
 
     // Detect Firebase ID token (non-vcn_ bearer tokens)
@@ -12891,13 +12904,23 @@ exports.agentGateway = onRequest({
           .limit(safeLimit);
 
         const snap = await query.get();
-        const rankings = snap.docs.map((doc, index) => {
+        const leaderboard = snap.docs.map((doc, index) => {
           const d = doc.data();
+          // Mask email: show first 2 chars + "***" + domain
+          const email = d.email || "";
+          let emailMasked = "***";
+          if (email.includes("@")) {
+            const [local, domain] = email.split("@");
+            emailMasked = local.slice(0, 2) + "***@" + domain;
+          }
           return {
             rank: index + 1,
             node_id: doc.id,
+            email_masked: emailMasked,
             device_type: d.device_type,
+            total_uptime_seconds: d.total_uptime_seconds || 0,
             total_uptime_hours: parseFloat(((d.total_uptime_seconds || 0) / 3600).toFixed(2)),
+            weight: d.weight || 0,
             total_earned: d.total_earned || "0",
             heartbeat_count: d.heartbeat_count || 0,
             streak_days: d.streak_days || 0,
@@ -12912,12 +12935,1336 @@ exports.agentGateway = onRequest({
         return res.status(200).json({
           success: true,
           scope,
-          rankings,
+          leaderboard,
           total_nodes: totalSnap.data().count,
         });
       } catch (e) {
         console.error("[Mobile Node] Leaderboard error:", e);
         return res.status(500).json({ error: `Leaderboard failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // REWARD POLICY MANAGEMENT
+    // =====================================================
+
+    // --- reward_policy.get_active ---
+    if (action === "reward_policy.get_active") {
+      try {
+        const snap = await db.collection("reward_policies")
+          .where("isActive", "==", true)
+          .limit(1)
+          .get();
+
+        if (snap.empty) {
+          return res.status(200).json({ success: true, policy: null });
+        }
+
+        return res.status(200).json({
+          success: true,
+          policy: snap.docs[0].data(),
+        });
+      } catch (e) {
+        console.error("[RewardPolicy] Get active error:", e);
+        return res.status(500).json({ error: `Failed to get active policy: ${e.message}` });
+      }
+    }
+
+    // --- reward_policy.list ---
+    if (action === "reward_policy.list") {
+      try {
+        // Admin-only: require api_key starting with vcn_mn_ or check caller
+        const snap = await db.collection("reward_policies")
+          .orderBy("version", "desc")
+          .get();
+
+        const policies = snap.docs.map(d => d.data());
+        return res.status(200).json({ success: true, policies, count: policies.length });
+      } catch (e) {
+        console.error("[RewardPolicy] List error:", e);
+        return res.status(500).json({ error: `Failed to list policies: ${e.message}` });
+      }
+    }
+
+    // --- reward_policy.create ---
+    if (action === "reward_policy.create") {
+      try {
+        const { policy } = body;
+        if (!policy) {
+          return res.status(400).json({ error: "policy object required" });
+        }
+
+        // ── Validation ──
+        const errors = [];
+
+        // Required fields
+        const requiredFields = [
+          "version", "effectiveFrom", "rewardPoolRatio", "allocPoolRatio",
+          "usePoolRatio", "qualityPoolRatio", "allocationCapLambda",
+          "uptimeCutoff", "auditCutoff", "latencyMinMs", "latencyMaxMs",
+          "qualityWeightUptime", "qualityWeightAudit", "qualityWeightLatency",
+          "minPayoutUsd",
+        ];
+        for (const f of requiredFields) {
+          if (policy[f] === undefined || policy[f] === null) {
+            errors.push(`Missing required field: ${f}`);
+          }
+        }
+
+        if (errors.length === 0) {
+          // Pool ratio sum check
+          const poolSum = Math.round(((policy.allocPoolRatio || 0) + (policy.usePoolRatio || 0) + (policy.qualityPoolRatio || 0)) * 10000) / 10000;
+          if (poolSum !== 1.0) {
+            errors.push(`Pool ratios must sum to 1.0 (got ${poolSum})`);
+          }
+
+          // Quality weight sum check
+          const qualSum = Math.round(((policy.qualityWeightUptime || 0) + (policy.qualityWeightAudit || 0) + (policy.qualityWeightLatency || 0)) * 10000) / 10000;
+          if (qualSum !== 1.0) {
+            errors.push(`Quality weights must sum to 1.0 (got ${qualSum})`);
+          }
+
+          // Range checks
+          if (policy.rewardPoolRatio <= 0 || policy.rewardPoolRatio > 0.30) {
+            errors.push(`rewardPoolRatio must be 0 < ratio <= 0.30`);
+          }
+          if (policy.allocationCapLambda <= 0 || policy.allocationCapLambda > 1) {
+            errors.push(`allocationCapLambda must be 0 < lambda <= 1`);
+          }
+          if (policy.latencyMaxMs <= policy.latencyMinMs) {
+            errors.push(`latencyMaxMs must be > latencyMinMs`);
+          }
+        }
+
+        if (errors.length > 0) {
+          return res.status(400).json({ success: false, errors });
+        }
+
+        // Generate ID
+        const policyId = "rp_" + Date.now().toString(36) + "_" + require("crypto").randomBytes(4).toString("hex");
+        const now = new Date().toISOString();
+        const isActive = policy.isActive !== false; // Default to true
+
+        // If active, deactivate current
+        if (isActive) {
+          const activeSnap = await db.collection("reward_policies")
+            .where("isActive", "==", true)
+            .get();
+          for (const d of activeSnap.docs) {
+            await d.ref.update({ isActive: false, updatedAt: now });
+          }
+        }
+
+        const fullPolicy = {
+          ...policy,
+          policyId,
+          isActive,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await db.collection("reward_policies").doc(policyId).set(fullPolicy);
+
+        console.log(`[RewardPolicy] Created: ${policyId} v${policy.version} (active=${isActive})`);
+        return res.status(201).json({ success: true, policyId, policy: fullPolicy });
+      } catch (e) {
+        console.error("[RewardPolicy] Create error:", e);
+        return res.status(500).json({ error: `Failed to create policy: ${e.message}` });
+      }
+    }
+
+    // --- reward_policy.activate ---
+    if (action === "reward_policy.activate") {
+      try {
+        const { policy_id } = body;
+        if (!policy_id) {
+          return res.status(400).json({ error: "policy_id required" });
+        }
+
+        const targetRef = db.collection("reward_policies").doc(policy_id);
+        const targetSnap = await targetRef.get();
+        if (!targetSnap.exists) {
+          return res.status(404).json({ error: `Policy ${policy_id} not found` });
+        }
+
+        const now = new Date().toISOString();
+
+        // Deactivate all active
+        const activeSnap = await db.collection("reward_policies")
+          .where("isActive", "==", true)
+          .get();
+        for (const d of activeSnap.docs) {
+          await d.ref.update({ isActive: false, updatedAt: now });
+        }
+
+        // Activate target
+        await targetRef.update({ isActive: true, updatedAt: now });
+
+        console.log(`[RewardPolicy] Activated: ${policy_id}`);
+        return res.status(200).json({ success: true, policy_id });
+      } catch (e) {
+        console.error("[RewardPolicy] Activate error:", e);
+        return res.status(500).json({ error: `Failed to activate policy: ${e.message}` });
+      }
+    }
+
+    // --- reward_policy.update ---
+    if (action === "reward_policy.update") {
+      try {
+        const { policy_id, updates } = body;
+        if (!policy_id) {
+          return res.status(400).json({ error: "policy_id required" });
+        }
+        if (!updates || typeof updates !== "object") {
+          return res.status(400).json({ error: "updates object required" });
+        }
+
+        const targetRef = db.collection("reward_policies").doc(policy_id);
+        const targetSnap = await targetRef.get();
+        if (!targetSnap.exists) {
+          return res.status(404).json({ error: `Policy ${policy_id} not found` });
+        }
+
+        // Merge & validate
+        const existing = targetSnap.data();
+        const merged = { ...existing, ...updates };
+        const errors = [];
+
+        // Pool ratio sum check
+        const poolSum = Math.round(((merged.allocPoolRatio || 0) + (merged.usePoolRatio || 0) + (merged.qualityPoolRatio || 0)) * 10000) / 10000;
+        if (poolSum !== 1.0) {
+          errors.push(`Pool ratios must sum to 1.0 (got ${poolSum})`);
+        }
+
+        // Quality weight sum check
+        const qualSum = Math.round(((merged.qualityWeightUptime || 0) + (merged.qualityWeightAudit || 0) + (merged.qualityWeightLatency || 0)) * 10000) / 10000;
+        if (qualSum !== 1.0) {
+          errors.push(`Quality weights must sum to 1.0 (got ${qualSum})`);
+        }
+
+        if (merged.rewardPoolRatio <= 0 || merged.rewardPoolRatio > 0.30) {
+          errors.push(`rewardPoolRatio must be 0 < ratio <= 0.30`);
+        }
+        if (merged.allocationCapLambda <= 0 || merged.allocationCapLambda > 1) {
+          errors.push(`allocationCapLambda must be 0 < lambda <= 1`);
+        }
+        if (merged.latencyMaxMs <= merged.latencyMinMs) {
+          errors.push(`latencyMaxMs must be > latencyMinMs`);
+        }
+
+        if (errors.length > 0) {
+          return res.status(400).json({ success: false, errors });
+        }
+
+        const now = new Date().toISOString();
+
+        // If activating, deactivate others
+        if (updates.isActive === true && !existing.isActive) {
+          const activeSnap = await db.collection("reward_policies")
+            .where("isActive", "==", true)
+            .get();
+          for (const d of activeSnap.docs) {
+            await d.ref.update({ isActive: false, updatedAt: now });
+          }
+        }
+
+        // Remove immutable fields from updates
+        delete updates.policyId;
+        delete updates.createdAt;
+        updates.updatedAt = now;
+
+        await targetRef.update(updates);
+
+        console.log(`[RewardPolicy] Updated: ${policy_id}`);
+        return res.status(200).json({ success: true, policy_id });
+      } catch (e) {
+        console.error("[RewardPolicy] Update error:", e);
+        return res.status(500).json({ error: `Failed to update policy: ${e.message}` });
+      }
+    }
+
+    // --- reward_policy.deactivate ---
+    if (action === "reward_policy.deactivate") {
+      try {
+        const { policy_id } = body;
+        if (!policy_id) {
+          return res.status(400).json({ error: "policy_id required" });
+        }
+
+        const targetRef = db.collection("reward_policies").doc(policy_id);
+        const targetSnap = await targetRef.get();
+        if (!targetSnap.exists) {
+          return res.status(404).json({ error: `Policy ${policy_id} not found` });
+        }
+
+        const now = new Date().toISOString();
+        await targetRef.update({ isActive: false, updatedAt: now });
+
+        console.log(`[RewardPolicy] Deactivated: ${policy_id}`);
+        return res.status(200).json({ success: true, policy_id });
+      } catch (e) {
+        console.error("[RewardPolicy] Deactivate error:", e);
+        return res.status(500).json({ error: `Failed to deactivate policy: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // NODE METRICS (Raw + Monthly Aggregation)
+    // =====================================================
+
+    // --- node_metrics.ingest ---
+    // Ingest raw metrics (allocation, usage, health) in batch
+    if (action === "node_metrics.ingest") {
+      try {
+        const { metrics } = body;
+        if (!Array.isArray(metrics) || metrics.length === 0) {
+          return res.status(400).json({ error: "metrics[] array required" });
+        }
+
+        let saved = 0;
+        const errors = [];
+
+        for (const m of metrics.slice(0, 100)) { // max 100 per call
+          try {
+            if (!m.type || !m.nodeId || !m.timestamp) {
+              errors.push(`Missing type/nodeId/timestamp`);
+              continue;
+            }
+
+            let collectionName;
+            if (m.type === "allocation") collectionName = "node_metrics_allocation";
+            else if (m.type === "usage") collectionName = "node_metrics_usage";
+            else if (m.type === "health") collectionName = "node_metrics_health";
+            else { errors.push(`Unknown type: ${m.type}`); continue; }
+
+            const doc = { ...m };
+            delete doc.type; // Don't store the type field, it's implicit from collection
+
+            await db.collection(collectionName).add(doc);
+            saved++;
+          } catch (me) {
+            errors.push(`${m.nodeId}: ${me.message}`);
+          }
+        }
+
+        return res.status(200).json({ success: true, saved, errors: errors.length > 0 ? errors : undefined });
+      } catch (e) {
+        console.error("[NodeMetrics] Ingest error:", e);
+        return res.status(500).json({ error: `Metrics ingest failed: ${e.message}` });
+      }
+    }
+
+    // --- node_metrics.query ---
+    // Query raw metrics for a specific node
+    if (action === "node_metrics.query") {
+      try {
+        const { node_id, type, from, to, limit: lim = 100 } = body;
+        if (!node_id || !type) {
+          return res.status(400).json({ error: "node_id and type required" });
+        }
+
+        let collectionName;
+        if (type === "allocation") collectionName = "node_metrics_allocation";
+        else if (type === "usage") collectionName = "node_metrics_usage";
+        else if (type === "health") collectionName = "node_metrics_health";
+        else return res.status(400).json({ error: `Unknown type: ${type}` });
+
+        let q = db.collection(collectionName)
+          .where("nodeId", "==", node_id)
+          .orderBy("timestamp", "desc")
+          .limit(Math.min(parseInt(lim) || 100, 500));
+
+        if (from) q = q.where("timestamp", ">=", from);
+        if (to) q = q.where("timestamp", "<=", to);
+
+        const snap = await q.get();
+        const results = snap.docs.map(d => d.data());
+
+        return res.status(200).json({ success: true, metrics: results, count: results.length });
+      } catch (e) {
+        console.error("[NodeMetrics] Query error:", e);
+        return res.status(500).json({ error: `Metrics query failed: ${e.message}` });
+      }
+    }
+
+    // --- node_metrics.aggregate_month ---
+    // Trigger monthly aggregation batch
+    if (action === "node_metrics.aggregate_month") {
+      try {
+        const { month } = body; // "YYYY-MM"
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+          return res.status(400).json({ error: "month required in YYYY-MM format" });
+        }
+
+        const monthStart = `${month}-01T00:00:00Z`;
+        const [yearN, monN] = month.split("-").map(Number);
+        const nextMonth = monN === 12 ? `${yearN + 1}-01` : `${yearN}-${String(monN + 1).padStart(2, "0")}`;
+        const monthEnd = `${nextMonth}-01T00:00:00Z`;
+
+        console.log(`[MetricsAggregation] Starting batch for ${month}`);
+
+        // Discover nodeIds from allocation + health metrics
+        const nodeIds = new Set();
+        const allocSnap = await db.collection("node_metrics_allocation")
+          .where("timestamp", ">=", monthStart)
+          .where("timestamp", "<", monthEnd)
+          .select("nodeId")
+          .get();
+        allocSnap.docs.forEach(d => nodeIds.add(d.data().nodeId));
+
+        const healthSnap = await db.collection("node_metrics_health")
+          .where("timestamp", ">=", monthStart)
+          .where("timestamp", "<", monthEnd)
+          .select("nodeId")
+          .get();
+        healthSnap.docs.forEach(d => nodeIds.add(d.data().nodeId));
+
+        let processed = 0;
+        const failed = [];
+        let skipped = 0;
+
+        for (const nodeId of nodeIds) {
+          try {
+            const [aDocs, uDocs, hDocs] = await Promise.all([
+              db.collection("node_metrics_allocation")
+                .where("nodeId", "==", nodeId)
+                .where("timestamp", ">=", monthStart).where("timestamp", "<", monthEnd)
+                .orderBy("timestamp", "asc").get(),
+              db.collection("node_metrics_usage")
+                .where("nodeId", "==", nodeId)
+                .where("timestamp", ">=", monthStart).where("timestamp", "<", monthEnd)
+                .orderBy("timestamp", "asc").get(),
+              db.collection("node_metrics_health")
+                .where("nodeId", "==", nodeId)
+                .where("timestamp", ">=", monthStart).where("timestamp", "<", monthEnd)
+                .orderBy("timestamp", "asc").get(),
+            ]);
+
+            const allocM = aDocs.docs.map(d => d.data());
+            const usageM = uDocs.docs.map(d => d.data());
+            const healthM = hDocs.docs.map(d => d.data());
+
+            if (allocM.length === 0 && usageM.length === 0 && healthM.length === 0) {
+              skipped++;
+              continue;
+            }
+
+            // ── AC calculation ──
+            let ac = 0;
+            const sortedA = [...allocM].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            for (let i = 0; i < sortedA.length - 1; i++) {
+              const deltaMs = new Date(sortedA[i + 1].timestamp).getTime() - new Date(sortedA[i].timestamp).getTime();
+              ac += sortedA[i].allocatedGb * (deltaMs / (1000 * 3600 * 730));
+            }
+            if (sortedA.length >= 2) {
+              const lastD = new Date(sortedA[sortedA.length - 1].timestamp).getTime() - new Date(sortedA[sortedA.length - 2].timestamp).getTime();
+              ac += sortedA[sortedA.length - 1].allocatedGb * (lastD / (1000 * 3600 * 730));
+            } else if (sortedA.length === 1) {
+              ac += sortedA[0].allocatedGb * (5 / 60 / 730);
+            }
+
+            // ── UC calculation (proofVerified only) ──
+            let uc = 0;
+            const verifiedU = usageM.filter(m => m.proofVerified);
+            const sortedU = [...verifiedU].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            for (let i = 0; i < sortedU.length - 1; i++) {
+              const deltaMs = new Date(sortedU[i + 1].timestamp).getTime() - new Date(sortedU[i].timestamp).getTime();
+              uc += sortedU[i].usedGb * (deltaMs / (1000 * 3600 * 730));
+            }
+            if (sortedU.length >= 2) {
+              const lastD = new Date(sortedU[sortedU.length - 1].timestamp).getTime() - new Date(sortedU[sortedU.length - 2].timestamp).getTime();
+              uc += sortedU[sortedU.length - 1].usedGb * (lastD / (1000 * 3600 * 730));
+            } else if (sortedU.length === 1) {
+              uc += sortedU[0].usedGb * (5 / 60 / 730);
+            }
+
+            // ── Quality: Uptime ──
+            const totalObserved = healthM.length;
+            const totalOnline = healthM.filter(m => m.isOnline).length;
+            const uptimeVal = totalObserved > 0 ? Math.round((totalOnline / totalObserved) * 10000) / 10000 : 0;
+
+            // ── Quality: Audit ──
+            const audited = healthM.filter(m => m.auditChecked);
+            const totalAuditChecks = audited.length;
+            const totalAuditSuccess = audited.filter(m => m.auditPassed).length;
+            const auditRate = totalAuditChecks > 0 ? Math.round((totalAuditSuccess / totalAuditChecks) * 10000) / 10000 : 1.0;
+
+            // ── Quality: p95 Latency ──
+            const latencies = healthM.filter(m => m.isOnline && m.latencyMs > 0).map(m => m.latencyMs).sort((a, b) => a - b);
+            const p95 = latencies.length > 0 ? latencies[Math.min(Math.ceil(latencies.length * 0.95) - 1, latencies.length - 1)] : 0;
+
+            const now = new Date().toISOString();
+            const docId = `${nodeId}_${month}`;
+
+            // Preserve createdAt on re-run
+            const existDoc = await db.collection("reward_metrics_monthly").doc(docId).get();
+            const createdAt = existDoc.exists ? existDoc.data().createdAt : now;
+
+            await db.collection("reward_metrics_monthly").doc(docId).set({
+              nodeId, month,
+              AC_gb_month: Math.round(ac * 10000) / 10000,
+              UC_gb_month: Math.round(uc * 10000) / 10000,
+              uptime: uptimeVal,
+              totalObservedIntervals: totalObserved,
+              totalOnlineIntervals: totalOnline,
+              auditSuccessRate: auditRate,
+              totalAuditChecks,
+              totalAuditSuccess,
+              p95LatencyMs: p95,
+              createdAt,
+              updatedAt: now,
+            });
+            processed++;
+          } catch (ne) {
+            console.error(`[MetricsAggregation] Node ${nodeId} failed:`, ne.message);
+            failed.push(nodeId);
+          }
+        }
+
+        console.log(`[MetricsAggregation] Done: ${processed} processed, ${failed.length} failed, ${skipped} skipped`);
+        return res.status(200).json({ success: true, month, processed, failed: failed.length > 0 ? failed : undefined, skipped, total_nodes: nodeIds.size });
+      } catch (e) {
+        console.error("[MetricsAggregation] Batch error:", e);
+        return res.status(500).json({ error: `Aggregation failed: ${e.message}` });
+      }
+    }
+
+    // --- node_metrics.get_monthly ---
+    if (action === "node_metrics.get_monthly") {
+      try {
+        const { node_id, month } = body;
+        if (!node_id || !month) {
+          return res.status(400).json({ error: "node_id and month required" });
+        }
+        const docId = `${node_id}_${month}`;
+        const snap = await db.collection("reward_metrics_monthly").doc(docId).get();
+        if (!snap.exists) {
+          return res.status(200).json({ success: true, data: null });
+        }
+        return res.status(200).json({ success: true, data: snap.data() });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- node_metrics.list_monthly ---
+    if (action === "node_metrics.list_monthly") {
+      try {
+        const { month, limit: lim = 100 } = body;
+        if (!month) {
+          return res.status(400).json({ error: "month required" });
+        }
+        const snap = await db.collection("reward_metrics_monthly")
+          .where("month", "==", month)
+          .limit(Math.min(parseInt(lim) || 100, 500))
+          .get();
+        const results = snap.docs.map(d => d.data());
+        return res.status(200).json({ success: true, data: results, count: results.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // REWARD CALCULATION ENGINE (Epic C)
+    // =====================================================
+
+    // --- reward_engine.run ---
+    // Execute monthly reward calculation and generate snapshot
+    if (action === "reward_engine.run") {
+      try {
+        const { month, revenue_usd, fx_rate } = body;
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+          return res.status(400).json({ error: "month required in YYYY-MM format" });
+        }
+        if (!revenue_usd || revenue_usd <= 0) {
+          return res.status(400).json({ error: "revenue_usd must be > 0" });
+        }
+        if (!fx_rate || fx_rate <= 0) {
+          return res.status(400).json({ error: "fx_rate (USD per VCN) must be > 0" });
+        }
+
+        // 1. Get active policy
+        const policySnap = await db.collection("reward_policies")
+          .where("isActive", "==", true)
+          .limit(1)
+          .get();
+        if (policySnap.empty) {
+          return res.status(400).json({ error: "No active reward policy found" });
+        }
+        const policy = policySnap.docs[0].data();
+
+        // 2. Load monthly metrics
+        const metricsSnap = await db.collection("reward_metrics_monthly")
+          .where("month", "==", month)
+          .get();
+        if (metricsSnap.empty) {
+          return res.status(400).json({ error: `No monthly metrics found for ${month}. Run node_metrics.aggregate_month first.` });
+        }
+        const nodeMetrics = metricsSnap.docs.map(d => d.data());
+
+        // 3. Calculate pool budgets
+        const r6 = (n) => Math.round(n * 1000000) / 1000000;
+        const poolUSD = r6(revenue_usd * policy.rewardPoolRatio);
+        const poolAllocUSD = r6(poolUSD * policy.allocPoolRatio);
+        const poolUseUSD = r6(poolUSD * policy.usePoolRatio);
+        const poolQualUSD = r6(poolUSD * policy.qualityPoolRatio);
+
+        // 4. Quality scores
+        const nodesWithQ = nodeMetrics.map(m => {
+          let qScore = 0;
+          let cutoff = false;
+          let cutoffReason = null;
+
+          if (m.uptime < policy.uptimeCutoff) {
+            cutoff = true;
+            cutoffReason = `uptime ${(m.uptime * 100).toFixed(1)}% < ${(policy.uptimeCutoff * 100).toFixed(1)}%`;
+          } else if (m.auditSuccessRate < policy.auditCutoff) {
+            cutoff = true;
+            cutoffReason = `audit ${(m.auditSuccessRate * 100).toFixed(1)}% < ${(policy.auditCutoff * 100).toFixed(1)}%`;
+          } else {
+            const latRange = policy.latencyMaxMs - policy.latencyMinMs;
+            let L = 1.0;
+            if (latRange > 0) L = Math.max(0, Math.min(1, (policy.latencyMaxMs - m.p95LatencyMs) / latRange));
+            qScore = Math.pow(m.uptime, policy.qualityWeightUptime)
+              * Math.pow(m.auditSuccessRate, policy.qualityWeightAudit)
+              * Math.pow(L, policy.qualityWeightLatency);
+            qScore = r6(qScore);
+          }
+          return { nodeId: m.nodeId, metrics: m, qualityScore: qScore, cutoffApplied: cutoff, cutoffReason };
+        });
+
+        // 5. Pool rewards
+        const calcPool = (nodes, budget, weightFn) => {
+          const weighted = nodes.map(n => ({ nodeId: n.nodeId, weight: weightFn(n) }));
+          const total = weighted.reduce((s, w) => s + w.weight, 0);
+          return weighted.map(w => ({
+            nodeId: w.nodeId,
+            rewardUSD: total > 0 ? r6(budget * (w.weight / total)) : 0,
+          }));
+        };
+
+        const allocAlpha = policy.allocPureRatio ?? 0.3;
+        const allocR = calcPool(nodesWithQ, poolAllocUSD, n => {
+          const acEff = Math.min(n.metrics.AC_gb_month, policy.allocationCapLambda * n.metrics.UC_gb_month);
+          return (allocAlpha * n.metrics.AC_gb_month + (1 - allocAlpha) * acEff) * n.qualityScore;
+        });
+        const useR = calcPool(nodesWithQ, poolUseUSD, n => n.metrics.UC_gb_month * n.qualityScore);
+        const qualR = calcPool(nodesWithQ, poolQualUSD, n => Math.sqrt(n.metrics.UC_gb_month) * n.qualityScore);
+
+        const allocMap = new Map(allocR.map(r => [r.nodeId, r.rewardUSD]));
+        const useMap = new Map(useR.map(r => [r.nodeId, r.rewardUSD]));
+        const qualMap = new Map(qualR.map(r => [r.nodeId, r.rewardUSD]));
+
+        // 6. Build line items
+        const now = new Date().toISOString();
+        const snapshotId = `rs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+        const lineItems = nodesWithQ.map(n => {
+          const alloc = allocMap.get(n.nodeId) || 0;
+          const use = useMap.get(n.nodeId) || 0;
+          const qual = qualMap.get(n.nodeId) || 0;
+          const totalUSD = r6(alloc + use + qual);
+          const vcn = fx_rate > 0 ? r6(totalUSD / fx_rate) : 0;
+          return {
+            snapshotId, nodeId: n.nodeId,
+            AC_gb_month: n.metrics.AC_gb_month, UC_gb_month: n.metrics.UC_gb_month,
+            uptime: n.metrics.uptime, auditSuccessRate: n.metrics.auditSuccessRate,
+            p95LatencyMs: n.metrics.p95LatencyMs, qualityScore: n.qualityScore,
+            cutoffApplied: n.cutoffApplied,
+            rewardAllocUSD: alloc, rewardUseUSD: use, rewardQualUSD: qual,
+            rewardTotalUSD: totalUSD, rewardVCN: vcn, createdAt: now,
+          };
+        });
+
+        const totalRewardUSD = r6(lineItems.reduce((s, li) => s + li.rewardTotalUSD, 0));
+        const totalRewardVCN = r6(lineItems.reduce((s, li) => s + li.rewardVCN, 0));
+        const nodesRewarded = lineItems.filter(li => li.rewardTotalUSD > 0).length;
+
+        // 7. Save snapshot
+        const snapshot = {
+          snapshotId, month, policyVersion: policy.version,
+          revenueUSD: revenue_usd, poolUSD, poolAllocUSD, poolUseUSD, poolQualUSD,
+          fxRateUsdPerVcn: fx_rate, totalNodesRewarded: nodesRewarded,
+          totalRewardUSD, totalRewardVCN, status: "calculated", createdAt: now,
+        };
+
+        await db.collection("reward_snapshots").doc(snapshotId).set(snapshot);
+
+        // Save line items in batches of 500
+        const batchSize = 500;
+        for (let i = 0; i < lineItems.length; i += batchSize) {
+          const batch = db.batch();
+          lineItems.slice(i, i + batchSize).forEach(li => {
+            const liRef = db.collection("reward_snapshot_line_items").doc(`${li.snapshotId}_${li.nodeId}`);
+            batch.set(liRef, li);
+          });
+          await batch.commit();
+        }
+
+        console.log(`[RewardEngine] Snapshot ${snapshotId} created: ${nodesRewarded} nodes, $${totalRewardUSD} USD`);
+        return res.status(200).json({
+          success: true, snapshot_id: snapshotId,
+          summary: {
+            poolUSD, nodesRewarded, nodesCutoff: lineItems.filter(li => li.cutoffApplied).length,
+            totalRewardUSD, totalRewardVCN,
+            verificationOk: Math.abs(totalRewardUSD - poolUSD) < 0.01,
+          },
+        });
+      } catch (e) {
+        console.error("[RewardEngine] Run error:", e);
+        return res.status(500).json({ error: `Reward engine failed: ${e.message}` });
+      }
+    }
+
+    // --- reward_engine.get_snapshot ---
+    if (action === "reward_engine.get_snapshot") {
+      try {
+        const { snapshot_id } = body;
+        if (!snapshot_id) return res.status(400).json({ error: "snapshot_id required" });
+
+        const snap = await db.collection("reward_snapshots").doc(snapshot_id).get();
+        if (!snap.exists) return res.status(404).json({ error: "Snapshot not found" });
+
+        const liSnap = await db.collection("reward_snapshot_line_items")
+          .where("snapshotId", "==", snapshot_id)
+          .orderBy("rewardTotalUSD", "desc")
+          .get();
+
+        return res.status(200).json({
+          success: true,
+          snapshot: snap.data(),
+          line_items: liSnap.docs.map(d => d.data()),
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- reward_engine.list_snapshots ---
+    if (action === "reward_engine.list_snapshots") {
+      try {
+        const { month } = body;
+        let q = db.collection("reward_snapshots").orderBy("createdAt", "desc").limit(50);
+        if (month) q = q.where("month", "==", month);
+
+        const snap = await q.get();
+        return res.status(200).json({ success: true, snapshots: snap.docs.map(d => d.data()) });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- reward_engine.update_status ---
+    if (action === "reward_engine.update_status") {
+      try {
+        const { snapshot_id, status } = body;
+        const validStatuses = ["draft", "calculated", "approved", "paid", "cancelled"];
+        if (!snapshot_id) return res.status(400).json({ error: "snapshot_id required" });
+        if (!validStatuses.includes(status)) return res.status(400).json({ error: `status must be one of: ${validStatuses.join(", ")}` });
+
+        const ref = db.collection("reward_snapshots").doc(snapshot_id);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: "Snapshot not found" });
+
+        await ref.update({ status, updatedAt: new Date().toISOString() });
+        return res.status(200).json({ success: true, snapshot_id, status });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // SETTLEMENT & PAYOUT (Epic D)
+    // =====================================================
+
+    // --- D1: revenue.set ---
+    if (action === "revenue.set") {
+      try {
+        const { month, gross_revenue_usd, refund_usd = 0, source = "manual" } = body;
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "month required (YYYY-MM)" });
+        if (!gross_revenue_usd || gross_revenue_usd <= 0) return res.status(400).json({ error: "gross_revenue_usd required" });
+
+        const net = Math.round((gross_revenue_usd - refund_usd) * 100) / 100;
+        const now = new Date().toISOString();
+        const existing = await db.collection("revenue_monthly").doc(month).get();
+
+        await db.collection("revenue_monthly").doc(month).set({
+          month, grossRevenueUSD: gross_revenue_usd, refundUSD: refund_usd,
+          netRevenueUSD: net, source, confirmedByAdmin: false,
+          createdAt: existing.exists ? existing.data().createdAt : now, updatedAt: now,
+        });
+
+        return res.status(200).json({ success: true, month, netRevenueUSD: net });
+      } catch (e) {
+        return res.status(500).json({ error: `Revenue set failed: ${e.message}` });
+      }
+    }
+
+    // --- D1: revenue.confirm ---
+    if (action === "revenue.confirm") {
+      try {
+        const { month } = body;
+        if (!month) return res.status(400).json({ error: "month required" });
+        const ref = db.collection("revenue_monthly").doc(month);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: `Revenue for ${month} not found` });
+
+        await ref.update({ confirmedByAdmin: true, updatedAt: new Date().toISOString() });
+        return res.status(200).json({ success: true, month });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- D1: revenue.get ---
+    if (action === "revenue.get") {
+      try {
+        const { month } = body;
+        if (!month) return res.status(400).json({ error: "month required" });
+        const snap = await db.collection("revenue_monthly").doc(month).get();
+        return res.status(200).json({ success: true, data: snap.exists ? snap.data() : null });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- D1: revenue.list ---
+    if (action === "revenue.list") {
+      try {
+        const snap = await db.collection("revenue_monthly").orderBy("month", "desc").limit(24).get();
+        return res.status(200).json({ success: true, data: snap.docs.map(d => d.data()) });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- D3: snapshot.approve ---
+    if (action === "snapshot.approve") {
+      try {
+        const { snapshot_id, approved_by = "admin" } = body;
+        if (!snapshot_id) return res.status(400).json({ error: "snapshot_id required" });
+
+        const ref = db.collection("reward_snapshots").doc(snapshot_id);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: "Snapshot not found" });
+
+        const data = snap.data();
+        if (data.status === "APPROVED") return res.status(400).json({ error: "Snapshot already approved (immutable)" });
+        if (data.status === "paid") return res.status(400).json({ error: "Snapshot already paid (immutable)" });
+
+        await ref.update({
+          status: "APPROVED",
+          approvedBy: approved_by,
+          approvedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        return res.status(200).json({ success: true, snapshot_id, status: "APPROVED" });
+      } catch (e) {
+        return res.status(500).json({ error: `Approve failed: ${e.message}` });
+      }
+    }
+
+    // --- D3: snapshot.reject ---
+    if (action === "snapshot.reject") {
+      try {
+        const { snapshot_id, rejected_by = "admin", reason = "" } = body;
+        if (!snapshot_id) return res.status(400).json({ error: "snapshot_id required" });
+
+        const ref = db.collection("reward_snapshots").doc(snapshot_id);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: "Snapshot not found" });
+
+        const data = snap.data();
+        if (data.status === "APPROVED") return res.status(400).json({ error: "Cannot reject approved snapshot" });
+        if (data.status === "paid") return res.status(400).json({ error: "Cannot reject paid snapshot" });
+
+        await ref.update({
+          status: "REJECTED",
+          rejectedBy: rejected_by,
+          rejectReason: reason,
+          rejectedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        return res.status(200).json({ success: true, snapshot_id, status: "REJECTED" });
+      } catch (e) {
+        return res.status(500).json({ error: `Reject failed: ${e.message}` });
+      }
+    }
+
+    // --- D4: fx_rate.set ---
+    if (action === "fx_rate.set") {
+      try {
+        const { month, usd_per_vcn, source = "manual", twap_window } = body;
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "month required (YYYY-MM)" });
+        if (!usd_per_vcn || usd_per_vcn <= 0) return res.status(400).json({ error: "usd_per_vcn must be > 0" });
+
+        const now = new Date().toISOString();
+        const existing = await db.collection("fx_rate_snapshots").doc(month).get();
+        await db.collection("fx_rate_snapshots").doc(month).set({
+          month, usdPerVcn: usd_per_vcn, source,
+          twapWindow: twap_window || null,
+          createdAt: existing.exists ? existing.data().createdAt : now, updatedAt: now,
+        });
+        return res.status(200).json({ success: true, month, usdPerVcn: usd_per_vcn });
+      } catch (e) {
+        return res.status(500).json({ error: `FX set failed: ${e.message}` });
+      }
+    }
+
+    // --- D4: fx_rate.get ---
+    if (action === "fx_rate.get") {
+      try {
+        const { month } = body;
+        if (!month) return res.status(400).json({ error: "month required" });
+        const snap = await db.collection("fx_rate_snapshots").doc(month).get();
+        return res.status(200).json({ success: true, data: snap.exists ? snap.data() : null });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- D5: payout.generate ---
+    if (action === "payout.generate") {
+      try {
+        const { snapshot_id } = body;
+        if (!snapshot_id) return res.status(400).json({ error: "snapshot_id required" });
+
+        // 1. Verify snapshot is APPROVED
+        const ssRef = db.collection("reward_snapshots").doc(snapshot_id);
+        const ssSnap = await ssRef.get();
+        if (!ssSnap.exists) return res.status(404).json({ error: "Snapshot not found" });
+        if (ssSnap.data().status !== "APPROVED") {
+          return res.status(400).json({ error: `Snapshot status is '${ssSnap.data().status}', must be 'APPROVED'` });
+        }
+
+        // 2. Get active policy for minPayoutUsd
+        const policySnap = await db.collection("reward_policies").where("isActive", "==", true).limit(1).get();
+        const minPayout = policySnap.empty ? 1.0 : (policySnap.docs[0].data().minPayoutUsd || 1.0);
+
+        // 3. Load line items
+        const liSnap = await db.collection("reward_snapshot_line_items")
+          .where("snapshotId", "==", snapshot_id).get();
+
+        if (liSnap.empty) return res.status(400).json({ error: "No line items for this snapshot" });
+
+        // 4. Check for existing payouts (idempotent)
+        const existingPayouts = await db.collection("payout_requests")
+          .where("snapshotId", "==", snapshot_id).limit(1).get();
+        if (!existingPayouts.empty) {
+          return res.status(400).json({ error: "Payouts already generated for this snapshot" });
+        }
+
+        // 5. Get wallet addresses from mobile_nodes collection
+        const nodeIds = liSnap.docs.map(d => d.data().nodeId);
+        const walletMap = new Map();
+        // Fetch in chunks of 10 (Firestore 'in' limit)
+        for (let i = 0; i < nodeIds.length; i += 10) {
+          const chunk = nodeIds.slice(i, i + 10);
+          const nodesSnap = await db.collection("mobile_nodes")
+            .where("nodeId", "in", chunk).get();
+          nodesSnap.docs.forEach(d => {
+            const nd = d.data();
+            if (nd.walletAddress) walletMap.set(nd.nodeId, nd.walletAddress);
+          });
+        }
+
+        // 6. Generate payout requests
+        const now = new Date().toISOString();
+        let created = 0, held = 0;
+        const batchSize = 500;
+        const payouts = [];
+
+        for (const d of liSnap.docs) {
+          const li = d.data();
+          if (li.rewardTotalUSD <= 0) continue;
+
+          const wallet = walletMap.get(li.nodeId);
+          const payoutId = `po_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+          let status = "pending";
+          let holdReason = null;
+
+          if (!wallet) {
+            status = "held";
+            holdReason = "No wallet address registered";
+            held++;
+          } else if (li.rewardTotalUSD < minPayout) {
+            status = "held";
+            holdReason = `Below minPayout ($${minPayout})`;
+            held++;
+          } else {
+            created++;
+          }
+
+          payouts.push({
+            payoutId, snapshotId: snapshot_id, nodeId: li.nodeId,
+            amountUSD: li.rewardTotalUSD, amountVCN: li.rewardVCN,
+            walletAddress: wallet || "", status, holdReason,
+            txHash: null, errorMessage: null, createdAt: now,
+          });
+        }
+
+        // Batch write
+        for (let i = 0; i < payouts.length; i += batchSize) {
+          const batch = db.batch();
+          payouts.slice(i, i + batchSize).forEach(p => {
+            batch.set(db.collection("payout_requests").doc(p.payoutId), p);
+          });
+          await batch.commit();
+        }
+
+        console.log(`[Payout] Generated ${payouts.length} payouts for ${snapshot_id}: ${created} pending, ${held} held`);
+        return res.status(200).json({
+          success: true, snapshot_id,
+          total: payouts.length, pending: created, held,
+        });
+      } catch (e) {
+        console.error("[Payout] Generate error:", e);
+        return res.status(500).json({ error: `Payout generation failed: ${e.message}` });
+      }
+    }
+
+    // --- D5: payout.list ---
+    if (action === "payout.list") {
+      try {
+        const { snapshot_id, status: filterStatus, limit: lim = 100 } = body;
+        let q = db.collection("payout_requests").orderBy("createdAt", "desc").limit(Math.min(parseInt(lim) || 100, 500));
+        if (snapshot_id) q = q.where("snapshotId", "==", snapshot_id);
+        if (filterStatus) q = q.where("status", "==", filterStatus);
+
+        const snap = await q.get();
+        return res.status(200).json({ success: true, data: snap.docs.map(d => d.data()), count: snap.docs.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- D5: payout.update_status ---
+    if (action === "payout.update_status") {
+      try {
+        const { payout_id, status, tx_hash, error_message } = body;
+        if (!payout_id) return res.status(400).json({ error: "payout_id required" });
+
+        const valid = ["pending", "processing", "completed", "failed", "held", "rollover"];
+        if (!valid.includes(status)) return res.status(400).json({ error: `status must be: ${valid.join(", ")}` });
+
+        const ref = db.collection("payout_requests").doc(payout_id);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: "Payout not found" });
+
+        const updates = { status, updatedAt: new Date().toISOString() };
+        if (tx_hash) updates.txHash = tx_hash;
+        if (error_message) updates.errorMessage = error_message;
+
+        await ref.update(updates);
+        return res.status(200).json({ success: true, payout_id, status });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // OPERATIONS STABILITY (Epic E)
+    // =====================================================
+
+    // --- E1: rollover.get ---
+    if (action === "rollover.get") {
+      try {
+        const { node_id } = body;
+        if (!node_id) return res.status(400).json({ error: "node_id required" });
+        const snap = await db.collection("node_rollover_balances").doc(node_id).get();
+        return res.status(200).json({ success: true, data: snap.exists ? snap.data() : null });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E1: rollover.list ---
+    if (action === "rollover.list") {
+      try {
+        const { min_usd = 0 } = body;
+        let q = db.collection("node_rollover_balances").orderBy("accumulatedUSD", "desc").limit(200);
+        const snap = await q.get();
+        const data = snap.docs.map(d => d.data()).filter(d => d.accumulatedUSD >= (parseFloat(min_usd) || 0));
+        return res.status(200).json({ success: true, data, count: data.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E1: rollover.apply (enhanced payout with rollover) ---
+    if (action === "rollover.apply") {
+      try {
+        const { snapshot_id, month } = body;
+        if (!snapshot_id) return res.status(400).json({ error: "snapshot_id required" });
+
+        const policySnap = await db.collection("reward_policies").where("isActive", "==", true).limit(1).get();
+        const minPayout = policySnap.empty ? 1.0 : (policySnap.docs[0].data().minPayoutUsd || 1.0);
+
+        const liSnap = await db.collection("reward_snapshot_line_items").where("snapshotId", "==", snapshot_id).get();
+        if (liSnap.empty) return res.status(400).json({ error: "No line items" });
+
+        const now = new Date().toISOString();
+        let rolledOver = 0, paidOut = 0;
+
+        for (const d of liSnap.docs) {
+          const li = d.data();
+          if (li.rewardTotalUSD <= 0) continue;
+
+          const rollRef = db.collection("node_rollover_balances").doc(li.nodeId);
+          const rollDoc = await rollRef.get();
+          const prev = rollDoc.exists ? rollDoc.data() : null;
+
+          const totalUSD = li.rewardTotalUSD + (prev?.accumulatedUSD || 0);
+          const totalVCN = li.rewardVCN + (prev?.accumulatedVCN || 0);
+
+          if (totalUSD < minPayout) {
+            // Roll over
+            const history = prev?.history || [];
+            history.push({ month: month || li.snapshotId, amountUSD: li.rewardTotalUSD, amountVCN: li.rewardVCN, reason: "below_min_payout" });
+            await rollRef.set({
+              nodeId: li.nodeId, accumulatedUSD: Math.round(totalUSD * 1e6) / 1e6,
+              accumulatedVCN: Math.round(totalVCN * 1e6) / 1e6,
+              lastUpdatedMonth: month || "", history,
+              createdAt: prev?.createdAt || now, updatedAt: now,
+            });
+            rolledOver++;
+          } else {
+            // Clear rollover
+            if (prev) await rollRef.delete();
+            paidOut++;
+          }
+        }
+
+        return res.status(200).json({ success: true, rolledOver, paidOut, total: liSnap.docs.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Rollover apply failed: ${e.message}` });
+      }
+    }
+
+    // --- E2: bootstrap.get ---
+    if (action === "bootstrap.get") {
+      try {
+        const snap = await db.collection("bootstrap_config").doc("current").get();
+        if (!snap.exists) {
+          return res.status(200).json({
+            success: true, data: {
+              enabled: false,
+              tiers: [
+                { label: "10GB", minAllocGb: 10, maxAllocGb: 49, floorUSD: 0.50 },
+                { label: "50GB", minAllocGb: 50, maxAllocGb: 99, floorUSD: 2.00 },
+                { label: "100GB", minAllocGb: 100, maxAllocGb: 999, floorUSD: 5.00 },
+              ],
+              qualityMinUptime: 0.90, qualityMinAudit: 0.95, totalFloorBudgetUSD: 1000,
+            }
+          });
+        }
+        return res.status(200).json({ success: true, data: snap.data() });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E2: bootstrap.set ---
+    if (action === "bootstrap.set") {
+      try {
+        const { config } = body;
+        if (!config) return res.status(400).json({ error: "config object required" });
+        await db.collection("bootstrap_config").doc("current").set({ ...config, updatedAt: new Date().toISOString() });
+        return res.status(200).json({ success: true });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E3: abuse.scan ---
+    if (action === "abuse.scan") {
+      try {
+        const { month } = body;
+        if (!month) return res.status(400).json({ error: "month required" });
+
+        const policySnap = await db.collection("reward_policies").where("isActive", "==", true).limit(1).get();
+        if (policySnap.empty) return res.status(400).json({ error: "No active policy" });
+        const policy = policySnap.docs[0].data();
+
+        const metricsSnap = await db.collection("reward_metrics_monthly").where("month", "==", month).get();
+        if (metricsSnap.empty) return res.status(200).json({ success: true, flags: [], count: 0 });
+        const metrics = metricsSnap.docs.map(d => d.data());
+
+        const flags = [];
+        const now = new Date().toISOString();
+
+        for (const m of metrics) {
+          const fid = () => `af_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+          if (m.AC_gb_month > 10 && m.UC_gb_month > 0 && m.AC_gb_month / m.UC_gb_month > 20) {
+            flags.push({
+              flagId: fid(), nodeId: m.nodeId, month, type: "alloc_usage_mismatch", severity: "medium",
+              description: `Alloc/usage ratio ${(m.AC_gb_month / m.UC_gb_month).toFixed(1)}x`, detectedAt: now, excluded: false,
+              evidence: { AC: m.AC_gb_month, UC: m.UC_gb_month }
+            });
+          }
+          if (m.UC_gb_month > 5 && m.totalAuditChecks < 10) {
+            flags.push({
+              flagId: fid(), nodeId: m.nodeId, month, type: "no_proof_usage", severity: "high",
+              description: `${m.UC_gb_month.toFixed(1)} GB used with only ${m.totalAuditChecks} audits`, detectedAt: now, excluded: false,
+              evidence: { UC: m.UC_gb_month, audits: m.totalAuditChecks }
+            });
+          }
+          if (m.p95LatencyMs > 0 && m.p95LatencyMs < (policy.latencyMinMs || 50) * 0.5 && m.totalObservedIntervals > 100) {
+            flags.push({
+              flagId: fid(), nodeId: m.nodeId, month, type: "latency_anomaly", severity: "low",
+              description: `p95=${m.p95LatencyMs}ms suspiciously low`, detectedAt: now, excluded: false,
+              evidence: { p95: m.p95LatencyMs }
+            });
+          }
+          if (m.uptime >= 0.999 && m.UC_gb_month === 0 && m.AC_gb_month > 5 && m.totalObservedIntervals > 500) {
+            flags.push({
+              flagId: fid(), nodeId: m.nodeId, month, type: "heartbeat_spoof", severity: "high",
+              description: `Perfect uptime + zero usage (${m.AC_gb_month.toFixed(1)} GB alloc)`, detectedAt: now, excluded: false,
+              evidence: { uptime: m.uptime, AC: m.AC_gb_month }
+            });
+          }
+        }
+
+        // Save flags
+        if (flags.length > 0) {
+          const batch = db.batch();
+          flags.forEach(f => batch.set(db.collection("abuse_flags").doc(f.flagId), f));
+          await batch.commit();
+        }
+
+        return res.status(200).json({ success: true, flags, count: flags.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Abuse scan failed: ${e.message}` });
+      }
+    }
+
+    // --- E3: abuse.list ---
+    if (action === "abuse.list") {
+      try {
+        const { month, node_id, excluded_only } = body;
+        let q = db.collection("abuse_flags").orderBy("detectedAt", "desc").limit(200);
+        if (month) q = q.where("month", "==", month);
+        if (node_id) q = q.where("nodeId", "==", node_id);
+        if (excluded_only) q = q.where("excluded", "==", true);
+        const snap = await q.get();
+        return res.status(200).json({ success: true, data: snap.docs.map(d => d.data()), count: snap.docs.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E3: abuse.exclude ---
+    if (action === "abuse.exclude") {
+      try {
+        const { flag_id, excluded = true } = body;
+        if (!flag_id) return res.status(400).json({ error: "flag_id required" });
+        const ref = db.collection("abuse_flags").doc(flag_id);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: "Flag not found" });
+        await ref.update({ excluded, resolvedAt: excluded ? null : new Date().toISOString(), updatedAt: new Date().toISOString() });
+        return res.status(200).json({ success: true, flag_id, excluded });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E3: abuse.resolve ---
+    if (action === "abuse.resolve") {
+      try {
+        const { flag_id, resolved_by = "admin" } = body;
+        if (!flag_id) return res.status(400).json({ error: "flag_id required" });
+        const ref = db.collection("abuse_flags").doc(flag_id);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: "Flag not found" });
+        await ref.update({ resolvedAt: new Date().toISOString(), resolvedBy: resolved_by, excluded: false });
+        return res.status(200).json({ success: true, flag_id });
+      } catch (e) {
+        return res.status(500).json({ error: `Failed: ${e.message}` });
+      }
+    }
+
+    // --- E4: ops.monthly_report ---
+    if (action === "ops.monthly_report") {
+      try {
+        const { month } = body;
+        if (!month) return res.status(400).json({ error: "month required" });
+
+        // Snapshot data
+        const ssSnap = await db.collection("reward_snapshots").where("month", "==", month).orderBy("createdAt", "desc").limit(1).get();
+        const snapshot = ssSnap.empty ? null : ssSnap.docs[0].data();
+
+        // Line items for distribution analysis
+        const liSnap = snapshot ? await db.collection("reward_snapshot_line_items").where("snapshotId", "==", snapshot.snapshotId).get() : { docs: [] };
+        const lineItems = liSnap.docs.map(d => d.data());
+
+        // Abuse flags
+        const abuseSnap = await db.collection("abuse_flags").where("month", "==", month).get();
+        const abuseFlags = abuseSnap.docs.map(d => d.data());
+
+        // Rollover totals
+        const rollSnap = await db.collection("node_rollover_balances").where("lastUpdatedMonth", "==", month).get();
+        const rollovers = rollSnap.docs.map(d => d.data());
+
+        // Revenue
+        const revSnap = await db.collection("revenue_monthly").doc(month).get();
+        const revenue = revSnap.exists ? revSnap.data() : null;
+
+        // Compute distributions
+        const totalNodes = lineItems.length;
+        const cutoffNodes = lineItems.filter(li => li.cutoffApplied).length;
+        const rewardedNodes = lineItems.filter(li => li.rewardTotalUSD > 0).length;
+
+        // Earning distribution buckets
+        const buckets = { "$0": 0, "$0-1": 0, "$1-5": 0, "$5-20": 0, "$20-100": 0, "$100+": 0 };
+        for (const li of lineItems) {
+          const r = li.rewardTotalUSD;
+          if (r === 0) buckets["$0"]++;
+          else if (r < 1) buckets["$0-1"]++;
+          else if (r < 5) buckets["$1-5"]++;
+          else if (r < 20) buckets["$5-20"]++;
+          else if (r < 100) buckets["$20-100"]++;
+          else buckets["$100+"]++;
+        }
+
+        // Quality distribution
+        const qualityBuckets = { "0 (cutoff)": 0, "0.01-0.5": 0, "0.5-0.8": 0, "0.8-0.95": 0, "0.95-1.0": 0 };
+        for (const li of lineItems) {
+          const q = li.qualityScore;
+          if (q === 0) qualityBuckets["0 (cutoff)"]++;
+          else if (q < 0.5) qualityBuckets["0.01-0.5"]++;
+          else if (q < 0.8) qualityBuckets["0.5-0.8"]++;
+          else if (q < 0.95) qualityBuckets["0.8-0.95"]++;
+          else qualityBuckets["0.95-1.0"]++;
+        }
+
+        // Top earners
+        const topEarners = [...lineItems].sort((a, b) => b.rewardTotalUSD - a.rewardTotalUSD).slice(0, 10)
+          .map(li => ({ nodeId: li.nodeId, totalUSD: li.rewardTotalUSD, qualityScore: li.qualityScore }));
+
+        return res.status(200).json({
+          success: true,
+          month,
+          report: {
+            revenue,
+            snapshot: snapshot ? {
+              snapshotId: snapshot.snapshotId, status: snapshot.status,
+              poolUSD: snapshot.poolUSD, poolAllocUSD: snapshot.poolAllocUSD,
+              poolUseUSD: snapshot.poolUseUSD, poolQualUSD: snapshot.poolQualUSD,
+              totalRewardUSD: snapshot.totalRewardUSD, totalRewardVCN: snapshot.totalRewardVCN,
+            } : null,
+            nodes: { total: totalNodes, rewarded: rewardedNodes, cutoff: cutoffNodes, cutoffRatio: totalNodes > 0 ? Math.round(cutoffNodes / totalNodes * 1000) / 10 : 0 },
+            earningDistribution: buckets,
+            qualityDistribution: qualityBuckets,
+            topEarners,
+            abuse: { total: abuseFlags.length, excluded: abuseFlags.filter(f => f.excluded).length, byType: abuseFlags.reduce((acc, f) => { acc[f.type] = (acc[f.type] || 0) + 1; return acc; }, {}) },
+            rollover: { total: rollovers.length, totalAccumulatedUSD: Math.round(rollovers.reduce((s, r) => s + r.accumulatedUSD, 0) * 100) / 100 },
+          }
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Report failed: ${e.message}` });
       }
     }
 
@@ -13408,6 +14755,19 @@ exports.agentGateway = onRequest({
         "hosting.configure", "hosting.toggle", "hosting.logs",
         "mobile_node.register", "mobile_node.heartbeat", "mobile_node.status",
         "mobile_node.claim_reward", "mobile_node.submit_attestation", "mobile_node.leaderboard",
+        "reward_policy.get_active", "reward_policy.list", "reward_policy.create", "reward_policy.activate",
+        "reward_policy.update", "reward_policy.deactivate",
+        "node_metrics.ingest", "node_metrics.query", "node_metrics.aggregate_month",
+        "node_metrics.get_monthly", "node_metrics.list_monthly",
+        "reward_engine.run", "reward_engine.get_snapshot", "reward_engine.list_snapshots", "reward_engine.update_status",
+        "revenue.set", "revenue.confirm", "revenue.get", "revenue.list",
+        "snapshot.approve", "snapshot.reject",
+        "fx_rate.set", "fx_rate.get",
+        "payout.generate", "payout.list", "payout.update_status",
+        "rollover.get", "rollover.list", "rollover.apply",
+        "bootstrap.get", "bootstrap.set",
+        "abuse.scan", "abuse.list", "abuse.exclude", "abuse.resolve",
+        "ops.monthly_report",
       ],
     });
   } catch (err) {

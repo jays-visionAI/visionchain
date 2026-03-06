@@ -422,8 +422,95 @@
         return d.innerHTML;
     }
 
+    // ─── Storage Allocation Management ───
+    let currentStorageConfig = { storageMaxGB: 50, nodeClass: 'standard' };
+
+    function initStorageSlider() {
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(config => {
+                currentStorageConfig = config;
+                const slider = document.getElementById('storageAllocSlider');
+                if (!slider) return;
+
+                const classRanges = {
+                    lite: { min: 0.1, max: 1, step: 0.1 },
+                    standard: { min: 1, max: 100, step: 1 },
+                    full: { min: 100, max: 1000, step: 10 },
+                };
+                const range = classRanges[config.nodeClass] || classRanges.standard;
+
+                slider.min = range.min;
+                slider.max = range.max;
+                slider.step = range.step;
+                slider.value = config.storageMaxGB || range.min;
+
+                setText('storageSliderMin', formatGB(range.min));
+                setText('storageSliderMax', formatGB(range.max));
+                setText('storageSliderValue', formatGB(config.storageMaxGB || range.min));
+                setText('storageAllocBadge', formatGB(config.storageMaxGB || range.min));
+                setText('storageAllocMax', formatGB(config.storageMaxGB || range.min));
+
+                slider.addEventListener('input', function () {
+                    const val = parseFloat(this.value);
+                    setText('storageSliderValue', formatGB(val));
+                });
+            })
+            .catch(() => { });
+    }
+
+    function formatGB(gb) {
+        if (gb < 1) return (gb * 1024).toFixed(0) + ' MB';
+        if (gb >= 1000) return (gb / 1024).toFixed(1) + ' TB';
+        return gb + ' GB';
+    }
+
+    window.applyStorageAllocation = function () {
+        const slider = document.getElementById('storageAllocSlider');
+        const statusEl = document.getElementById('storageApplyStatus');
+        const btn = document.getElementById('storageApplyBtn');
+        if (!slider || !btn) return;
+
+        const newGB = parseFloat(slider.value);
+        btn.disabled = true;
+        statusEl.textContent = 'Saving...';
+        statusEl.style.color = '#a0aec0';
+
+        fetch('/api/config/storage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storageMaxGB: newGB }),
+        })
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    statusEl.textContent = 'Applied: ' + formatGB(result.storageMaxGB);
+                    statusEl.style.color = '#10b981';
+                    setText('storageAllocBadge', formatGB(result.storageMaxGB));
+                    setText('storageAllocMax', formatGB(result.storageMaxGB));
+                    setText('storageAllocUsed', formatSize(result.currentUsageBytes || 0));
+                    setText('storageAllocPct', (result.usagePercent || 0) + '%');
+                    addLog('Storage allocation updated to ' + formatGB(result.storageMaxGB), 'success');
+                } else {
+                    statusEl.textContent = 'Error: ' + (result.error || 'Unknown');
+                    statusEl.style.color = '#f43f5e';
+                    addLog('Storage update failed: ' + (result.error || 'Unknown'), 'error');
+                }
+            })
+            .catch(err => {
+                statusEl.textContent = 'Failed';
+                statusEl.style.color = '#f43f5e';
+                addLog('Storage update error: ' + err.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                setTimeout(() => { statusEl.textContent = ''; }, 5000);
+            });
+    };
+
     // Boot
     initParticles();
+    initStorageSlider();
     connect();
     window.addEventListener('resize', drawHeartbeatChart);
 })();

@@ -323,6 +323,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         order: 18,
         requiredRole: 'admin'
     },
+    {
+        id: 'reward-engine',
+        path: '/adminsystem/reward-engine',
+        label: 'Reward Engine',
+        icon: 'Coins',
+        badge: 'NEW',
+        category: 'custom',
+        order: 19,
+        requiredRole: 'admin'
+    },
 
     // ===== DEVELOPER PAGES =====
     {
