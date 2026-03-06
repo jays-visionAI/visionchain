@@ -22119,6 +22119,207 @@ exports.aiMemoryConsolidate = onCall({ cors: true, maxInstances: 3, timeoutSecon
   return { success: true, consolidated: totalConsolidated, strategy };
 });
 
+// ─── AI Memory Storage - Phase 5: Multi-tenant Access Control & Workspace ──
+
+/**
+ * aiWorkspaceManage - Workspace CRUD + member management
+ */
+exports.aiWorkspaceManage = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { action, ...params } = request.data || {};
+  const wsCol = db.collection("users").doc(email).collection("ai_workspaces");
+  const now = new Date().toISOString();
+
+  switch (action) {
+    case "create": {
+      const { name, description, settings } = params;
+      if (!name) throw new HttpsError("invalid-argument", "name is required.");
+      const wsRef = wsCol.doc();
+      const wsData = {
+        workspaceId: wsRef.id, name, description: description || "",
+        ownerId: email,
+        members: [{ email, role: "owner", invitedAt: now, acceptedAt: now }],
+        settings: {
+          defaultModelTarget: settings?.defaultModelTarget || "both",
+          autoIndex: settings?.autoIndex ?? true,
+          retentionDays: settings?.retentionDays || 365,
+          maxStorageGb: settings?.maxStorageGb || 10,
+        },
+        fileCount: 0, totalSize: 0, createdAt: now, updatedAt: now,
+      };
+      await wsRef.set(wsData);
+      // Audit
+      await logAudit(db, email, { action: "workspace_invite", actor: email, resourceType: "workspace", resourceId: wsRef.id, details: { name } });
+      return { success: true, workspace: wsData };
+    }
+    case "update": {
+      const { workspaceId, name, description, settings } = params;
+      if (!workspaceId) throw new HttpsError("invalid-argument", "workspaceId is required.");
+      const wsDoc = await wsCol.doc(workspaceId).get();
+      if (!wsDoc.exists) throw new HttpsError("not-found", "Workspace not found.");
+      const ws = wsDoc.data();
+      const member = ws.members.find(m => m.email === email);
+      if (!member || !["owner", "admin"].includes(member.role)) throw new HttpsError("permission-denied", "Admin access required.");
+      const updates = { updatedAt: now };
+      if (name) updates.name = name;
+      if (description !== undefined) updates.description = description;
+      if (settings) updates.settings = { ...ws.settings, ...settings };
+      await wsCol.doc(workspaceId).update(updates);
+      return { success: true, workspaceId };
+    }
+    case "delete": {
+      const { workspaceId } = params;
+      if (!workspaceId) throw new HttpsError("invalid-argument", "workspaceId is required.");
+      const wsDoc = await wsCol.doc(workspaceId).get();
+      if (!wsDoc.exists) throw new HttpsError("not-found", "Workspace not found.");
+      if (wsDoc.data().ownerId !== email) throw new HttpsError("permission-denied", "Owner access required.");
+      await wsCol.doc(workspaceId).delete();
+      return { success: true, workspaceId };
+    }
+    case "invite": {
+      const { workspaceId, memberEmail, role = "viewer" } = params;
+      if (!workspaceId || !memberEmail) throw new HttpsError("invalid-argument", "workspaceId and memberEmail required.");
+      const wsDoc = await wsCol.doc(workspaceId).get();
+      if (!wsDoc.exists) throw new HttpsError("not-found", "Workspace not found.");
+      const ws = wsDoc.data();
+      const actor = ws.members.find(m => m.email === email);
+      if (!actor || !["owner", "admin"].includes(actor.role)) throw new HttpsError("permission-denied", "Admin access required.");
+      if (ws.members.some(m => m.email === memberEmail.toLowerCase())) throw new HttpsError("already-exists", "Member already exists.");
+      const newMember = { email: memberEmail.toLowerCase(), role, invitedAt: now };
+      await wsCol.doc(workspaceId).update({ members: [...ws.members, newMember], updatedAt: now });
+      await logAudit(db, email, { action: "workspace_invite", actor: email, resourceType: "workspace", resourceId: workspaceId, details: { memberEmail, role } });
+      return { success: true, member: newMember };
+    }
+    case "remove": {
+      const { workspaceId, memberEmail } = params;
+      if (!workspaceId || !memberEmail) throw new HttpsError("invalid-argument", "workspaceId and memberEmail required.");
+      const wsDoc = await wsCol.doc(workspaceId).get();
+      if (!wsDoc.exists) throw new HttpsError("not-found", "Workspace not found.");
+      const ws = wsDoc.data();
+      const actor = ws.members.find(m => m.email === email);
+      if (!actor || !["owner", "admin"].includes(actor.role)) throw new HttpsError("permission-denied", "Admin access required.");
+      if (memberEmail.toLowerCase() === ws.ownerId) throw new HttpsError("failed-precondition", "Cannot remove owner.");
+      const updated = ws.members.filter(m => m.email !== memberEmail.toLowerCase());
+      await wsCol.doc(workspaceId).update({ members: updated, updatedAt: now });
+      await logAudit(db, email, { action: "workspace_remove", actor: email, resourceType: "workspace", resourceId: workspaceId, details: { memberEmail } });
+      return { success: true };
+    }
+    case "list": {
+      const snap = await wsCol.orderBy("createdAt", "desc").limit(50).get();
+      return { success: true, workspaces: snap.docs.map(d => ({ workspaceId: d.id, ...d.data() })) };
+    }
+    default:
+      throw new HttpsError("invalid-argument", "action must be: create, update, delete, invite, remove, list");
+  }
+});
+
+/**
+ * aiDataShare - Data sharing link management
+ */
+exports.aiDataShare = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { action, ...params } = request.data || {};
+  const shareCol = db.collection("users").doc(email).collection("ai_data_shares");
+  const now = new Date().toISOString();
+
+  switch (action) {
+    case "create": {
+      const { resourceType, resourceIds, permissions = ["read"], expireHours, maxAccessCount, password, workspaceId } = params;
+      if (!resourceType || !resourceIds?.length) throw new HttpsError("invalid-argument", "resourceType and resourceIds required.");
+      const shareRef = shareCol.doc();
+      const shareData = {
+        shareId: shareRef.id, creatorId: email, workspaceId: workspaceId || null,
+        resourceType, resourceIds,
+        permissions: permissions.filter(p => ["read", "write", "search"].includes(p)),
+        accessCount: 0,
+        maxAccessCount: maxAccessCount || null,
+        password: password || null,
+        expireAt: expireHours ? new Date(Date.now() + expireHours * 3600000).toISOString() : null,
+        isActive: true, createdAt: now,
+      };
+      await shareRef.set(shareData);
+      await logAudit(db, email, { action: "share_create", actor: email, resourceType, resourceId: resourceIds[0], details: { shareId: shareRef.id, permissions } });
+      return { success: true, share: shareData };
+    }
+    case "access": {
+      const { shareId, password: inputPassword } = params;
+      if (!shareId) throw new HttpsError("invalid-argument", "shareId is required.");
+      // Share links can be accessed across tenants — check global or owner's collection
+      const shareDoc = await shareCol.doc(shareId).get();
+      if (!shareDoc.exists) throw new HttpsError("not-found", "Share link not found.");
+      const share = shareDoc.data();
+      if (!share.isActive) throw new HttpsError("failed-precondition", "Share link is inactive.");
+      if (share.expireAt && new Date(share.expireAt) < new Date()) {
+        await shareCol.doc(shareId).update({ isActive: false });
+        throw new HttpsError("failed-precondition", "Share link has expired.");
+      }
+      if (share.maxAccessCount && share.accessCount >= share.maxAccessCount) {
+        await shareCol.doc(shareId).update({ isActive: false });
+        throw new HttpsError("resource-exhausted", "Share link access limit reached.");
+      }
+      if (share.password && share.password !== inputPassword) {
+        throw new HttpsError("permission-denied", "Invalid password.");
+      }
+      await shareCol.doc(shareId).update({ accessCount: share.accessCount + 1 });
+      await logAudit(db, email, { action: "share_access", actor: email, resourceType: share.resourceType, resourceId: share.resourceIds[0], details: { shareId } });
+      return { success: true, share: { ...share, password: undefined } };
+    }
+    case "revoke": {
+      const { shareId } = params;
+      if (!shareId) throw new HttpsError("invalid-argument", "shareId is required.");
+      await shareCol.doc(shareId).update({ isActive: false });
+      return { success: true, shareId };
+    }
+    case "list": {
+      const snap = await shareCol.where("isActive", "==", true).orderBy("createdAt", "desc").limit(50).get();
+      return { success: true, shares: snap.docs.map(d => ({ shareId: d.id, ...d.data(), password: undefined })) };
+    }
+    default:
+      throw new HttpsError("invalid-argument", "action must be: create, access, revoke, list");
+  }
+});
+
+/**
+ * aiAuditLog - Audit log query
+ */
+exports.aiAuditLog = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { action: queryAction, startDate, endDate, actionFilter, resourceType, limit: pageSize = 50 } = request.data || {};
+
+  const logCol = db.collection("users").doc(email).collection("ai_audit_logs");
+
+  if (queryAction === "query") {
+    let q = logCol.orderBy("timestamp", "desc");
+    if (actionFilter) q = q.where("action", "==", actionFilter);
+    if (startDate) q = q.where("timestamp", ">=", startDate);
+    if (endDate) q = q.where("timestamp", "<=", endDate);
+    const snap = await q.limit(Math.min(pageSize, 200)).get();
+    return { success: true, logs: snap.docs.map(d => ({ logId: d.id, ...d.data() })), total: snap.docs.length };
+  }
+
+  // Default: get recent logs
+  const snap = await logCol.orderBy("timestamp", "desc").limit(Math.min(pageSize, 100)).get();
+  return { success: true, logs: snap.docs.map(d => ({ logId: d.id, ...d.data() })), total: snap.docs.length };
+});
+
+/** Helper: Write audit log entry */
+async function logAudit(dbRef, tenantId, entry) {
+  try {
+    const logRef = dbRef.collection("users").doc(tenantId).collection("ai_audit_logs").doc();
+    await logRef.set({
+      logId: logRef.id,
+      tenantId,
+      ...entry,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn("[AI Storage] Audit log write failed:", err.message);
+  }
+}
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [

@@ -578,3 +578,64 @@ export async function consolidateMemories(
         return null;
     }
 }
+
+// ─── Phase 5: Multi-tenant Access Control & Workspace ──────────────────────
+
+/**
+ * Manage workspaces (create/update/delete/invite/remove/list).
+ */
+export async function manageWorkspace(
+    action: 'create' | 'update' | 'delete' | 'invite' | 'remove' | 'list',
+    params: Record<string, any> = {}
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiWorkspaceManage', { timeout: 30000 });
+        const result = await fn({ action, ...params });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] manageWorkspace error:', err);
+        return null;
+    }
+}
+
+/**
+ * Manage data share links (create/access/revoke/list).
+ */
+export async function manageShareLink(
+    action: 'create' | 'access' | 'revoke' | 'list',
+    params: Record<string, any> = {}
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiDataShare', { timeout: 30000 });
+        const result = await fn({ action, ...params });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] manageShareLink error:', err);
+        return null;
+    }
+}
+
+/**
+ * Query audit logs.
+ */
+export async function queryAuditLogs(
+    params: {
+        action?: 'query';
+        startDate?: string;
+        endDate?: string;
+        actionFilter?: string;
+        limit?: number;
+    } = {}
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiAuditLog', { timeout: 30000 });
+        const result = await fn({ action: 'query', ...params });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] queryAuditLogs error:', err);
+        return null;
+    }
+}

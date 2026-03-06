@@ -397,3 +397,77 @@ export interface CreateContextCacheParams {
     ttlSeconds?: number;
     displayName?: string;
 }
+
+// ─── Phase 5: Multi-tenant Access Control & Workspace ──────────────────────
+
+export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type SharePermission = 'read' | 'write' | 'search';
+export type AuditAction = 'file_access' | 'file_modify' | 'file_delete' | 'share_create' | 'share_access'
+    | 'memory_create' | 'memory_delete' | 'search_query' | 'workspace_invite' | 'workspace_remove'
+    | 'index_request' | 'embedding_generate' | 'cache_create';
+
+/**
+ * AI workspace for multi-tenant isolation.
+ * Stored in Firestore: users/{email}/ai_workspaces/{workspaceId}
+ */
+export interface Workspace {
+    workspaceId: string;
+    name: string;
+    description?: string;
+    ownerId: string;
+    members: WorkspaceMember[];
+    settings: {
+        defaultModelTarget: ModelTarget;
+        autoIndex: boolean;
+        retentionDays: number;
+        maxStorageGb: number;
+    };
+    fileCount: number;
+    totalSize: number;
+    createdAt: string;
+    updatedAt?: string;
+}
+
+export interface WorkspaceMember {
+    email: string;
+    role: WorkspaceRole;
+    invitedAt: string;
+    acceptedAt?: string;
+    lastActiveAt?: string;
+}
+
+/**
+ * Data sharing link.
+ * Stored in Firestore: users/{email}/ai_data_shares/{shareId}
+ */
+export interface DataShareLink {
+    shareId: string;
+    creatorId: string;
+    workspaceId?: string;
+    resourceType: 'file' | 'chunk' | 'memory' | 'workspace';
+    resourceIds: string[];
+    permissions: SharePermission[];
+    accessCount: number;
+    maxAccessCount?: number;
+    password?: string;
+    expireAt?: string;
+    isActive: boolean;
+    createdAt: string;
+}
+
+/**
+ * Audit log entry.
+ * Stored in Firestore: users/{email}/ai_audit_logs/{logId}
+ */
+export interface AuditLogEntry {
+    logId: string;
+    tenantId: string;
+    workspaceId?: string;
+    action: AuditAction;
+    actor: string;
+    resourceType: string;
+    resourceId: string;
+    details?: Record<string, any>;
+    ipAddress?: string;
+    timestamp: string;
+}
