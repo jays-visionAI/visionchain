@@ -21051,7 +21051,7 @@ exports.aiGetIndexStatus = onCall({ cors: true, maxInstances: 10, timeoutSeconds
  * Supports: PDF, TXT, MD, HTML, CSV, JSON, DOCX, code files
  * Enrichment: summary + keywords via DeepSeek API
  */
-exports.aiProcessIngestion = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 540, memory: "2GiB", secrets: ["DEEPSEEK_API_KEY"] }, async (request) => {
+exports.aiProcessIngestion = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 540, memory: "2GiB" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
   const { fileId, jobId, modelTarget = "both" } = request.data || {};
