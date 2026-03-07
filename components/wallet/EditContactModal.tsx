@@ -9,7 +9,7 @@ import {
     Save,
     Trash2
 } from 'lucide-solid';
-import { updateContact, Contact, findUserByAddress } from '../../services/firebaseService';
+import { updateContact, Contact } from '../../services/firebaseService';
 
 interface EditContactModalProps {
     isOpen: boolean;
@@ -23,10 +23,6 @@ export const EditContactModal = (props: EditContactModalProps) => {
     const [name, setName] = createSignal('');
     const [alias, setAlias] = createSignal('');
     const [phone, setPhone] = createSignal('');
-    const [manualAddress, setManualAddress] = createSignal('');
-    const [manualEmail, setManualEmail] = createSignal('');
-    const [isLookingUp, setIsLookingUp] = createSignal(false);
-    const [lookupResult, setLookupResult] = createSignal<string | null>(null);
     const [isSaving, setIsSaving] = createSignal(false);
     const [error, setError] = createSignal<string | null>(null);
 
@@ -36,39 +32,8 @@ export const EditContactModal = (props: EditContactModalProps) => {
             setName(props.contact.internalName);
             setAlias(props.contact.alias || '');
             setPhone(props.contact.phone);
-            setManualAddress(props.contact.address || '');
-            setManualEmail(props.contact.email || '');
-            setLookupResult(null);
-            setError(null);
         }
     });
-
-    const handleLookupByEmail = async () => {
-        const email = manualEmail().trim().toLowerCase();
-        if (!email || !email.includes('@')) {
-            setError('Valid email is required');
-            return;
-        }
-        setIsLookingUp(true);
-        setError(null);
-        setLookupResult(null);
-        try {
-            const { searchUserByEmail } = await import('../../services/firebaseService');
-            const result = await searchUserByEmail(email);
-            if (result && result.address) {
-                setManualAddress(result.address);
-                setLookupResult(`Found: ${result.name || result.email} (${result.address.substring(0, 10)}...)`);
-            } else {
-                setLookupResult(null);
-                setError('No Vision Chain user found with this email');
-            }
-        } catch (e) {
-            setError('Lookup failed');
-            console.error(e);
-        } finally {
-            setIsLookingUp(false);
-        }
-    };
 
     const handleSave = async () => {
         if (!props.contact?.id) return;
@@ -77,40 +42,14 @@ export const EditContactModal = (props: EditContactModalProps) => {
             return;
         }
 
-        const addressVal = manualAddress().trim();
-        if (addressVal && !addressVal.startsWith('0x')) {
-            setError('Wallet address must start with 0x');
-            return;
-        }
-
         setIsSaving(true);
         setError(null);
         try {
-            const updateData: any = {
+            await updateContact(props.userEmail, props.contact.id, {
                 internalName: name().trim(),
                 alias: alias().trim(),
                 phone: phone().trim()
-            };
-
-            // If user manually entered/looked-up an address, link it
-            if (addressVal && addressVal.length >= 42) {
-                updateData.address = addressVal;
-                updateData.syncStatus = 'verified';
-                // Try to find the VID for this address
-                try {
-                    const user = await findUserByAddress(addressVal);
-                    if (user) {
-                        updateData.vchainUserUid = user.email || user.vid || '';
-                        if (user.email) updateData.email = user.email;
-                    }
-                } catch { }
-            }
-
-            if (manualEmail().trim()) {
-                updateData.email = manualEmail().trim().toLowerCase();
-            }
-
-            await updateContact(props.userEmail, props.contact.id, updateData);
+            });
             props.onSuccess();
             props.onClose();
         } catch (e) {
@@ -119,11 +58,6 @@ export const EditContactModal = (props: EditContactModalProps) => {
         } finally {
             setIsSaving(false);
         }
-    };
-
-    const hasLinkedAddress = () => {
-        const addr = manualAddress();
-        return addr && addr.startsWith('0x') && addr.length >= 42;
     };
 
     return (
@@ -166,18 +100,11 @@ export const EditContactModal = (props: EditContactModalProps) => {
                         </div>
 
                         {/* Body */}
-                        <div class="p-8 space-y-6 overflow-y-auto">
+                        <div class="p-8 space-y-6 overflow-hidden">
                             <Show when={error()}>
                                 <div class="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold">
                                     <AlertCircle class="w-4 h-4" />
                                     {error()}
-                                </div>
-                            </Show>
-
-                            <Show when={lookupResult()}>
-                                <div class="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold">
-                                    <CheckCircle class="w-4 h-4" />
-                                    {lookupResult()}
                                 </div>
                             </Show>
 
@@ -213,63 +140,6 @@ export const EditContactModal = (props: EditContactModalProps) => {
                                         placeholder="010-0000-0000"
                                         class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm font-mono outline-none transition-all placeholder:text-gray-700 box-border"
                                     />
-                                </div>
-
-                                {/* Manual Link Section */}
-                                <div class="pt-2 border-t border-white/[0.06]">
-                                    <div class="flex items-center gap-2 mb-3">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-400">
-                                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                                        </svg>
-                                        <span class="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Manual Link</span>
-                                        <span class="text-[9px] text-gray-600 ml-1">-- Link by email or wallet address</span>
-                                    </div>
-
-                                    <div class="space-y-3">
-                                        <div class="space-y-2">
-                                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Email</label>
-                                            <div class="flex gap-2">
-                                                <input
-                                                    type="email"
-                                                    value={manualEmail()}
-                                                    onInput={(e) => setManualEmail(e.currentTarget.value)}
-                                                    placeholder="user@example.com"
-                                                    class="flex-1 bg-white/[0.02] border border-white/[0.08] focus:border-cyan-500/50 rounded-2xl px-5 py-3 text-white text-sm outline-none transition-all placeholder:text-gray-700 box-border"
-                                                />
-                                                <button
-                                                    onClick={handleLookupByEmail}
-                                                    disabled={isLookingUp()}
-                                                    class="shrink-0 px-4 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50"
-                                                >
-                                                    <Show when={isLookingUp()} fallback={
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
-                                                            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                                                        </svg>
-                                                    }>
-                                                        <Loader2 class="w-4 h-4 animate-spin" />
-                                                    </Show>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div class="space-y-2">
-                                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Wallet Address</label>
-                                            <input
-                                                type="text"
-                                                value={manualAddress()}
-                                                onInput={(e) => setManualAddress(e.currentTarget.value)}
-                                                placeholder="0x..."
-                                                class={`w-full bg-white/[0.02] border rounded-2xl px-5 py-3 text-sm font-mono outline-none transition-all placeholder:text-gray-700 box-border ${hasLinkedAddress() ? 'border-emerald-500/30 text-emerald-400' : 'border-white/[0.08] focus:border-cyan-500/50 text-white'}`}
-                                            />
-                                            <Show when={hasLinkedAddress()}>
-                                                <div class="flex items-center gap-1.5 pl-1">
-                                                    <CheckCircle class="w-3 h-3 text-emerald-400" />
-                                                    <span class="text-[9px] font-bold text-emerald-400">Address linked -- this contact can receive transfers</span>
-                                                </div>
-                                            </Show>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
