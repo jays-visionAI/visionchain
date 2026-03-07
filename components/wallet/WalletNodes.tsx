@@ -140,6 +140,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                 </svg>
                             </div>
                             <h3 class="text-lg font-bold text-white">Mobile Node (Lite)</h3>
+                            <span class="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded-md text-[9px] font-black text-amber-400 uppercase tracking-wider">Beta</span>
                         </div>
 
                         {/* Always-visible info notice */}
@@ -212,6 +213,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                 {storageSvg()}
                             </div>
                             <h3 class="text-lg font-bold text-white">Distributed Storage Node</h3>
+                            <span class="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded-md text-[9px] font-black text-amber-400 uppercase tracking-wider">Beta</span>
                         </div>
 
                         <div class="bg-gradient-to-br from-[#111113] to-[#0d0d15] border border-white/[0.06] rounded-[28px] p-6 relative overflow-hidden">
@@ -219,7 +221,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
 
                             <div class="relative z-10">
                                 <p class="text-sm text-gray-400 leading-relaxed mb-4">
-                                    Share your storage and earn VCN rewards. Download the desktop app or install via CLI.
+                                    Share your storage and earn rewards. Download the desktop app or install via CLI.
                                 </p>
 
                                 {/* What's New Banner */}
@@ -413,6 +415,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                 {shieldSvg()}
                             </div>
                             <h3 class="text-lg font-bold text-white">Validator Node</h3>
+                            <span class="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded-md text-[9px] font-black text-amber-400 uppercase tracking-wider">Beta</span>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

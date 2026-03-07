@@ -381,7 +381,10 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                         <WifiIcon class="w-5 h-5 text-cyan-400" />
                     </div>
                     <div>
-                        <h3 class="text-lg font-bold text-white">Mobile Node</h3>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-lg font-bold text-white">Mobile Node</h3>
+                            <span class="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded-md text-[9px] font-black text-amber-400 uppercase tracking-wider">Beta</span>
+                        </div>
                         <p class="text-xs text-gray-500">Distributed File + AI Data Storage</p>
                     </div>
                 </div>
