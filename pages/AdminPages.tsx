@@ -30,6 +30,7 @@ export const AdminDailyTips = lazy(() => import('../components/admin/AdminDailyT
 export const AdminRPConfig = lazy(() => import('../components/admin/AdminRPConfig'));
 export const AdminUserAnalytics = lazy(() => import('../components/admin/AdminUserAnalytics'));
 export const AdminRewardHub = lazy(() => import('../components/admin/AdminRewardHub'));
+export const AIStorageAdmin = lazy(() => import('../components/admin/AIStorageAdmin'));
 
 
 // Loading spinner component
@@ -344,6 +345,17 @@ export function AdminRewardHubPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminRewardHub />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AIStorageAdminPage() {
+    document.title = 'AI Storage | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AIStorageAdmin />
             </AdminLayout>
         </Suspense>
     );

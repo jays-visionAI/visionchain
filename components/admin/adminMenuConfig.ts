@@ -324,6 +324,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         requiredRole: 'admin'
     },
     {
+        id: 'ai-storage',
+        path: '/adminsystem/ai-storage',
+        label: 'AI Storage',
+        icon: 'Database',
+        badge: 'NEW',
+        category: 'custom',
+        order: 18.5,
+        requiredRole: 'admin'
+    },
+    {
         id: 'reward-engine',
         path: '/adminsystem/reward-engine',
         label: 'Reward Engine',

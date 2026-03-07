@@ -22583,6 +22583,177 @@ exports.aiHealthCheck = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 30
   return { success: true, health: { timestamp: now, overall, components, latencyMs } };
 });
 
+// ─── AI Memory Storage - Phase 7: Integration Orchestrator ─────────────────
+
+/**
+ * aiOrchestrate - Full pipeline: index -> ingest -> embed in a single call
+ */
+exports.aiOrchestrate = onCall({ cors: true, maxInstances: 3, timeoutSeconds: 540, memory: "2GiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId, modelTarget = "both" } = request.data || {};
+
+  if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
+
+  const result = { fileId, steps: [], errors: [], startedAt: new Date().toISOString() };
+
+  try {
+    // Step 1: Check file exists
+    const fileDoc = await db.collection("users").doc(email).collection("disk_files").doc(fileId).get();
+    if (!fileDoc.exists) throw new HttpsError("not-found", "File not found.");
+    result.steps.push("file_verified");
+
+    // Step 2: Mark as indexing
+    await db.collection("users").doc(email).collection("disk_files").doc(fileId).update({
+      indexingStatus: "processing",
+      indexingStartedAt: new Date().toISOString(),
+    });
+
+    // Step 3: Ingest — call aiProcessIngestion logic inline
+    const fileData = fileDoc.data();
+    const fileName = fileData.name || fileData.fileName || "";
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    let rawText = "";
+
+    // Fetch content from Storage
+    const { getStorage } = require("firebase-admin/storage");
+    const storagePath = fileData.storagePath || fileData.path || `users/${email}/${fileId}/${fileName}`;
+    try {
+      const bucket = getStorage().bucket();
+      const [buffer] = await bucket.file(storagePath).download();
+      const textExts = ["txt", "md", "csv", "json", "html", "htm", "js", "ts", "jsx", "tsx", "py", "java", "c", "cpp", "go", "rs", "rb", "php", "yaml", "yml", "toml", "xml", "sql", "sh", "bat", "css", "scss"];
+      if (ext === "pdf") {
+        try { const pdfParse = require("pdf-parse"); const data = await pdfParse(buffer); rawText = data.text || ""; }
+        catch { rawText = buffer.toString("utf-8").substring(0, 50000); }
+      } else if (textExts.includes(ext)) {
+        rawText = buffer.toString("utf-8");
+      } else {
+        rawText = buffer.toString("utf-8").substring(0, 50000);
+      }
+    } catch (err) { result.errors.push("download: " + err.message); }
+
+    if (!rawText || rawText.trim().length < 10) {
+      await db.collection("users").doc(email).collection("disk_files").doc(fileId).update({ indexingStatus: "error", indexingError: "No text extracted" });
+      return { success: false, ...result, error: "No text content extracted" };
+    }
+    result.steps.push("text_extracted");
+
+    // Step 4: Chunk
+    const chunks = [];
+    const lines = rawText.split("\n");
+    let currentChunk = [];
+    let currentTokens = 0;
+    const MAX_TOKENS = 500;
+
+    for (const line of lines) {
+      const lineTokens = Math.ceil(line.length / 4);
+      if (currentTokens + lineTokens > MAX_TOKENS && currentChunk.length > 0) {
+        chunks.push(currentChunk.join("\n"));
+        currentChunk = [line];
+        currentTokens = lineTokens;
+      } else {
+        currentChunk.push(line);
+        currentTokens += lineTokens;
+      }
+    }
+    if (currentChunk.length > 0) chunks.push(currentChunk.join("\n"));
+    result.steps.push(`chunked:${chunks.length}`);
+
+    // Step 5: Save chunks
+    const batch = db.batch();
+    const chunkIds = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkRef = db.collection("users").doc(email).collection("ai_chunks").doc();
+      chunkIds.push(chunkRef.id);
+      batch.set(chunkRef, {
+        chunkId: chunkRef.id, fileId, chunkIndex: i, text: chunks[i],
+        tokenCount: Math.ceil(chunks[i].length / 4),
+        createdAt: new Date().toISOString(),
+      });
+    }
+    await batch.commit();
+    result.steps.push("chunks_saved");
+
+    // Step 6: Generate embeddings
+    let oaiCount = 0, gemCount = 0;
+    const openaiKey = process.env.OPENAI_API_KEY || "";
+    const geminiKey = process.env.GEMINI_API_KEY || "";
+
+    if ((modelTarget === "openai" || modelTarget === "both") && openaiKey) {
+      try {
+        const OpenAI = require("openai");
+        const openai = new OpenAI({ apiKey: openaiKey });
+        for (let i = 0; i < chunkIds.length; i++) {
+          const resp = await openai.embeddings.create({ model: "text-embedding-3-small", input: chunks[i].substring(0, 8000), dimensions: 1536 });
+          await db.collection("users").doc(email).collection("ai_embeddings_openai").doc(chunkIds[i]).set({
+            chunkId: chunkIds[i], fileId, vector: resp.data[0].embedding,
+            model: "text-embedding-3-small", dimensions: 1536, createdAt: new Date().toISOString(),
+          });
+          oaiCount++;
+        }
+        result.steps.push(`openai_embeddings:${oaiCount}`);
+      } catch (err) { result.errors.push("openai: " + err.message); }
+    }
+
+    if ((modelTarget === "gemini" || modelTarget === "both") && geminiKey) {
+      try {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(geminiKey);
+        const embModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+        for (let i = 0; i < chunkIds.length; i++) {
+          const resp = await embModel.embedContent(chunks[i].substring(0, 8000));
+          await db.collection("users").doc(email).collection("ai_embeddings_gemini").doc(chunkIds[i]).set({
+            chunkId: chunkIds[i], fileId, vector: resp.embedding.values,
+            model: "text-embedding-004", dimensions: 768, createdAt: new Date().toISOString(),
+          });
+          gemCount++;
+        }
+        result.steps.push(`gemini_embeddings:${gemCount}`);
+      } catch (err) { result.errors.push("gemini: " + err.message); }
+    }
+
+    // Step 7: Update file status
+    await db.collection("users").doc(email).collection("disk_files").doc(fileId).update({
+      indexingStatus: "indexed",
+      indexedAt: new Date().toISOString(),
+      chunkCount: chunks.length,
+      embeddingModels: modelTarget,
+    });
+    result.steps.push("completed");
+
+    // Record usage
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const metricRef = db.collection("users").doc(email).collection("ai_usage_metrics").doc(today);
+      const metricDoc = await metricRef.get();
+      if (metricDoc.exists) {
+        const d = metricDoc.data();
+        await metricRef.update({
+          "apiCalls.indexing": (d.apiCalls?.indexing || 0) + 1,
+          "apiCalls.embedding": (d.apiCalls?.embedding || 0) + 1,
+          "apiCalls.total": (d.apiCalls?.total || 0) + 2,
+          "storage.filesIndexed": (d.storage?.filesIndexed || 0) + 1,
+          "storage.chunksCreated": (d.storage?.chunksCreated || 0) + chunks.length,
+          "storage.embeddingsCreated": (d.storage?.embeddingsCreated || 0) + oaiCount + gemCount,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } catch { /* non-critical */ }
+
+    // Audit log
+    await logAudit(db, email, { action: "index_request", actor: email, resourceType: "file", resourceId: fileId, details: { chunks: chunks.length, oaiCount, gemCount } });
+
+    result.completedAt = new Date().toISOString();
+    return { success: true, ...result };
+  } catch (err) {
+    result.errors.push(err.message);
+    await db.collection("users").doc(email).collection("disk_files").doc(fileId).update({
+      indexingStatus: "error", indexingError: err.message,
+    }).catch(() => { });
+    return { success: false, ...result };
+  }
+});
+
 exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   try {
     const bucketNames = [

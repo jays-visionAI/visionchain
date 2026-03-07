@@ -674,3 +674,23 @@ export async function runHealthCheck(): Promise<any | null> {
         return null;
     }
 }
+
+// ─── Phase 7: Integration Orchestrator ─────────────────────────────────────
+
+/**
+ * Full pipeline: index -> ingest -> embed in a single call.
+ */
+export async function orchestrateFile(
+    fileId: string,
+    modelTarget: 'openai' | 'gemini' | 'both' = 'both'
+): Promise<any | null> {
+    try {
+        const functions = getFunctions(getFirebaseApp());
+        const fn = httpsCallable(functions, 'aiOrchestrate', { timeout: 540000 });
+        const result = await fn({ fileId, modelTarget });
+        return result.data;
+    } catch (err) {
+        console.error('[AI Storage] orchestrateFile error:', err);
+        return null;
+    }
+}
