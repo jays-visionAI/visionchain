@@ -8,7 +8,7 @@ async function api(action: string, body: any = {}) {
 }
 
 interface RewardSummary {
-    totalEarnedUSD: number; totalEarnedVCN: number; monthsActive: number;
+    totalEarnedUSD: number; totalEarnedVCN: number; totalEarnedRP: number; monthsActive: number;
     rolloverUSD: number; rolloverVCN: number;
 }
 interface HistoryItem {
@@ -66,11 +66,23 @@ export default function NodeRewardPanel(props: { nodeId: string }) {
             <Show when={tab() === 'overview' && !loading()}>
                 <Show when={summary()} fallback={<div class="py-6 text-center text-gray-500 text-xs">No reward data yet</div>}>
                     <div class="space-y-3">
-                        {/* Total Earned */}
-                        <div class="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl p-4">
-                            <div class="text-[9px] font-black text-emerald-400/70 uppercase tracking-widest">Total Earned</div>
-                            <div class="text-2xl font-bold text-white mt-1">{vcn(summary()!.totalEarnedVCN)}</div>
-                            <div class="text-xs text-gray-400">{usd(summary()!.totalEarnedUSD)}</div>
+                        {/* 3-Type Earned Summary */}
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-xl p-3">
+                                <div class="text-[8px] font-black text-emerald-400/70 uppercase tracking-widest">USDT</div>
+                                <div class="text-lg font-bold text-emerald-400 mt-0.5">{usd(summary()!.totalEarnedUSD)}</div>
+                                <div class="text-[9px] text-gray-500">Storage Usage</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border border-cyan-500/20 rounded-xl p-3">
+                                <div class="text-[8px] font-black text-cyan-400/70 uppercase tracking-widest">VCN</div>
+                                <div class="text-lg font-bold text-cyan-400 mt-0.5">{vcn(summary()!.totalEarnedVCN)}</div>
+                                <div class="text-[9px] text-gray-500">Uptime</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-xl p-3">
+                                <div class="text-[8px] font-black text-amber-400/70 uppercase tracking-widest">RP</div>
+                                <div class="text-lg font-bold text-amber-400 mt-0.5">{(summary()!.totalEarnedRP || 0).toLocaleString()}</div>
+                                <div class="text-[9px] text-gray-500">Testnet</div>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-2">

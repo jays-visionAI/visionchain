@@ -45,6 +45,13 @@ interface NodeStatus {
     created_at: string;
 }
 
+interface NodeQuality {
+    allocatedGb: number;
+    usedGb: number;
+    uptimePct: number;
+    auditPct: number;
+}
+
 interface LeaderboardEntry {
     rank: number;
     node_id: string;
@@ -134,6 +141,10 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
     const [nodeStatus, setNodeStatus] = createSignal<NodeStatus | null>(null);
     const [statusLoading, setStatusLoading] = createSignal(false);
 
+    // Quality / Storage data
+    const [nodeQuality, setNodeQuality] = createSignal<NodeQuality | null>(null);
+    const [showHowEarn, setShowHowEarn] = createSignal(false);
+
     // Heartbeat state
     const [isRunning, setIsRunning] = createSignal(false);
     const [sessionUptime, setSessionUptime] = createSignal(0);
@@ -169,6 +180,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
         if (registered()) {
             fetchStatus();
             fetchLeaderboard();
+            fetchQuality();
             // Auto-start heartbeat on mount if tab is visible
             if (document.visibilityState === 'visible') {
                 startHeartbeat();
@@ -234,6 +246,16 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
             }
         } catch (_) { /* ignore */ }
         setStatusLoading(false);
+    };
+
+    // ---------- Quality / Storage ----------
+    const fetchQuality = async () => {
+        try {
+            const result = await api('my_rewards.quality', { node_id: nodeId() });
+            if (result.success && result.metrics) {
+                setNodeQuality(result.metrics as NodeQuality);
+            }
+        } catch (_) { /* ignore */ }
     };
 
     // ---------- Heartbeat Engine ----------
@@ -338,6 +360,17 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
         }
     };
 
+    // ---------- Storage Helpers ----------
+    const formatStorage = (gb: number) => {
+        if (gb < 1) return `${(gb * 1024).toFixed(0)} MB`;
+        return `${gb.toFixed(2)} GB`;
+    };
+    const storagePct = () => {
+        const q = nodeQuality();
+        if (!q || q.allocatedGb <= 0) return 0;
+        return Math.min(100, (q.usedGb / q.allocatedGb) * 100);
+    };
+
     // ---------- Render ----------
     return (
         <div class="space-y-6">
@@ -349,7 +382,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                     </div>
                     <div>
                         <h3 class="text-lg font-bold text-white">Mobile Node</h3>
-                        <p class="text-xs text-gray-500">Earn VCN by keeping this tab active</p>
+                        <p class="text-xs text-gray-500">Distributed File + AI Data Storage</p>
                     </div>
                 </div>
                 <Show when={registered() && isRunning()}>
@@ -365,6 +398,26 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                     </div>
                 </Show>
             </div>
+
+            {/* AI Storage Provider Badge */}
+            <Show when={registered()}>
+                <div class="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-cyan-500/10 border border-indigo-500/20 rounded-2xl p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold text-white">AI Data Storage Provider</div>
+                            <div class="text-[10px] text-gray-400 mt-0.5">Your node stores files, semantic embeddings, and AI memory for AI Agents</div>
+                        </div>
+                        <div class="flex gap-1.5 flex-shrink-0">
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Files" />
+                            <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse" title="Embeddings" />
+                            <div class="w-2 h-2 rounded-full bg-purple-500 animate-pulse" title="Memory" />
+                        </div>
+                    </div>
+                </div>
+            </Show>
 
             {/* Registration Card */}
             <Show when={!registered()}>
@@ -479,32 +532,108 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                             </div>
                         </div>
 
-                        {/* Stats Grid */}
+                        {/* 3-Type Rewards */}
                         <Show when={nodeStatus()}>
-                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                {/* Pending Reward */}
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-[0.15em]">Pending Reward</div>
-                                    <div class="text-xl font-black text-cyan-400">{parseFloat(nodeStatus()!.pending_reward).toFixed(4)}</div>
-                                    <div class="text-[10px] text-gray-500">VCN</div>
+                            <div class="grid grid-cols-3 gap-3">
+                                {/* USDT */}
+                                <div class="bg-[#111113] border border-emerald-500/10 rounded-2xl p-4 space-y-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <span class="text-[8px] font-black text-emerald-400/80 uppercase tracking-wider">USDT</span>
+                                    </div>
+                                    <div class="text-lg font-black text-emerald-400">$0.00</div>
+                                    <div class="text-[9px] text-gray-500">Storage Usage</div>
                                 </div>
-                                {/* Total Earned */}
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-[0.15em]">Total Earned</div>
-                                    <div class="text-xl font-black text-emerald-400">{parseFloat(nodeStatus()!.total_earned || '0').toFixed(4)}</div>
-                                    <div class="text-[10px] text-gray-500">VCN</div>
+                                {/* VCN */}
+                                <div class="bg-[#111113] border border-cyan-500/10 rounded-2xl p-4 space-y-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                                        <span class="text-[8px] font-black text-cyan-400/80 uppercase tracking-wider">VCN</span>
+                                    </div>
+                                    <div class="text-lg font-black text-cyan-400">{parseFloat(nodeStatus()!.pending_reward).toFixed(2)}</div>
+                                    <div class="text-[9px] text-gray-500">Pending</div>
                                 </div>
-                                {/* Total Uptime */}
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-[0.15em]">Total Uptime</div>
-                                    <div class="text-xl font-black text-white">{nodeStatus()!.total_uptime_hours.toFixed(1)}h</div>
-                                    <div class="text-[10px] text-gray-500">{nodeStatus()!.heartbeat_count} heartbeats</div>
+                                {/* RP */}
+                                <div class="bg-[#111113] border border-amber-500/10 rounded-2xl p-4 space-y-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
+                                        <span class="text-[8px] font-black text-amber-400/80 uppercase tracking-wider">RP</span>
+                                    </div>
+                                    <div class="text-lg font-black text-amber-400">{nodeStatus()!.streak_days * 10}</div>
+                                    <div class="text-[9px] text-gray-500">Testnet Bonus</div>
                                 </div>
-                                {/* Network Rank */}
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-[0.15em]">Network Rank</div>
-                                    <div class="text-xl font-black text-purple-400">#{nodeStatus()!.network_rank}</div>
-                                    <div class="text-[10px] text-gray-500">of {nodeStatus()!.total_nodes} nodes</div>
+                            </div>
+
+                            {/* Total Earned + Uptime + Rank */}
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
+                                    <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Total Earned</div>
+                                    <div class="text-base font-black text-white">{parseFloat(nodeStatus()!.total_earned || '0').toFixed(2)} <span class="text-[10px] text-gray-500">VCN</span></div>
+                                </div>
+                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
+                                    <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Uptime</div>
+                                    <div class="text-base font-black text-white">{nodeStatus()!.total_uptime_hours.toFixed(1)}<span class="text-[10px] text-gray-500">h</span></div>
+                                </div>
+                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
+                                    <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Rank</div>
+                                    <div class="text-base font-black text-purple-400">#{nodeStatus()!.network_rank} <span class="text-[10px] text-gray-500">/ {nodeStatus()!.total_nodes}</span></div>
+                                </div>
+                            </div>
+                        </Show>
+
+                        {/* Storage Usage Bar */}
+                        <Show when={nodeQuality()}>
+                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <div class="text-[9px] font-black text-gray-500 uppercase tracking-[0.15em]">Storage Usage</div>
+                                    <div class="text-xs text-gray-400">{formatStorage(nodeQuality()!.usedGb)} / {formatStorage(nodeQuality()!.allocatedGb)}</div>
+                                </div>
+                                <div class="h-2.5 bg-white/5 rounded-full overflow-hidden">
+                                    <div
+                                        class={`h-full rounded-full transition-all duration-700 ${storagePct() > 80 ? 'bg-gradient-to-r from-amber-500 to-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
+                                        style={`width: ${Math.max(2, storagePct())}%`}
+                                    />
+                                </div>
+                                <div class="text-[10px] text-gray-500">Rewards are based on actual storage used by the network</div>
+                            </div>
+                        </Show>
+
+                        {/* How You Earn - Collapsible */}
+                        <button
+                            onClick={() => setShowHowEarn(!showHowEarn())}
+                            class="w-full flex items-center justify-between px-4 py-3 bg-[#111113] border border-white/[0.06] rounded-2xl text-left hover:border-white/10 transition-all"
+                        >
+                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">How You Earn</span>
+                            <svg class={`w-4 h-4 text-gray-500 transition-transform ${showHowEarn() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        <Show when={showHowEarn()}>
+                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-3 -mt-3">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">USDT</div>
+                                        <div class="text-[10px] text-gray-500 mt-0.5">Monthly reward proportional to actual storage used by the network. More storage used = higher payout.</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">VCN Token</div>
+                                        <div class="text-[10px] text-gray-500 mt-0.5">Earned continuously based on uptime and heartbeat activity. Keep your node running to maximize VCN rewards.</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">RP (Reward Points)</div>
+                                        <div class="text-[10px] text-gray-500 mt-0.5">Bonus points during testnet phase. Earned from daily streaks and participation. Convertible after mainnet launch.</div>
+                                    </div>
                                 </div>
                             </div>
                         </Show>
