@@ -312,6 +312,123 @@
                 </div>
             </div>
 
+            <!-- Update Banner -->
+            <div id="updateBanner" class="panel"
+                style="display:none; background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(6,182,212,0.08)); border: 1px solid rgba(99,102,241,0.25);">
+                <div style="display: flex; align-items: center; gap: 14px; padding: 4px 0;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:13px; font-weight:700; color:#e0e7ff;">New Version Available</span>
+                            <span id="updateVersionBadge"
+                                style="font-size:10px; font-weight:800; color:#a5b4fc; background:rgba(99,102,241,0.2); padding:2px 8px; border-radius:6px; letter-spacing:0.05em;"></span>
+                        </div>
+                        <div id="updateNotes"
+                            style="font-size:11px; color:#94a3b8; margin-top:3px; max-width:500px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        </div>
+                    </div>
+                    <a id="updateDownloadLink" href="#" target="_blank" style="
+                        flex-shrink:0; display:inline-flex; align-items:center; gap:6px;
+                        padding:8px 18px; border-radius:8px; border:none;
+                        background:linear-gradient(135deg,#6366f1,#06b6d4); color:#fff;
+                        font-size:12px; font-weight:700; cursor:pointer;
+                        text-decoration:none; font-family:inherit; transition:opacity 0.2s;
+                    ">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Download
+                    </a>
+                    <button onclick="document.getElementById('updateBanner').style.display='none'" style="
+                        flex-shrink:0; width:28px; height:28px; border-radius:6px; border:none;
+                        background:rgba(255,255,255,0.06); color:#6b7280; cursor:pointer;
+                        display:flex; align-items:center; justify-content:center;
+                        font-size:16px; font-family:inherit;
+                    ">&times;</button>
+                </div>
+            </div>
+
+            <!-- Node Settings -->
+            <div class="panel storage-config-panel">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                    </svg>
+                    <h2>Node Settings</h2>
+                </div>
+                <div class="storage-config-body">
+                    <div class="storage-config-info">
+                        <p class="storage-config-desc">
+                            Change your node's email, class, and environment. Changes take effect on the next heartbeat.
+                        </p>
+                    </div>
+
+                    <!-- Email -->
+                    <div style="margin-bottom: 14px;">
+                        <div class="storage-slider-label" style="margin-bottom: 6px;">Email Address</div>
+                        <input type="email" id="settingsEmail" placeholder="you@example.com"
+                            style="width: 100%; padding: 9px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #e2e8f0; font-size: 13px; outline: none; font-family: 'JetBrains Mono', monospace; transition: border-color 0.2s; box-sizing: border-box;" />
+                    </div>
+
+                    <!-- Node Class -->
+                    <div style="margin-bottom: 14px;">
+                        <div class="storage-slider-label" style="margin-bottom: 6px;">Node Class</div>
+                        <div id="settingsClassSelector" style="display: flex; gap: 8px;">
+                            <button class="settings-cls-btn" data-class="lite" onclick="selectNodeClass('lite')"
+                                style="flex:1; padding:9px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:#94a3b8; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; text-align:center; transition:all 0.2s;">
+                                <div style="font-weight:700;">Lite</div>
+                                <div style="font-size:10px; opacity:0.6; margin-top:2px;">100MB-1GB</div>
+                            </button>
+                            <button class="settings-cls-btn" data-class="standard" onclick="selectNodeClass('standard')"
+                                style="flex:1; padding:9px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:#94a3b8; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; text-align:center; transition:all 0.2s;">
+                                <div style="font-weight:700;">Standard</div>
+                                <div style="font-size:10px; opacity:0.6; margin-top:2px;">1-100GB</div>
+                            </button>
+                            <button class="settings-cls-btn" data-class="full" onclick="selectNodeClass('full')"
+                                style="flex:1; padding:9px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:#94a3b8; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; text-align:center; transition:all 0.2s;">
+                                <div style="font-weight:700;">Full</div>
+                                <div style="font-size:10px; opacity:0.6; margin-top:2px;">100GB-1TB</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Environment -->
+                    <div style="margin-bottom: 16px;">
+                        <div class="storage-slider-label" style="margin-bottom: 6px;">Environment</div>
+                        <div id="settingsEnvSelector" style="display: flex; gap: 8px;">
+                            <button class="settings-env-btn" data-env="production" onclick="selectNodeEnv('production')"
+                                style="flex:1; padding:9px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:#94a3b8; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; text-align:center; transition:all 0.2s;">
+                                Production
+                            </button>
+                            <button class="settings-env-btn" data-env="staging" onclick="selectNodeEnv('staging')"
+                                style="flex:1; padding:9px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:#94a3b8; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; text-align:center; transition:all 0.2s;">
+                                Staging
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="storage-config-actions">
+                        <button class="btn-storage-apply" id="settingsSaveBtn" onclick="saveNodeSettings()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Save Changes
+                        </button>
+                        <span class="storage-apply-status" id="settingsSaveStatus"></span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Storage Allocation Settings -->
             <div class="panel storage-config-panel">
                 <div class="panel-header">

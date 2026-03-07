@@ -63,7 +63,7 @@ function acquireLock() {
         pid: process.pid,
         client: 'app',
         startedAt: new Date().toISOString(),
-        version: '1.0.0',
+        version: '1.1.1-beta',
     };
     fs.writeFileSync(LOCK_PATH, JSON.stringify(lock, null, 2), 'utf-8');
     return null; // success
@@ -131,7 +131,7 @@ async function registerNode(email, nodeClass, storageGB, environment, referralCo
         device_type: 'desktop',
         platform: process.platform,
         node_class: nodeClass,
-        version: '1.0.0',
+        version: '1.1.1-beta',
     };
     if (referralCode) body.referral_code = referralCode;
 
@@ -180,7 +180,7 @@ async function sendHeartbeat() {
             platform: process.platform,
             node_class: config.nodeClass,
             storage_max_gb: config.storageMaxGB,
-            version: '1.0.0',
+            version: '1.1.1-beta',
             chunk_endpoint: `http://${os.hostname()}:${CHUNK_PORT}`,
         });
 
@@ -592,7 +592,7 @@ function createTray() {
 function updateTrayMenu() {
     if (!tray) return;
     const template = [
-        { label: `Vision Node v1.0.0`, enabled: false },
+        { label: `Vision Node Beta v1.1.1`, enabled: false },
         { type: 'separator' },
         {
             label: nodeRunning ? 'Stop Node' : 'Start Node',
@@ -646,6 +646,60 @@ function setupIPC() {
 
     ipcMain.handle('node:openExternal', (_, url) => {
         shell.openExternal(url);
+    });
+
+    // ── Settings Change Handlers ──
+    ipcMain.handle('node:updateConfig', (_, updates) => {
+        if (!config) return { success: false, error: 'Node not initialized' };
+
+        const allowedFields = ['email', 'nodeClass', 'environment'];
+        const classRanges = {
+            lite: { min: 0.1, max: 1, default: 0.5 },
+            standard: { min: 1, max: 100, default: 10 },
+            full: { min: 100, max: 1000, default: 200 },
+        };
+
+        let changed = false;
+        for (const key of allowedFields) {
+            if (updates[key] !== undefined && updates[key] !== config[key]) {
+                config[key] = updates[key];
+                changed = true;
+
+                // If nodeClass changed, adjust storage range and API URL
+                if (key === 'nodeClass') {
+                    const range = classRanges[updates[key]] || classRanges.standard;
+                    if (config.storageMaxGB < range.min) config.storageMaxGB = range.default;
+                    if (config.storageMaxGB > range.max) config.storageMaxGB = range.max;
+                }
+                if (key === 'environment') {
+                    config.apiUrl = updates[key] === 'staging' ? STAGING_API : PRODUCTION_API;
+                }
+            }
+        }
+
+        if (changed) {
+            saveConfig(config);
+            sendToRenderer('node:stats', getNodeStatus());
+        }
+
+        return { success: true, config };
+    });
+
+    ipcMain.handle('node:updateStorage', (_, newGB) => {
+        if (!config) return { success: false, error: 'Node not initialized' };
+
+        const classRanges = {
+            lite: { min: 0.1, max: 1 },
+            standard: { min: 1, max: 100 },
+            full: { min: 100, max: 1000 },
+        };
+        const range = classRanges[config.nodeClass] || classRanges.standard;
+        const clamped = Math.max(range.min, Math.min(range.max, parseFloat(newGB)));
+
+        config.storageMaxGB = clamped;
+        saveConfig(config);
+        sendToRenderer('node:stats', getNodeStatus());
+        return { success: true, storageMaxGB: clamped };
     });
 }
 

@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('visionNode', {
     stop: () => ipcRenderer.invoke('node:stop'),
     openExternal: (url) => ipcRenderer.invoke('node:openExternal', url),
 
+    // Settings
+    updateConfig: (updates) => ipcRenderer.invoke('node:updateConfig', updates),
+    updateStorage: (newGB) => ipcRenderer.invoke('node:updateStorage', newGB),
+
     // Events from main process
     onStarted: (cb) => ipcRenderer.on('node:started', (_, data) => cb(data)),
     onStopped: (cb) => ipcRenderer.on('node:stopped', (_, data) => cb(data)),

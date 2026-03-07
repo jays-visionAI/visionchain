@@ -15,6 +15,8 @@ async function init() {
         showView('dashboard-view');
         await refreshStatus();
         initStorageSettings();
+        initNodeSettings();
+        checkForUpdates();
     }
 
     // Listen for events from main process
@@ -179,6 +181,23 @@ function updateUI(s) {
     document.getElementById('stat-storage').textContent = `${s.storageMaxGB || 0} GB`;
     document.getElementById('stat-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
 
+    // Overview storage usage
+    const usedBytes = s.storageBytes || 0;
+    const maxBytes = (s.storageMaxGB || 1) * 1024 * 1024 * 1024;
+    const usagePct = maxBytes > 0 ? Math.min(100, (usedBytes / maxBytes) * 100) : 0;
+    const usedEl = document.getElementById('stat-storage-used');
+    const barEl = document.getElementById('stat-storage-bar');
+    const chunksEl = document.getElementById('stat-storage-chunks');
+    const pctEl = document.getElementById('stat-storage-pct');
+    if (usedEl) usedEl.textContent = formatBytes(usedBytes);
+    if (barEl) {
+        barEl.style.width = `${Math.max(0, usagePct)}%`;
+        if (usagePct > 80) barEl.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
+        else barEl.style.background = 'linear-gradient(90deg, #22c55e, #06b6d4)';
+    }
+    if (chunksEl) chunksEl.textContent = `${(s.storageChunks || 0).toLocaleString()} chunks`;
+    if (pctEl) pctEl.textContent = `${usagePct.toFixed(1)}%`;
+
     // Node info
     document.getElementById('overview-node-id').textContent = s.nodeId || '';
     document.getElementById('info-email').textContent = s.email || '-';
@@ -191,14 +210,19 @@ function updateUI(s) {
     document.getElementById('reward-earned').textContent = parseFloat(s.totalEarned || 0).toFixed(4);
     document.getElementById('reward-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
 
-    // Settings
-    const config = s;
+    // Settings - Node Configuration
     document.getElementById('settings-nodeid').textContent = s.nodeId || '-';
     document.getElementById('settings-apikey').textContent = s.nodeId ? '***hidden***' : '-';
     document.getElementById('settings-storage-path').textContent = `~/.visionnode/storage`;
     document.getElementById('settings-api-url').textContent = s.environment === 'staging'
         ? 'staging.cloudfunctions.net/agentGateway'
         : 'production.cloudfunctions.net/agentGateway';
+
+    // Settings - Storage usage
+    const settingsUsed = document.getElementById('settings-storage-used');
+    const settingsPct = document.getElementById('settings-storage-pct');
+    if (settingsUsed) settingsUsed.textContent = formatBytes(usedBytes);
+    if (settingsPct) settingsPct.textContent = `${usagePct.toFixed(1)}%`;
 }
 
 // ── Event Handlers ──
@@ -257,6 +281,14 @@ function formatUptime(seconds) {
     return `${(seconds / 86400).toFixed(1)}d`;
 }
 
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const val = bytes / Math.pow(1024, i);
+    return `${val < 10 ? val.toFixed(2) : val < 100 ? val.toFixed(1) : Math.round(val)} ${units[i]}`;
+}
+
 function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -278,6 +310,102 @@ function escapeHtml(str) {
 
 // ── Start ──
 document.addEventListener('DOMContentLoaded', init);
+
+// ── Node Settings ──
+let settingsClass = 'standard';
+let settingsEnv = 'production';
+
+async function initNodeSettings() {
+    try {
+        const status = await window.visionNode.getStatus();
+        if (!status) return;
+
+        // Populate email
+        const emailInput = document.getElementById('settings-email');
+        if (emailInput) emailInput.value = status.email || '';
+
+        // Set class
+        settingsClass = status.nodeClass || 'standard';
+        highlightClassBtn(settingsClass);
+
+        // Set environment
+        settingsEnv = status.environment || 'production';
+        highlightEnvBtn(settingsEnv);
+    } catch (err) {
+        console.warn('[NodeSettings] Init failed:', err);
+    }
+}
+
+function selectSettingsClass(cls) {
+    settingsClass = cls;
+    highlightClassBtn(cls);
+}
+
+function selectSettingsEnv(env) {
+    settingsEnv = env;
+    highlightEnvBtn(env);
+}
+
+function highlightClassBtn(cls) {
+    document.querySelectorAll('.settings-class-btn').forEach(btn => {
+        const isActive = btn.dataset.class === cls;
+        btn.style.borderColor = isActive ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.08)';
+        btn.style.background = isActive ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)';
+        btn.style.color = isActive ? '#a5b4fc' : '#94a3b8';
+    });
+}
+
+function highlightEnvBtn(env) {
+    document.querySelectorAll('.settings-env-btn').forEach(btn => {
+        const isActive = btn.dataset.env === env;
+        btn.style.borderColor = isActive ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.08)';
+        btn.style.background = isActive ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)';
+        btn.style.color = isActive ? '#86efac' : '#94a3b8';
+    });
+}
+
+async function saveNodeSettings() {
+    const btn = document.getElementById('settings-save-btn');
+    const statusEl = document.getElementById('settings-save-status');
+    if (!btn) return;
+
+    const email = (document.getElementById('settings-email')?.value || '').trim();
+    if (!email || !email.includes('@')) {
+        statusEl.textContent = 'Invalid email address';
+        statusEl.style.color = '#ef4444';
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#a0aec0';
+
+    try {
+        const result = await window.visionNode.updateConfig({
+            email,
+            nodeClass: settingsClass,
+            environment: settingsEnv,
+        });
+
+        if (result && result.success) {
+            statusEl.textContent = 'Settings saved successfully';
+            statusEl.style.color = '#22c55e';
+            // Refresh the overview UI too
+            await refreshStatus();
+            // Reinitialize storage slider for new class range
+            initStorageSettings();
+        } else {
+            statusEl.textContent = 'Error: ' + (result?.error || 'Unknown');
+            statusEl.style.color = '#ef4444';
+        }
+    } catch (err) {
+        statusEl.textContent = 'Failed to save';
+        statusEl.style.color = '#ef4444';
+    } finally {
+        btn.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+    }
+}
 
 // ── Storage Settings ──
 async function initStorageSettings() {
@@ -346,3 +474,136 @@ async function applyStorageSettings() {
         setTimeout(() => { statusEl.textContent = ''; }, 5000);
     }
 }
+
+// ── Update Checker ──
+const CURRENT_VERSION = '1.1.1';
+const GITHUB_RELEASES_API = 'https://api.github.com/repos/jays-visionAI/visionchain/releases/latest';
+
+async function checkForUpdates() {
+    try {
+        const resp = await fetch(GITHUB_RELEASES_API, {
+            headers: { 'Accept': 'application/vnd.github.v3+json' },
+        });
+        if (!resp.ok) return;
+
+        const release = await resp.json();
+        const latestTag = (release.tag_name || '').replace(/^(node-)?v/, '');
+        if (!latestTag || !isNewerVersion(latestTag, CURRENT_VERSION)) return;
+
+        // Find the right download asset for this platform
+        const platform = navigator.platform.toLowerCase();
+        const assets = release.assets || [];
+        let downloadUrl = '';
+        let assetName = '';
+
+        if (platform.includes('mac') || platform.includes('darwin')) {
+            // Prefer arm64 for Apple Silicon, fallback to x64
+            const arm = assets.find(a => /arm64.*\.dmg$/i.test(a.name));
+            const x64 = assets.find(a => /x64.*\.dmg$/i.test(a.name));
+            const any = assets.find(a => /\.dmg$/i.test(a.name));
+            const picked = arm || x64 || any;
+            if (picked) { downloadUrl = picked.browser_download_url; assetName = picked.name; }
+        } else if (platform.includes('win')) {
+            const exe = assets.find(a => /\.exe$/i.test(a.name));
+            if (exe) { downloadUrl = exe.browser_download_url; assetName = exe.name; }
+        }
+
+        if (!downloadUrl && release.html_url) {
+            downloadUrl = release.html_url; // Fallback to release page
+        }
+
+        showUpdateBanner(latestTag, release.body || '', downloadUrl, assetName);
+    } catch (err) {
+        console.warn('[UpdateChecker] Failed:', err.message);
+    }
+}
+
+function isNewerVersion(latest, current) {
+    const a = latest.split('.').map(Number);
+    const b = current.split('.').map(Number);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const x = a[i] || 0;
+        const y = b[i] || 0;
+        if (x > y) return true;
+        if (x < y) return false;
+    }
+    return false;
+}
+
+function showUpdateBanner(version, releaseNotes, downloadUrl, assetName) {
+    // Remove existing banner if any
+    const old = document.getElementById('update-banner');
+    if (old) old.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.style.cssText = `
+        position: fixed; top: 38px; left: 0; right: 0; z-index: 9999;
+        background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(6,182,212,0.1));
+        border-bottom: 1px solid rgba(99,102,241,0.3);
+        padding: 10px 20px;
+        display: flex; align-items: center; gap: 12px;
+        backdrop-filter: blur(12px);
+        animation: slideDown 0.4s ease;
+    `;
+
+    // Sparkle SVG icon
+    const iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+
+    const summaryLines = (releaseNotes || '').split('\n').filter(l => l.trim()).slice(0, 3);
+    const summaryText = summaryLines.length > 0
+        ? summaryLines.map(l => l.replace(/^[-*]\s*/, '').trim()).join(' / ')
+        : '';
+
+    banner.innerHTML = `
+        <div style="flex-shrink:0">${iconSvg}</div>
+        <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:12px; font-weight:700; color:#e0e7ff;">New Version Available</span>
+                <span style="font-size:10px; font-weight:800; color:#a5b4fc; background:rgba(99,102,241,0.2); padding:2px 8px; border-radius:6px; letter-spacing:0.05em;">v${escapeHtml(version)}</span>
+            </div>
+            ${summaryText ? `<div style="font-size:10px; color:#94a3b8; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(summaryText)}</div>` : ''}
+        </div>
+        <button onclick="downloadUpdate('${escapeHtml(downloadUrl)}')" style="
+            flex-shrink:0; display:flex; align-items:center; gap:6px;
+            padding:7px 16px; border-radius:8px; border:none;
+            background:linear-gradient(135deg,#6366f1,#06b6d4); color:#fff;
+            font-size:11px; font-weight:700; cursor:pointer;
+            font-family:inherit; transition:opacity 0.2s;
+        " onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+        </button>
+        <button onclick="dismissUpdateBanner()" style="
+            flex-shrink:0; width:24px; height:24px; border-radius:6px; border:none;
+            background:rgba(255,255,255,0.06); color:#6b7280; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            font-size:14px; font-family:inherit; transition:background 0.2s;
+        " onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">&times;</button>
+    `;
+
+    // Inject animation keyframe if not already
+    if (!document.getElementById('update-banner-style')) {
+        const style = document.createElement('style');
+        style.id = 'update-banner-style';
+        style.textContent = '@keyframes slideDown { from { transform: translateY(-100%); opacity:0; } to { transform: translateY(0); opacity:1; } }';
+        document.head.appendChild(style);
+    }
+
+    document.body.appendChild(banner);
+}
+
+function downloadUpdate(url) {
+    if (url) window.visionNode.openExternal(url);
+}
+
+function dismissUpdateBanner() {
+    const banner = document.getElementById('update-banner');
+    if (banner) {
+        banner.style.transition = 'opacity 0.3s, transform 0.3s';
+        banner.style.opacity = '0';
+        banner.style.transform = 'translateY(-100%)';
+        setTimeout(() => banner.remove(), 300);
+    }
+}
+

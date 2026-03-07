@@ -222,6 +222,10 @@
         setText('totalChunks', String(storage.totalChunks || 0));
         setText('fileCount', (storage.totalFiles || 0) + ' files');
 
+        // Update Storage Allocation panel usage
+        setText('storageAllocUsed', formatSize(storage.totalSizeBytes || 0));
+        setText('storageAllocPct', pct + '%');
+
         // ── Uptime Ring ──
         const upSec = status.uptimeSeconds || 0;
         const upPct = Math.min(upSec / (24 * 3600), 1); // max 24h = full
@@ -508,9 +512,170 @@
             });
     };
 
+    // ─── Node Settings ───
+    let selectedNodeClass = 'standard';
+    let selectedNodeEnv = 'production';
+
+    function initNodeSettings() {
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(config => {
+                // Populate email
+                const emailInput = document.getElementById('settingsEmail');
+                if (emailInput) emailInput.value = config.email || '';
+
+                // Highlight class
+                selectedNodeClass = config.nodeClass || 'standard';
+                highlightClassBtns(selectedNodeClass);
+
+                // Highlight env
+                selectedNodeEnv = config.environment || 'production';
+                highlightEnvBtns(selectedNodeEnv);
+            })
+            .catch(() => { });
+    }
+
+    window.selectNodeClass = function (cls) {
+        selectedNodeClass = cls;
+        highlightClassBtns(cls);
+    };
+
+    window.selectNodeEnv = function (env) {
+        selectedNodeEnv = env;
+        highlightEnvBtns(env);
+    };
+
+    function highlightClassBtns(cls) {
+        document.querySelectorAll('.settings-cls-btn').forEach(btn => {
+            const isActive = btn.dataset.class === cls;
+            btn.style.borderColor = isActive ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.08)';
+            btn.style.background = isActive ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)';
+            btn.style.color = isActive ? '#a5b4fc' : '#94a3b8';
+        });
+    }
+
+    function highlightEnvBtns(env) {
+        document.querySelectorAll('.settings-env-btn').forEach(btn => {
+            const isActive = btn.dataset.env === env;
+            btn.style.borderColor = isActive ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.08)';
+            btn.style.background = isActive ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)';
+            btn.style.color = isActive ? '#6ee7b7' : '#94a3b8';
+        });
+    }
+
+    window.saveNodeSettings = function () {
+        const btn = document.getElementById('settingsSaveBtn');
+        const statusEl = document.getElementById('settingsSaveStatus');
+        if (!btn) return;
+
+        const email = (document.getElementById('settingsEmail') || {}).value || '';
+        if (!email.trim() || !email.includes('@')) {
+            statusEl.textContent = 'Invalid email address';
+            statusEl.style.color = '#f43f5e';
+            return;
+        }
+
+        btn.disabled = true;
+        statusEl.textContent = 'Saving...';
+        statusEl.style.color = '#a0aec0';
+
+        fetch('/api/config/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: email.trim(),
+                nodeClass: selectedNodeClass,
+                environment: selectedNodeEnv,
+            }),
+        })
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    statusEl.textContent = 'Settings saved successfully';
+                    statusEl.style.color = '#10b981';
+                    addLog('Node settings updated', 'success');
+                    // Reinit storage slider (class may have changed range)
+                    initStorageSlider();
+                } else {
+                    statusEl.textContent = 'Error: ' + (result.error || 'Unknown');
+                    statusEl.style.color = '#f43f5e';
+                    addLog('Settings update failed: ' + (result.error || 'Unknown'), 'error');
+                }
+            })
+            .catch(err => {
+                statusEl.textContent = 'Failed';
+                statusEl.style.color = '#f43f5e';
+                addLog('Settings update error: ' + err.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                setTimeout(() => { statusEl.textContent = ''; }, 5000);
+            });
+    };
+
+    // ─── Update Checker ───
+    const CURRENT_VERSION = '1.1.1';
+    const GITHUB_RELEASES_API = 'https://api.github.com/repos/jays-visionAI/visionchain/releases/latest';
+
+    function checkForUpdates() {
+        fetch(GITHUB_RELEASES_API, {
+            headers: { 'Accept': 'application/vnd.github.v3+json' },
+        })
+            .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
+            .then(release => {
+                const latestTag = (release.tag_name || '').replace(/^(node-)?v/, '');
+                if (!latestTag || !isNewerVersion(latestTag, CURRENT_VERSION)) return;
+
+                // Find the right download asset
+                const assets = release.assets || [];
+                let downloadUrl = '';
+
+                // Try CLI-specific asset first, then platform-specific
+                const cliAsset = assets.find(a => /cli/i.test(a.name));
+                const macAsset = assets.find(a => /darwin|macos|mac/i.test(a.name));
+                const linuxAsset = assets.find(a => /linux/i.test(a.name));
+                const tar = assets.find(a => /\.tar\.gz$/i.test(a.name));
+                const picked = cliAsset || macAsset || linuxAsset || tar;
+                if (picked) downloadUrl = picked.browser_download_url;
+
+                if (!downloadUrl) downloadUrl = release.html_url || '';
+
+                // Show banner
+                const banner = document.getElementById('updateBanner');
+                if (banner) {
+                    banner.style.display = 'block';
+                    setText('updateVersionBadge', 'v' + latestTag);
+
+                    const summaryLines = (release.body || '').split('\n').filter(l => l.trim()).slice(0, 3);
+                    const summary = summaryLines.map(l => l.replace(/^[-*]\s*/, '').trim()).join(' / ');
+                    setText('updateNotes', summary);
+
+                    const dlLink = document.getElementById('updateDownloadLink');
+                    if (dlLink) dlLink.href = downloadUrl;
+
+                    addLog('New version available: v' + latestTag, 'info');
+                }
+            })
+            .catch(() => { /* silently ignore */ });
+    }
+
+    function isNewerVersion(latest, current) {
+        const a = latest.split('.').map(Number);
+        const b = current.split('.').map(Number);
+        for (let i = 0; i < Math.max(a.length, b.length); i++) {
+            const x = a[i] || 0;
+            const y = b[i] || 0;
+            if (x > y) return true;
+            if (x < y) return false;
+        }
+        return false;
+    }
+
     // Boot
     initParticles();
     initStorageSlider();
+    initNodeSettings();
     connect();
+    checkForUpdates();
     window.addEventListener('resize', drawHeartbeatChart);
 })();

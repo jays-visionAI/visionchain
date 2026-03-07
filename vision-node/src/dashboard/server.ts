@@ -147,6 +147,51 @@ export function startDashboard(port: number): void {
         }
     });
 
+    // API: Update node settings (email, nodeClass, environment)
+    app.post('/api/config/settings', (req, res) => {
+        try {
+            const { email, nodeClass, environment } = req.body;
+            const config = configManager.get();
+            const updates: Partial<typeof config> = {};
+
+            if (email && typeof email === 'string' && email.includes('@')) {
+                updates.email = email;
+            }
+
+            const validClasses = ['lite', 'standard', 'full'] as const;
+            if (nodeClass && validClasses.includes(nodeClass)) {
+                updates.nodeClass = nodeClass;
+
+                // Adjust storage range for new class
+                const classRanges: Record<string, { min: number; max: number; default: number }> = {
+                    lite: { min: 0.1, max: 1, default: 0.5 },
+                    standard: { min: 1, max: 100, default: 10 },
+                    full: { min: 100, max: 1000, default: 200 },
+                };
+                const range = classRanges[nodeClass] || classRanges.standard;
+                if (config.storageMaxGB < range.min) updates.storageMaxGB = range.default;
+                if (config.storageMaxGB > range.max) updates.storageMaxGB = range.max;
+            }
+
+            const validEnvs = ['production', 'staging'] as const;
+            if (environment && validEnvs.includes(environment)) {
+                updates.environment = environment;
+            }
+
+            configManager.update(updates);
+            configManager.save();
+
+            const updatedConfig = configManager.get();
+            const { apiKey, ...safeConfig } = updatedConfig;
+            res.json({ success: true, config: safeConfig });
+
+            console.log(`[Dashboard] Node settings updated:`, Object.keys(updates).join(', '));
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            res.status(500).json({ error: errMsg });
+        }
+    });
+
     // SSE: Live updates (push every 5 seconds)
     app.get('/api/events', (_req, res) => {
         res.writeHead(200, {

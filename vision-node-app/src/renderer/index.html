@@ -184,7 +184,26 @@
                             </svg>
                         </div>
                         <div class="stat-label">Storage</div>
-                        <div class="stat-value" id="stat-storage">0 GB</div>
+                        <div class="stat-value" id="stat-storage">10 GB</div>
+                        <div style="margin-top: 6px; width: 100%;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span
+                                    style="font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Used</span>
+                                <span id="stat-storage-used"
+                                    style="font-size: 10px; color: #94a3b8; font-weight: 600;">0 B</span>
+                            </div>
+                            <div
+                                style="height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
+                                <div id="stat-storage-bar"
+                                    style="height: 100%; width: 0%; background: linear-gradient(90deg, #22c55e, #06b6d4); border-radius: 2px; transition: width 0.8s ease;">
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+                                <span id="stat-storage-chunks" style="font-size: 9px; color: #6b7280;">0 chunks</span>
+                                <span id="stat-storage-pct" style="font-size: 9px; color: #6b7280;">0%</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="stat-card stat-weight">
                         <div class="stat-icon">
@@ -275,6 +294,80 @@
                     <h2>Settings</h2>
                 </div>
 
+                <!-- Node Settings -->
+                <div class="info-card">
+                    <div class="info-header">Node Settings</div>
+                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 20px; line-height: 1.6;">
+                        Change your node's email, class, and environment. Changes will take effect on the next
+                        heartbeat.
+                    </p>
+
+                    <!-- Email -->
+                    <div style="margin-bottom: 16px;">
+                        <label
+                            style="display: block; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 6px;">Email
+                            Address</label>
+                        <input type="email" id="settings-email" placeholder="you@example.com"
+                            style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #fff; font-size: 13px; outline: none; font-family: inherit; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='rgba(99,102,241,0.5)'"
+                            onblur="this.style.borderColor='rgba(255,255,255,0.08)'" />
+                    </div>
+
+                    <!-- Node Class -->
+                    <div style="margin-bottom: 16px;">
+                        <label
+                            style="display: block; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 6px;">Node
+                            Class</label>
+                        <div id="settings-class-selector" style="display: flex; gap: 8px;">
+                            <button class="settings-class-btn" data-class="lite"
+                                style="flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; text-align: center;"
+                                onclick="selectSettingsClass('lite')">
+                                <div style="font-weight: 700; color: inherit;">Lite</div>
+                                <div style="font-size: 10px; opacity: 0.6; margin-top: 2px;">100MB - 1GB</div>
+                            </button>
+                            <button class="settings-class-btn" data-class="standard"
+                                style="flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; text-align: center;"
+                                onclick="selectSettingsClass('standard')">
+                                <div style="font-weight: 700; color: inherit;">Standard</div>
+                                <div style="font-size: 10px; opacity: 0.6; margin-top: 2px;">1 - 100 GB</div>
+                            </button>
+                            <button class="settings-class-btn" data-class="full"
+                                style="flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; text-align: center;"
+                                onclick="selectSettingsClass('full')">
+                                <div style="font-weight: 700; color: inherit;">Full</div>
+                                <div style="font-size: 10px; opacity: 0.6; margin-top: 2px;">100GB - 1TB</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Environment -->
+                    <div style="margin-bottom: 20px;">
+                        <label
+                            style="display: block; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 6px;">Environment</label>
+                        <div id="settings-env-selector" style="display: flex; gap: 8px;">
+                            <button class="settings-env-btn" data-env="production"
+                                style="flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; text-align: center;"
+                                onclick="selectSettingsEnv('production')">
+                                <div style="font-weight: 700; color: inherit;">Production</div>
+                            </button>
+                            <button class="settings-env-btn" data-env="staging"
+                                style="flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; text-align: center;"
+                                onclick="selectSettingsEnv('staging')">
+                                <div style="font-weight: 700; color: inherit;">Staging</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button id="settings-save-btn" class="btn-primary" onclick="saveNodeSettings()"
+                            style="padding: 8px 24px; font-size: 12px;">
+                            Save Changes
+                        </button>
+                        <span id="settings-save-status" style="font-size: 12px;"></span>
+                    </div>
+                </div>
+
                 <!-- Storage Allocation -->
                 <div class="info-card">
                     <div class="info-header">Storage Allocation</div>
@@ -353,7 +446,7 @@
                 <div class="info-card">
                     <div class="info-header">About</div>
                     <div class="help-text">
-                        <p>Vision Node v1.0.0</p>
+                        <p>Vision Node Beta v1.1.1</p>
                         <p>Distributed Storage Network for Vision Chain</p>
                         <p style="margin-top: 12px">
                             <a href="#"
