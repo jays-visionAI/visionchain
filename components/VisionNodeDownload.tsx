@@ -193,7 +193,7 @@ export default function VisionNodeDownload() {
 
                     {/* Version & Requirements */}
                     <p style="margin-top:20px;font-size:12px;color:#475569">
-                        v1.1.0  --  Requires macOS 12+ / Windows 10+ / Ubuntu 20+
+                        v1.1.1  --  Requires macOS 12+ / Windows 10+ / Ubuntu 20+
                     </p>
                 </div>
             </section>

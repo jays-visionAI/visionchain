@@ -232,7 +232,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     >
                                         <div class="flex items-center gap-2 flex-1 min-w-0">
                                             <span class="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/30 rounded-md text-[9px] font-black text-emerald-400 uppercase tracking-wider shrink-0">NEW</span>
-                                            <span class="text-xs font-bold text-white">Beta v1.1.0</span>
+                                            <span class="text-xs font-bold text-white">Beta v1.1.1</span>
                                             <span class="text-[11px] text-gray-400 truncate">-- Distributed Storage Network</span>
                                         </div>
                                         <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider shrink-0 hidden sm:inline">Release Notes</span>
@@ -244,7 +244,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     <Show when={showReleaseNotes()}>
                                         <div class="mt-2 px-5 py-4 bg-black/30 border border-white/[0.06] rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
                                             <div class="flex items-center gap-2 mb-3">
-                                                <span class="text-xs font-bold text-white">Beta v1.1.0</span>
+                                                <span class="text-xs font-bold text-white">Beta v1.1.1</span>
                                                 <span class="text-[10px] text-gray-500">2026-03-04</span>
                                             </div>
                                             <div class="space-y-2">
