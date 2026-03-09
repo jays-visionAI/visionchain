@@ -13511,19 +13511,69 @@ exports.agentGateway = onRequest({
         const isNewEpoch = currentEpoch !== (mnData.current_epoch || 0);
 
         // ═══ 3-TIER REWARD CALCULATION ═══
-        // Tier 1: USDT — Storage revenue share (based on actual GB stored, Filecoin benchmark)
+        // Tier 1: USDT — 매출의 30%를 노드에 비례 배분 (revenue pool based)
         // Tier 2: VCN  — Uptime mining reward (weight × uptime × rate)
         // Tier 3: RP   — Participation points (until VCN listing)
 
-        // --- Tier 1: USDT (Storage Usage Revenue) ---
-        // Benchmark: Filecoin market rate ~$0.005/GB/month (competitive pricing)
-        // Node gets 70% of storage revenue, 30% protocol fee
-        const STORAGE_RATE_USD_PER_GB_MONTH = 0.005; // Filecoin-competitive rate
-        const NODE_REVENUE_SHARE = 0.70; // node keeps 70%
-        const storedGB = chunksHeld * 256 / (1024 * 1024); // 256KB per chunk → GB
-        const monthSeconds = 30 * 24 * 3600;
-        const usdtPerSec = (storedGB * STORAGE_RATE_USD_PER_GB_MONTH * NODE_REVENUE_SHARE) / monthSeconds;
-        const usdtReward = usdtPerSec * uptimeDelta;
+        // --- Tier 1: USDT (Revenue Pool Share — 매출의 30%) ---
+        // Fetch current month's revenue and active reward policy
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        let usdtReward = 0;
+        let rewardPoolInfo = { monthlyRevenue: 0, poolRatio: 0.30, poolUSD: 0, estimatedMonthly: 0 };
+        try {
+          // Get revenue for current month
+          const revDoc = await db.collection("revenue_monthly").doc(currentMonth).get();
+          const monthlyRevenue = revDoc.exists ? (revDoc.data().netRevenueUSD || 0) : 0;
+
+          // Get active reward policy
+          const policySnap = await db.collection("reward_policies")
+            .where("isActive", "==", true).limit(1).get();
+          const poolRatio = policySnap.empty ? 0.30 : (policySnap.docs[0].data().rewardPoolRatio || 0.30);
+
+          // Total reward pool for the month
+          const poolUSD = monthlyRevenue * poolRatio; // e.g., $1000 revenue × 0.30 = $300 pool
+
+          if (poolUSD > 0) {
+            // Get total network weight (sum of all active nodes' weight × uptime_proportion)
+            // For real-time estimate, use a cached/approximate total
+            const activeNodesSnap = await db.collection("mobile_nodes")
+              .where("status", "==", "active")
+              .select("weight", "today_uptime_seconds")
+              .get();
+
+            let totalNetworkContribution = 0;
+            activeNodesSnap.forEach(doc => {
+              const d = doc.data();
+              totalNetworkContribution += (d.weight || 0) * Math.max(1, d.today_uptime_seconds || 0);
+            });
+
+            // This node's contribution for this heartbeat
+            const myContribution = weight * uptimeDelta;
+            const myDailyShare = totalNetworkContribution > 0
+              ? (myContribution / totalNetworkContribution) : 0;
+
+            // Estimate: pool ÷ 30 days × my daily share
+            const dailyPool = poolUSD / 30;
+            usdtReward = dailyPool * myDailyShare;
+
+            rewardPoolInfo = {
+              monthlyRevenue,
+              poolRatio,
+              poolUSD,
+              estimatedMonthly: totalNetworkContribution > 0
+                ? poolUSD * ((weight * (mnData.today_uptime_seconds || 0) + weight * uptimeDelta) /
+                  totalNetworkContribution)
+                : 0,
+            };
+          }
+        } catch (e) {
+          console.warn("[Mobile Node] Revenue pool calc error:", e.message);
+          // Fallback: use Filecoin benchmark rate if no revenue data
+          const storedGB = chunksHeld * 256 / (1024 * 1024);
+          const FALLBACK_RATE = 0.005; // $/GB/month (Filecoin competitive)
+          usdtReward = (storedGB * FALLBACK_RATE * 0.70 / (30 * 24 * 3600)) * uptimeDelta;
+        }
+
         const prevUsdtPending = parseFloat(mnData.pending_usdt || "0");
         const newUsdtPending = isNewEpoch ? usdtReward : prevUsdtPending + usdtReward;
 
@@ -13629,9 +13679,8 @@ exports.agentGateway = onRequest({
           total_earned: mnData.claimed_reward || "0",
           total_usdt_earned: updateData.total_usdt_earned,
           total_rp_earned: updateData.total_rp_earned,
-          // Rates for display
-          usdt_rate_gb_month: STORAGE_RATE_USD_PER_GB_MONTH,
-          node_revenue_share: NODE_REVENUE_SHARE,
+          // Revenue pool info
+          revenue_pool: rewardPoolInfo,
           next_heartbeat_sec: mode === "wifi_full" ? 300 : 1800,
         });
       } catch (e) {
