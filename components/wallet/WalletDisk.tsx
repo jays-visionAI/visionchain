@@ -140,6 +140,8 @@ export const WalletDisk = (props: {
     const [shareTarget, setShareTarget] = createSignal<{ type: 'file' | 'folder'; item: DiskFile | DiskFolder } | null>(null);
     const [shareSearchQuery, setShareSearchQuery] = createSignal('');
     const [sharingInProgress, setSharingInProgress] = createSignal(false);
+    const [shareConfirmContact, setShareConfirmContact] = createSignal<{ name: string; email: string } | null>(null);
+    const [shareSuccess, setShareSuccess] = createSignal(false);
     const [sharedWithMe, setSharedWithMe] = createSignal<ShareInfo[]>([]);
     const [sharedFolders, setSharedFolders] = createSignal<SharedFolder[]>([]);
     const [sharedLoading, setSharedLoading] = createSignal(false);
@@ -955,14 +957,25 @@ export const WalletDisk = (props: {
         loadContacts();
     };
 
-    const executeShare = async (targetEmail: string) => {
+    const selectShareContact = (contactName: string, contactEmail: string) => {
+        setShareConfirmContact({ name: contactName, email: contactEmail });
+    };
+
+    const executeShare = async () => {
         const target = shareTarget();
-        if (!target) return;
+        const contact = shareConfirmContact();
+        if (!target || !contact) return;
         setSharingInProgress(true);
         try {
-            await shareResource(targetEmail, target.type, target.item.id, target.item.name);
-            setShowShareModal(false);
-            setShareTarget(null);
+            await shareResource(contact.email, target.type, target.item.id, target.item.name);
+            setShareSuccess(true);
+            // Auto-close after 2 seconds
+            setTimeout(() => {
+                setShowShareModal(false);
+                setShareTarget(null);
+                setShareConfirmContact(null);
+                setShareSuccess(false);
+            }, 2000);
         } catch (err: any) {
             console.error('[Disk] Share failed:', err);
             alert(err.message || 'Failed to share');
@@ -3087,74 +3100,133 @@ export const WalletDisk = (props: {
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
                             class="bg-[#1a1a24] border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl"
                         >
-                            <div class="flex flex-col items-center text-center mb-6">
-                                <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
-                                    <Share2 class="w-8 h-8 text-blue-400" />
-                                </div>
-                                <h1 class="text-xl font-black text-white mb-1 uppercase tracking-tight">Share {shareTarget()!.type}</h1>
-                                <p class="text-xs text-gray-500 truncate max-w-[250px]">{shareTarget()!.item.name}</p>
-                            </div>
-
-                            <div class="space-y-3 mb-6">
-                                <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
-                                    <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Search contacts by name</div>
-                                    <input
-                                        type="text"
-                                        value={shareSearchQuery()}
-                                        onInput={(e) => setShareSearchQuery(e.currentTarget.value)}
-                                        placeholder="Enter name or email..."
-                                        autocomplete="off"
-                                        class="bg-transparent border-none text-white text-sm font-bold placeholder-gray-700 focus:outline-none w-full"
-                                    />
-                                </div>
-
-                                {/* Found contacts */}
-                                <Show when={shareSearchQuery().length >= 2}>
-                                    <div class="max-h-[200px] overflow-y-auto space-y-1 custom-scrollbar">
-                                        <For each={contacts().filter((c: any) => {
-                                            const q = shareSearchQuery().toLowerCase();
-                                            return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid;
-                                        }).slice(0, 10)}>
-                                            {(contact: any) => (
-                                                <button
-                                                    onClick={() => executeShare(contact.vchainUserUid)}
-                                                    disabled={sharingInProgress()}
-                                                    class="w-full flex items-center gap-3 p-3 bg-white/[0.02] hover:bg-white/[0.06] rounded-xl transition-all text-left"
-                                                >
-                                                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 font-black text-xs border border-blue-500/20">
-                                                        {contact.internalName?.charAt(0)?.toUpperCase() || '?'}
-                                                    </div>
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="text-sm font-bold text-white truncate">{contact.internalName}</div>
-                                                        <div class="text-[10px] text-gray-500 truncate">{contact.vchainUserUid}</div>
-                                                    </div>
-                                                    <Share2 class="w-4 h-4 text-gray-500" />
-                                                </button>
-                                            )}
-                                        </For>
-                                        <Show when={contacts().filter((c: any) => {
-                                            const q = shareSearchQuery().toLowerCase();
-                                            return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid;
-                                        }).length === 0}>
-                                            <div class="text-center py-4 text-xs text-gray-600">No contacts found</div>
-                                        </Show>
+                            {/* Success State */}
+                            <Show when={shareSuccess()}>
+                                <div class="flex flex-col items-center text-center py-4">
+                                    <div class="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 border border-emerald-500/20">
+                                        <svg class="w-8 h-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                                     </div>
-                                </Show>
-                            </div>
-
-                            <Show when={sharingInProgress()}>
-                                <div class="flex items-center justify-center gap-2 py-3 text-sm text-blue-400">
-                                    <div class="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                                    Sharing...
+                                    <h1 class="text-lg font-black text-white mb-2">공유 완료</h1>
+                                    <p class="text-sm text-gray-400">
+                                        <span class="text-white font-bold">{shareConfirmContact()?.name}</span>님에게
+                                    </p>
+                                    <p class="text-xs text-gray-500 truncate max-w-[250px] mt-1">"{shareTarget()!.item.name}"</p>
+                                    <p class="text-sm text-emerald-400 mt-2 font-bold">파일이 공유되었습니다</p>
                                 </div>
                             </Show>
 
-                            <button
-                                onClick={() => { setShowShareModal(false); setShareTarget(null); }}
-                                class="w-full h-12 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-black uppercase tracking-tight transition-all"
-                            >
-                                Cancel
-                            </button>
+                            {/* Confirmation State */}
+                            <Show when={shareConfirmContact() && !shareSuccess()}>
+                                <div class="flex flex-col items-center text-center mb-6">
+                                    <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+                                        <Share2 class="w-8 h-8 text-blue-400" />
+                                    </div>
+                                    <h1 class="text-lg font-black text-white mb-2">파일을 공유합니다</h1>
+                                    <p class="text-xs text-gray-500 truncate max-w-[250px] mb-4">"{shareTarget()!.item.name}"</p>
+                                </div>
+                                <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-5 py-4 mb-6">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 font-black text-sm border border-blue-500/20">
+                                            {shareConfirmContact()!.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-sm font-bold text-white truncate">{shareConfirmContact()!.name}</div>
+                                            <div class="text-[11px] text-gray-500 truncate">{shareConfirmContact()!.email}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {shareTarget()!.item && (shareTarget()!.item as DiskFile).isEncrypted && (
+                                    <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 mb-4">
+                                        <div class="flex items-start gap-2">
+                                            <svg class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                            <p class="text-[11px] text-amber-300/80">이 파일은 암호화되어 있습니다. 상대방이 열람하려면 암호가 필요합니다.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                <div class="flex gap-3">
+                                    <button
+                                        onClick={() => setShareConfirmContact(null)}
+                                        disabled={sharingInProgress()}
+                                        class="flex-1 h-12 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-black uppercase tracking-tight transition-all"
+                                    >
+                                        취소
+                                    </button>
+                                    <button
+                                        onClick={executeShare}
+                                        disabled={sharingInProgress()}
+                                        class="flex-1 h-12 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-black uppercase tracking-tight transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Show when={sharingInProgress()} fallback={<>공유하기</>}>
+                                            <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            공유 중...
+                                        </Show>
+                                    </button>
+                                </div>
+                            </Show>
+
+                            {/* Search State */}
+                            <Show when={!shareConfirmContact() && !shareSuccess()}>
+                                <div class="flex flex-col items-center text-center mb-6">
+                                    <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+                                        <Share2 class="w-8 h-8 text-blue-400" />
+                                    </div>
+                                    <h1 class="text-xl font-black text-white mb-1 uppercase tracking-tight">Share {shareTarget()!.type}</h1>
+                                    <p class="text-xs text-gray-500 truncate max-w-[250px]">{shareTarget()!.item.name}</p>
+                                </div>
+
+                                <div class="space-y-3 mb-6">
+                                    <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Search contacts by name</div>
+                                        <input
+                                            type="text"
+                                            value={shareSearchQuery()}
+                                            onInput={(e) => setShareSearchQuery(e.currentTarget.value)}
+                                            placeholder="Enter name or email..."
+                                            autocomplete="off"
+                                            class="bg-transparent border-none text-white text-sm font-bold placeholder-gray-700 focus:outline-none w-full"
+                                        />
+                                    </div>
+
+                                    {/* Found contacts */}
+                                    <Show when={shareSearchQuery().length >= 2}>
+                                        <div class="max-h-[200px] overflow-y-auto space-y-1 custom-scrollbar">
+                                            <For each={contacts().filter((c: any) => {
+                                                const q = shareSearchQuery().toLowerCase();
+                                                return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid;
+                                            }).slice(0, 10)}>
+                                                {(contact: any) => (
+                                                    <button
+                                                        onClick={() => selectShareContact(contact.internalName || contact.vchainUserUid, contact.vchainUserUid)}
+                                                        class="w-full flex items-center gap-3 p-3 bg-white/[0.02] hover:bg-white/[0.06] rounded-xl transition-all text-left"
+                                                    >
+                                                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 font-black text-xs border border-blue-500/20">
+                                                            {contact.internalName?.charAt(0)?.toUpperCase() || '?'}
+                                                        </div>
+                                                        <div class="flex-1 min-w-0">
+                                                            <div class="text-sm font-bold text-white truncate">{contact.internalName}</div>
+                                                            <div class="text-[10px] text-gray-500 truncate">{contact.vchainUserUid}</div>
+                                                        </div>
+                                                        <Share2 class="w-4 h-4 text-gray-500" />
+                                                    </button>
+                                                )}
+                                            </For>
+                                            <Show when={contacts().filter((c: any) => {
+                                                const q = shareSearchQuery().toLowerCase();
+                                                return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid;
+                                            }).length === 0}>
+                                                <div class="text-center py-4 text-xs text-gray-600">No contacts found</div>
+                                            </Show>
+                                        </div>
+                                    </Show>
+                                </div>
+
+                                <button
+                                    onClick={() => { setShowShareModal(false); setShareTarget(null); setShareConfirmContact(null); }}
+                                    class="w-full h-12 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-black uppercase tracking-tight transition-all"
+                                >
+                                    Cancel
+                                </button>
+                            </Show>
                         </Motion.div>
                     </Motion.div>
                 </Show>
