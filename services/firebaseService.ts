@@ -1099,7 +1099,8 @@ export type RPActionType =
     | 'profile_update' | 'daily_login'
     | 'staking_deposit' | 'transfer_send'
     | 'mobile_node_daily'
-    | 'referral_tier1_rp' | 'referral_tier2_rp';
+    | 'referral_tier1_rp' | 'referral_tier2_rp'
+    | 'cex_connect' | 'quant_strategy_setup';
 
 export interface RPEntry {
     id?: string;
@@ -1149,6 +1150,9 @@ export interface RPConfig {
     // Referral RP propagation rates
     referral_rp_tier1_rate: number;  // 0.10 = 10%
     referral_rp_tier2_rate: number;  // 0.02 = 2%
+    // CEX & Quant
+    cex_connect: number;
+    quant_strategy_setup: number;
 }
 
 const DEFAULT_RP_CONFIG: RPConfig = {
@@ -1180,6 +1184,9 @@ const DEFAULT_RP_CONFIG: RPConfig = {
     // Referral RP propagation rates
     referral_rp_tier1_rate: 0.10,
     referral_rp_tier2_rate: 0.02,
+    // CEX & Quant
+    cex_connect: 15,
+    quant_strategy_setup: 20,
 };
 
 let _rpConfigCache: RPConfig | null = null;
@@ -1320,6 +1327,10 @@ export const trackUserLogin = async (email: string): Promise<void> => {
                 updatedAt: new Date().toISOString(),
             });
         }
+        // Award daily login RP (fire-and-forget)
+        getRPConfig().then(rpCfg => {
+            addRewardPoints(email, rpCfg.daily_login, 'daily_login', 'Daily login').catch(() => { });
+        }).catch(() => { });
     } catch (e) {
         console.warn('[Activity] Login tracking failed:', e);
     }

@@ -884,8 +884,11 @@ export const WalletDisk = (props: {
                             setPreviewFile(null);
                             return;
                         }
+                        console.log('[Disk] Decrypting PDF:', { salt: file.salt, iv: file.iv, saltLen: file.salt?.length, ivLen: file.iv?.length, pwdLen: encryptionPassword().length });
                         const buffer = await blob.arrayBuffer();
+                        console.log('[Disk] Pre-decrypt blob size:', buffer.byteLength);
                         blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                        console.log('[Disk] Post-decrypt blob size:', blob.size);
                     }
                 } else {
                     const resp = await fetch(file.downloadURL);

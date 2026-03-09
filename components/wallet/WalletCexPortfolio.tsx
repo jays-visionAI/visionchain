@@ -39,6 +39,7 @@ import {
     type CexPortfolioSnapshot,
     type CexAsset
 } from '../../services/cexService';
+import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 
 // SVG Icons (no emoji/emoticon usage)
 const UpbitIcon = () => (
@@ -248,6 +249,20 @@ const WalletCexPortfolio = (): JSX.Element => {
             setAddLabel('');
             // Reload data
             await loadData();
+
+            // Award CEX connect RP (fire-and-forget)
+            const currentEmail = getFirebaseAuth().currentUser?.email;
+            if (currentEmail) {
+                getRPConfig().then(rpCfg => {
+                    addRewardPoints(
+                        currentEmail,
+                        rpCfg.cex_connect,
+                        'cex_connect',
+                        `Connected ${EXCHANGE_LABELS[addExchange()]}`
+                    ).catch(() => { });
+                }).catch(() => { });
+            }
+
             // Close modal after delay
             setTimeout(() => {
                 setShowAddModal(false);

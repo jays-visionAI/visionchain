@@ -1404,6 +1404,11 @@ const Wallet = (): JSX.Element => {
                 // Refresh on-chain balance after successful transfer
                 setTimeout(() => fetchPortfolioData(), 2000);
 
+                // Award transfer_send RP (fire-and-forget)
+                getRPConfig().then(rpCfg => {
+                    addRewardPoints(userProfile().email, rpCfg.transfer_send, 'transfer_send', `Sent ${amount} ${symbol}`).catch(() => { });
+                }).catch(() => { });
+
                 // --- Notification Logic ---
                 try {
                     const isScheduled = isSchedulingTimeLock();

@@ -20,6 +20,7 @@ import { WalletViewHeader } from './wallet/WalletViewHeader';
 import { useI18n } from '../i18n/i18nContext';
 import { contractService } from '../services/contractService';
 import { WalletService } from '../services/walletService';
+import { addRewardPoints, getRPConfig } from '../services/firebaseService';
 
 // ============ Contract Config ============
 const BRIDGE_STAKING_ADDRESS = '0x593dFDc2e31F32D17B981392786F84b0E1228Ab6'; // BridgeStaking V3 (with stakeFor)
@@ -347,6 +348,14 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 setTxStatus('success');
                 setStakeAmount('');
                 await loadContractData();
+
+                // Award staking deposit RP (fire-and-forget)
+                const userEmail = props.userEmail?.();
+                if (userEmail) {
+                    getRPConfig().then(rpCfg => {
+                        addRewardPoints(userEmail, rpCfg.staking_deposit, 'staking_deposit', `Staked ${stakeAmount()} VCN`).catch(() => { });
+                    }).catch(() => { });
+                }
 
                 setTimeout(() => setTxStatus('idle'), 5000);
             } catch (err: any) {

@@ -48,6 +48,7 @@ import {
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
 import type { StrategyTemplate, StrategyParameter, ExceptionRule } from '../../services/quant/types';
+import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -278,8 +279,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                 <button
                                     onClick={() => setActiveTab(tab)}
                                     class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === tab
-                                            ? 'bg-white/[0.08] text-white shadow-lg'
-                                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                                        ? 'bg-white/[0.08] text-white shadow-lg'
+                                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
                                         }`}
                                 >
                                     {tab === 'strategies' && <StrategyIcon />}
@@ -304,8 +305,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                     <button
                                         onClick={() => setCategoryFilter(cat.id)}
                                         class={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap border ${categoryFilter() === cat.id
-                                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                                                : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white hover:border-white/[0.1]'
+                                            ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                            : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white hover:border-white/[0.1]'
                                             }`}
                                     >
                                         {cat.label}
@@ -569,8 +570,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                                     <button
                                                         onClick={() => toggleAsset(asset.currency)}
                                                         class={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${isSelected()
-                                                                ? 'bg-cyan-500/10 border-cyan-500/20'
-                                                                : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1]'
+                                                            ? 'bg-cyan-500/10 border-cyan-500/20'
+                                                            : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1]'
                                                             }`}
                                                     >
                                                         <div class={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected() ? 'bg-cyan-500 border-cyan-500' : 'border-gray-600'
@@ -611,8 +612,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 <button
                                                     onClick={() => setRiskProfile(profile.id)}
                                                     class={`p-3 rounded-xl border text-center transition-all ${riskProfile() === profile.id
-                                                            ? `bg-${profile.color}-500/10 border-${profile.color}-500/20`
-                                                            : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1]'
+                                                        ? `bg-${profile.color}-500/10 border-${profile.color}-500/20`
+                                                        : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1]'
                                                         }`}
                                                 >
                                                     <div class={`text-xs font-bold ${riskProfile() === profile.id ? 'text-white' : 'text-gray-400'}`}>
@@ -810,6 +811,15 @@ const VisionQuantEngine = (): JSX.Element => {
                                             assets: selectedAssets(),
                                             params: customParams(),
                                         });
+
+                                        // Award quant_strategy_setup RP (fire-and-forget)
+                                        const email = getFirebaseAuth().currentUser?.email;
+                                        if (email) {
+                                            getRPConfig().then(rpCfg => {
+                                                addRewardPoints(email, rpCfg.quant_strategy_setup, 'quant_strategy_setup', `Setup ${selectedStrategy()!.name}`).catch(() => { });
+                                            }).catch(() => { });
+                                        }
+
                                         setShowConfirm(false);
                                         setActiveTab('agents');
                                     }}
