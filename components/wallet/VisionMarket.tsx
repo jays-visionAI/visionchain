@@ -794,16 +794,16 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                 <div class="flex items-center justify-between shrink-0">
                                     <div class="flex items-center gap-3 min-w-0 pr-10">
                                         <div class={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center border ${previewType() === 'video' ? 'bg-purple-500/10 border-purple-500/20' :
-                                                previewType() === 'image' ? 'bg-pink-500/10 border-pink-500/20' :
-                                                    previewType() === 'audio' ? 'bg-amber-500/10 border-amber-500/20' :
-                                                        previewType() === 'pdf' ? 'bg-red-500/10 border-red-500/20' :
-                                                            'bg-cyan-500/10 border-cyan-500/20'
+                                            previewType() === 'image' ? 'bg-pink-500/10 border-pink-500/20' :
+                                                previewType() === 'audio' ? 'bg-amber-500/10 border-amber-500/20' :
+                                                    previewType() === 'pdf' ? 'bg-red-500/10 border-red-500/20' :
+                                                        'bg-cyan-500/10 border-cyan-500/20'
                                             }`}>
                                             <FileTypeIcon type={selectedItem()?.type || ''} name={selectedItem()?.name || ''} class={`w-4 h-4 ${previewType() === 'video' ? 'text-purple-400' :
-                                                    previewType() === 'image' ? 'text-pink-400' :
-                                                        previewType() === 'audio' ? 'text-amber-400' :
-                                                            previewType() === 'pdf' ? 'text-red-400' :
-                                                                'text-cyan-400'
+                                                previewType() === 'image' ? 'text-pink-400' :
+                                                    previewType() === 'audio' ? 'text-amber-400' :
+                                                        previewType() === 'pdf' ? 'text-red-400' :
+                                                            'text-cyan-400'
                                                 }`} />
                                         </div>
                                         <div class="min-w-0">
@@ -961,22 +961,53 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                             </div>
                         </Show>
 
-                        {/* ── Step: Success (for documents/other) ── */}
+                        {/* \u2500\u2500 Step: Success (for documents/other) \u2500\u2500 */}
                         <Show when={purchaseStep() === 'success'}>
-                            <div class="space-y-6 text-center py-8">
+                            <div class="space-y-6 text-center py-6">
                                 <div class="w-16 h-16 mx-auto rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
                                     <CheckCircle class="w-8 h-8 text-green-400" />
                                 </div>
                                 <div>
                                     <h3 class="text-xl font-black text-white">Download Complete</h3>
-                                    <p class="text-sm text-gray-500 mt-2">The file has been saved to your device.</p>
+                                    <p class="text-sm text-gray-500 mt-2">The file has been saved to your downloads folder.</p>
                                 </div>
-                                <button
-                                    onClick={closePurchaseModal}
-                                    class="mx-auto h-10 px-8 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-sm rounded-xl transition-all border border-white/10"
-                                >
-                                    Done
-                                </button>
+
+                                {/* File info card */}
+                                <div class="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05] mx-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class={`w-12 h-12 rounded-xl flex items-center justify-center border shrink-0 ${fileTypeColor(selectedItem()?.type || '')} bg-white/[0.03] border-white/[0.05]`}>
+                                            <FileTypeIcon type={selectedItem()?.type || ''} name={selectedItem()?.name || ''} class="w-6 h-6" />
+                                        </div>
+                                        <div class="text-left min-w-0 flex-1">
+                                            <div class="text-sm font-bold text-white truncate">{selectedItem()?.name}</div>
+                                            <div class="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5">
+                                                <span>{formatFileSize(selectedItem()?.size || 0)}</span>
+                                                <span class="text-gray-700">&middot;</span>
+                                                <span class="truncate">{selectedItem()?.type || 'Unknown type'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex gap-3 justify-center">
+                                    <button
+                                        onClick={() => {
+                                            const blob = previewBlob();
+                                            const item = selectedItem();
+                                            if (blob && item) triggerBlobDownload(blob, item.name);
+                                        }}
+                                        class="h-10 px-6 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-bold text-sm rounded-xl transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
+                                    >
+                                        <Download class="w-4 h-4" />
+                                        Download Again
+                                    </button>
+                                    <button
+                                        onClick={closePurchaseModal}
+                                        class="h-10 px-8 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-sm rounded-xl transition-all border border-white/10"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
                             </div>
                         </Show>
 
