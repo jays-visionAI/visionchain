@@ -13587,6 +13587,7 @@ exports.agentGateway = onRequest({
         // Fetch current month's revenue and active reward policy
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         let usdtReward = 0;
+        let storedGB = chunksHeld * 256 / (1024 * 1024); // KB chunks -> GB
         let rewardPoolInfo = { monthlyRevenue: 0, poolRatio: 0.30, poolUSD: 0, estimatedMonthly: 0 };
         try {
           // Get revenue for current month
@@ -13637,7 +13638,6 @@ exports.agentGateway = onRequest({
         } catch (e) {
           console.warn("[Mobile Node] Revenue pool calc error:", e.message);
           // Fallback: use Filecoin benchmark rate if no revenue data
-          const storedGB = chunksHeld * 256 / (1024 * 1024);
           const FALLBACK_RATE = 0.005; // $/GB/month (Filecoin competitive)
           usdtReward = (storedGB * FALLBACK_RATE * 0.70 / (30 * 24 * 3600)) * uptimeDelta;
         }

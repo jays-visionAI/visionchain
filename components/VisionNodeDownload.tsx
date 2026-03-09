@@ -15,12 +15,12 @@ function detectOS(): 'mac' | 'windows' | 'linux' {
     return 'linux';
 }
 
-// Download URLs – pinned to node-v1.1.1-beta release
+// Download URLs -- pinned to v1.1.2-beta release
 const DOWNLOAD_URLS = {
-    mac_arm64: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.1-beta/VisionNode-1.1.1-beta-arm64.dmg',
-    mac_x64: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.1-beta/VisionNode-1.1.1-beta-x64.dmg',
-    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.1-beta/VisionNode-Setup-1.1.1-beta.exe',
-    linux: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.1-beta/VisionNode-Setup-1.1.1-beta.exe', // CLI recommended for Linux
+    mac_arm64: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-arm64.dmg',
+    mac_x64: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-x64.dmg',
+    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
+    linux: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe', // CLI recommended for Linux
 };
 
 const CLI_INSTALL_CMD = 'curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash';
@@ -193,7 +193,7 @@ export default function VisionNodeDownload() {
 
                     {/* Version & Requirements */}
                     <p style="margin-top:20px;font-size:12px;color:#475569">
-                        v1.1.1  --  Requires macOS 12+ / Windows 10+ / Ubuntu 20+
+                        v1.1.2  --  Requires macOS 12+ / Windows 10+ / Ubuntu 20+
                     </p>
                 </div>
             </section>
