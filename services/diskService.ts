@@ -464,7 +464,7 @@ export const uploadDiskFile = async (
     });
 
     // Threshold for direct base64 upload via callable function
-    const DIRECT_UPLOAD_LIMIT = 8 * 1024 * 1024; // 8MB
+    const DIRECT_UPLOAD_LIMIT = 5 * 1024 * 1024; // 5MB (base64 encodes to ~6.65MB, safe under 10MB httpsCallable limit)
 
     // Call Cloud Function for distributed upload
     const functions = getFunctions(getFirebaseApp());

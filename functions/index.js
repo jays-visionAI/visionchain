@@ -20388,6 +20388,14 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540,
     throw new HttpsError("invalid-argument", `File exceeds ${maxFileSize / (1024 * 1024)}MB limit.`);
   }
 
+  // Verify received data matches expected size (detect base64 truncation)
+  if (fileSize && Math.abs(buffer.length - fileSize) > 1024) {
+    throw new HttpsError("data-loss",
+      `File data truncated during upload. Expected ${fileSize} bytes but received ${buffer.length} bytes. ` +
+      `File may be too large for direct base64 upload. Please try again.`
+    );
+  }
+
   // Check usage vs limit
   const sub = subDoc.data();
   const limitBytes = sub.subscribedGb * 1024 * 1024 * 1024;

@@ -198,9 +198,6 @@ export const WalletDisk = (props: {
             if (!(window as any).pdfjsLib) {
                 await new Promise<void>((resolve, reject) => {
                     const script = document.createElement('script');
-                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.mjs';
-                    script.type = 'module';
-                    // Use legacy build for broader compatibility
                     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
                     script.type = 'text/javascript';
                     script.onload = () => {
@@ -219,14 +216,22 @@ export const WalletDisk = (props: {
             if (!pdfjsLib) throw new Error('pdf.js failed to load');
 
             const arrayBuffer = await blob.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            // Validate PDF header
+            const header = new Uint8Array(arrayBuffer.slice(0, 5));
+            const headerStr = String.fromCharCode(...header);
+            if (!headerStr.startsWith('%PDF')) {
+                console.error('[Disk] Invalid PDF header:', headerStr, '- first 20 bytes:', new Uint8Array(arrayBuffer.slice(0, 20)));
+                throw new Error('Downloaded data is not a valid PDF (header: ' + headerStr + ')');
+            }
+
+            const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
             const totalPages = pdf.numPages;
             setPdfTotalPages(totalPages);
 
-            // Render all pages (or first 20 for very large PDFs)
             const pagesToRender = Math.min(totalPages, 50);
             const pages: string[] = [];
-            const scale = 2.0; // Higher scale for sharp rendering
+            const scale = 2.0;
 
             for (let i = 1; i <= pagesToRender; i++) {
                 const page = await pdf.getPage(i);
@@ -240,7 +245,6 @@ export const WalletDisk = (props: {
                 await page.render({ canvasContext: ctx, viewport }).promise;
                 pages.push(canvas.toDataURL('image/png'));
 
-                // Update state progressively for fast feedback
                 if (i === 1 || i % 5 === 0) {
                     setPdfPages([...pages]);
                 }
@@ -445,6 +449,15 @@ export const WalletDisk = (props: {
         }
 
         await loadData();
+
+        // Auto-dismiss upload panel after a brief delay if all uploads succeeded
+        const hasErrors = uploadQueue().some(u => u.status === 'error');
+        if (!hasErrors) {
+            setTimeout(() => {
+                setShowUploadPanel(false);
+                setUploadQueue([]);
+            }, 1500);
+        }
     };
 
     const onFileSelect = (e: Event) => {
@@ -603,7 +616,14 @@ export const WalletDisk = (props: {
                 const userEmail = email();
                 if (!userEmail) { alert('Login required'); return; }
 
-                const result = await downloadDiskFile(userEmail, file.id);
+                // Use chunk-by-chunk download to avoid base64 response size limits
+                let blob: Blob;
+                if (file.chunkHashes && file.chunkHashes.length > 0) {
+                    blob = await downloadDiskFileGranular(file, () => { }, 10);
+                } else {
+                    const result = await downloadDiskFile(userEmail, file.id);
+                    blob = result.blob;
+                }
 
                 // Award RP for disk download (fire-and-forget)
                 getRPConfig().then(rpCfg => {
@@ -621,7 +641,7 @@ export const WalletDisk = (props: {
                     }
                     setDecryptingFileId(file.id);
                     try {
-                        const buffer = await result.blob.arrayBuffer();
+                        const buffer = await blob.arrayBuffer();
                         const decBlob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
                         const url = window.URL.createObjectURL(decBlob);
                         const a = document.createElement('a');
@@ -639,8 +659,8 @@ export const WalletDisk = (props: {
                 }
 
                 // Normal distributed file download
-                const blob = new Blob([await result.blob.arrayBuffer()], { type: file.type || result.fileType });
-                const url = window.URL.createObjectURL(blob);
+                const finalBlob = new Blob([await blob.arrayBuffer()], { type: file.type });
+                const url = window.URL.createObjectURL(finalBlob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = file.name;

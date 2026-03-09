@@ -1098,7 +1098,8 @@ export type RPActionType =
     | 'ai_chat' | 'agent_create'
     | 'profile_update' | 'daily_login'
     | 'staking_deposit' | 'transfer_send'
-    | 'mobile_node_daily';
+    | 'mobile_node_daily'
+    | 'referral_tier1_rp' | 'referral_tier2_rp';
 
 export interface RPEntry {
     id?: string;
@@ -1145,6 +1146,9 @@ export interface RPConfig {
     agent_nft_mint: number;
     agent_referral_inviter: number;
     agent_referral_invitee: number;
+    // Referral RP propagation rates
+    referral_rp_tier1_rate: number;  // 0.10 = 10%
+    referral_rp_tier2_rate: number;  // 0.02 = 2%
 }
 
 const DEFAULT_RP_CONFIG: RPConfig = {
@@ -1173,6 +1177,9 @@ const DEFAULT_RP_CONFIG: RPConfig = {
     agent_nft_mint: 30,
     agent_referral_inviter: 50,
     agent_referral_invitee: 25,
+    // Referral RP propagation rates
+    referral_rp_tier1_rate: 0.10,
+    referral_rp_tier2_rate: 0.02,
 };
 
 let _rpConfigCache: RPConfig | null = null;
@@ -1489,6 +1496,56 @@ export const addRewardPoints = async (
     }
 
     console.log(`[RP] +${amount} RP to ${userId} (${type}: ${source})`);
+
+    // ── Referral RP Propagation (fire-and-forget) ──
+    // Skip propagation for referral-derived types to prevent infinite recursion
+    const NON_PROPAGATING_TYPES: RPActionType[] = ['referral_tier1_rp', 'referral_tier2_rp', 'referral', 'levelup'];
+    if (!NON_PROPAGATING_TYPES.includes(type) && amount > 0) {
+        (async () => {
+            try {
+                const rpCfg = await getRPConfig();
+                const tier1Rate = rpCfg.referral_rp_tier1_rate ?? 0.10;
+                const tier2Rate = rpCfg.referral_rp_tier2_rate ?? 0.02;
+
+                // Look up user's referrer chain
+                const userDocRef = doc(db, 'users', userId.toLowerCase());
+                const userSnap2 = await getDoc(userDocRef);
+                if (!userSnap2.exists()) return;
+                const userData = userSnap2.data();
+
+                const referrerId = userData.referrerId;
+                const grandReferrerId = userData.grandReferrerId;
+
+                // Tier 1: Direct referrer gets 10% of earned RP
+                if (referrerId) {
+                    const tier1RP = Math.round(amount * tier1Rate);
+                    if (tier1RP >= 1) {
+                        await addRewardPoints(
+                            referrerId,
+                            tier1RP,
+                            'referral_tier1_rp',
+                            `${userId.split('@')[0]} earned ${amount} RP (${type})`
+                        );
+                    }
+                }
+
+                // Tier 2: Grand referrer gets 2% of earned RP
+                if (grandReferrerId) {
+                    const tier2RP = Math.round(amount * tier2Rate);
+                    if (tier2RP >= 1) {
+                        await addRewardPoints(
+                            grandReferrerId,
+                            tier2RP,
+                            'referral_tier2_rp',
+                            `${userId.split('@')[0]} earned ${amount} RP (${type})`
+                        );
+                    }
+                }
+            } catch (e) {
+                console.warn('[RP] Referral propagation failed (non-blocking):', e);
+            }
+        })();
+    }
 };
 
 /**
