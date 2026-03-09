@@ -451,6 +451,9 @@ export const WalletDisk = (props: {
 
         await loadData();
 
+        // Clear search filter so uploaded files are visible
+        setSearchQuery('');
+
         // Auto-dismiss upload panel after a brief delay if all uploads succeeded
         const hasErrors = uploadQueue().some(u => u.status === 'error');
         if (!hasErrors) {
@@ -1050,6 +1053,8 @@ export const WalletDisk = (props: {
                         placeholder="Search files..."
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                        autocomplete="off"
+                        name="disk-search-query"
                         class="h-10 w-32 sm:w-48 pl-9 pr-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all"
                     />
                 </div>
