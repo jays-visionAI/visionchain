@@ -288,9 +288,20 @@ let chunkDb = null;
 function initChunkStorage() {
     if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
 
+    // better-sqlite3 is a native module that may fail on some platforms
+    // (e.g., cross-compiled from macOS to Windows). Wrap in try-catch
+    // and fall back to filesystem-only mode gracefully.
+    let Database = null;
     try {
-        // Use better-sqlite3 if available, otherwise fallback to JSON file index
-        const Database = require('better-sqlite3');
+        Database = require('better-sqlite3');
+    } catch (loadErr) {
+        console.warn('[Storage] better-sqlite3 native module not available:', loadErr.message);
+        console.warn('[Storage] Falling back to filesystem-only chunk storage');
+        chunkDb = null;
+        return;
+    }
+
+    try {
         chunkDb = new Database(DB_PATH);
         chunkDb.pragma('journal_mode = WAL');
         chunkDb.exec(`
@@ -304,8 +315,8 @@ function initChunkStorage() {
             )
         `);
         console.log('[Storage] SQLite chunk index initialized');
-    } catch {
-        console.warn('[Storage] better-sqlite3 not available, using filesystem-only mode');
+    } catch (dbErr) {
+        console.warn('[Storage] SQLite initialization failed:', dbErr.message);
         chunkDb = null;
     }
 }

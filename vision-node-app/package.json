@@ -14,9 +14,11 @@
         "build:all": "electron-builder --mac --win"
     },
     "dependencies": {
-        "better-sqlite3": "^11.0.0",
         "express": "^4.21.0",
         "ws": "^8.16.0"
+    },
+    "optionalDependencies": {
+        "better-sqlite3": "^11.0.0"
     },
     "devDependencies": {
         "@electron/notarize": "^2.5.0",
@@ -69,6 +71,9 @@
             "perMachine": false,
             "allowToChangeInstallationDirectory": false
         },
+        "asarUnpack": [
+            "**/better-sqlite3/**"
+        ],
         "dmg": {
             "contents": [
                 {
