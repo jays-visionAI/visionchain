@@ -20379,7 +20379,7 @@ exports.diskUploadPart = onCall({ cors: true, maxInstances: 20, timeoutSeconds: 
 exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540, memory: "2GiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
-  const { fileData, tempStoragePath, uploadSessionId, fileName, fileType, folder, fileSize, thumbnail, preserveOriginal } = request.data;
+  const { fileData, tempStoragePath, uploadSessionId, fileName, fileType, folder, fileSize, thumbnail, preserveOriginal, isEncrypted, salt, iv } = request.data;
 
   if (!fileData && !tempStoragePath && !uploadSessionId) {
     throw new HttpsError("invalid-argument", "fileData, tempStoragePath, or uploadSessionId is required.");
@@ -20673,6 +20673,10 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540,
       thumbnail: thumbnail || "",
       thumbnailURL,
       abstract: fileAbstract,
+      // Encryption metadata
+      isEncrypted: isEncrypted || false,
+      salt: salt || "",
+      iv: iv || "",
       ...optimizationMeta,
     };
 

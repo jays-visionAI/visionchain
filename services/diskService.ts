@@ -501,6 +501,11 @@ export const uploadDiskFile = async (
             folder,
             fileSize: file.size,
             thumbnail: thumbnailDataUrl || undefined,
+            // Encryption metadata
+            isEncrypted: extraMetadata?.isEncrypted || false,
+            salt: extraMetadata?.salt || undefined,
+            iv: extraMetadata?.iv || undefined,
+            preserveOriginal: extraMetadata?.preserveOriginal || false,
         };
     } else {
         // Large files: multipart upload via httpsCallable (no Firebase Storage needed)
@@ -564,6 +569,11 @@ export const uploadDiskFile = async (
             folder,
             fileSize: file.size,
             thumbnail: thumbnailDataUrl || undefined,
+            // Encryption metadata
+            isEncrypted: extraMetadata?.isEncrypted || false,
+            salt: extraMetadata?.salt || undefined,
+            iv: extraMetadata?.iv || undefined,
+            preserveOriginal: extraMetadata?.preserveOriginal || false,
         };
     }
 
@@ -612,6 +622,9 @@ export const uploadDiskFile = async (
         thumbnail: thumbnailDataUrl || undefined,
         thumbnailURL: data.thumbnailURL || undefined,
         abstract: data.abstract || undefined,
+        isEncrypted: extraMetadata?.isEncrypted || false,
+        salt: extraMetadata?.salt,
+        iv: extraMetadata?.iv,
     };
 
     onProgress?.({
