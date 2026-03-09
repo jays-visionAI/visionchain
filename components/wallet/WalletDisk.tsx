@@ -859,6 +859,7 @@ export const WalletDisk = (props: {
 
         // PDF files: download blob and render via pdf.js
         if (file.type.includes('pdf')) {
+            console.log('[Disk] PDF preview for:', file.name, '| isEncrypted:', file.isEncrypted, '| storageType:', file.storageType, '| chunkCount:', file.chunkCount);
             setPreviewLoading(true);
             setPreviewProgress(null);
             try {
@@ -876,7 +877,7 @@ export const WalletDisk = (props: {
                         if (!encryptionPassword()) {
                             setShowPasswordModal(true);
                             setPreviewFile(null);
-                            alert('Please enter your encryption password to preview this file.');
+                            alert('암호화된 파일입니다. 비밀번호를 입력해주세요.');
                             return;
                         }
                         const buffer = await blob.arrayBuffer();
@@ -888,7 +889,6 @@ export const WalletDisk = (props: {
                 }
                 setPreviewLoading(false);
                 setPdfRendering(true);
-                // Render PDF pages using pdf.js
                 await renderPdfFromBlob(blob);
             } catch (err) {
                 console.error('[Disk] PDF preview failed:', err);
