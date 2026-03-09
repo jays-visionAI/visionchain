@@ -210,18 +210,22 @@ function updateUI(s) {
     document.getElementById('info-wallet').textContent = s.walletAddress ? truncate(s.walletAddress, 16) : '-';
     document.getElementById('info-env').textContent = capitalize(s.environment || '-');
 
-    // Rewards
-    document.getElementById('reward-pending').textContent = parseFloat(s.pendingReward || 0).toFixed(6);
-    document.getElementById('reward-earned').textContent = parseFloat(s.totalEarned || 0).toFixed(4);
+    // Rewards - 3 Tier
+    document.getElementById('reward-pending-vcn').textContent = parseFloat(s.pendingReward || 0).toFixed(6);
+    document.getElementById('reward-pending-usdt').textContent = '$' + parseFloat(s.pendingUsdt || 0).toFixed(6);
+    document.getElementById('reward-pending-rp').textContent = Math.floor(s.pendingRp || 0).toLocaleString();
+    document.getElementById('reward-earned-vcn').textContent = parseFloat(s.totalEarned || 0).toFixed(4);
+    document.getElementById('reward-earned-usdt').textContent = '$' + parseFloat(s.totalUsdtEarned || 0).toFixed(6);
+    document.getElementById('reward-earned-rp').textContent = Math.floor(s.totalRpEarned || 0).toLocaleString();
     document.getElementById('reward-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
     // Show weight breakdown in rewards tab
     const weightBreakdownEl = document.getElementById('reward-weight-breakdown');
     if (weightBreakdownEl) {
         if (s.storageBonus > 0) {
-            weightBreakdownEl.textContent = `Base ${(s.baseWeight || 0).toFixed(3)}x + ${(s.storageBonus || 0).toFixed(3)}x storage (${s.chunksHeld || 0} chunks)`;
+            weightBreakdownEl.textContent = `Base ${(s.baseWeight || 0).toFixed(3)}x + ${(s.storageBonus || 0).toFixed(3)}x storage (${s.chunksHeld || 0} chunks, ${(s.storedGB || 0).toFixed(4)} GB)`;
             weightBreakdownEl.style.display = 'block';
         } else {
-            weightBreakdownEl.textContent = `Desktop full mode`;
+            weightBreakdownEl.textContent = `Desktop full mode — store chunks to earn more`;
             weightBreakdownEl.style.display = 'block';
         }
     }
@@ -254,8 +258,10 @@ function onNodeStopped(data) {
 
 function onHeartbeat(data) {
     if (data.success) {
-        const rewardStr = data.reward ? ` (+${parseFloat(data.reward).toFixed(6)} VCN)` : '';
-        addActivity('success', `Heartbeat OK${rewardStr}`);
+        const vcnStr = data.vcn_reward ? `VCN +${parseFloat(data.vcn_reward).toFixed(6)}` : '';
+        const usdtStr = data.usdt_reward && parseFloat(data.usdt_reward) > 0 ? ` | USDT +$${parseFloat(data.usdt_reward).toFixed(8)}` : '';
+        const rpStr = data.rp_reward ? ` | RP +${data.rp_reward}` : '';
+        addActivity('success', `Heartbeat OK (${vcnStr}${usdtStr}${rpStr})`);
     } else {
         addActivity('error', `Heartbeat failed: ${data.error || 'Unknown error'}`);
     }

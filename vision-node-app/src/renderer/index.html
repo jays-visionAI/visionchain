@@ -255,38 +255,75 @@
                     <h2>Rewards</h2>
                 </div>
 
-                <div class="reward-hero">
-                    <div class="reward-total">
-                        <div class="reward-total-label">Pending Rewards</div>
-                        <div class="reward-total-value" id="reward-pending">0.000000</div>
-                        <div class="reward-total-unit">VCN</div>
+                <!-- 3-Tier Pending Rewards -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+                    <!-- USDT -->
+                    <div
+                        style="background: #111113; border: 1px solid rgba(16,185,129,0.15); border-radius: 20px; padding: 20px; text-align: center;">
+                        <div
+                            style="font-size: 9px; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;">
+                            USDT Earned</div>
+                        <div id="reward-pending-usdt"
+                            style="font-size: 24px; font-weight: 900; color: #10b981; letter-spacing: -0.5px;">$0.000000
+                        </div>
+                        <div style="font-size: 9px; color: #4b5563; margin-top: 4px;">Storage Revenue</div>
+                    </div>
+                    <!-- VCN -->
+                    <div
+                        style="background: #111113; border: 1px solid rgba(6,182,212,0.15); border-radius: 20px; padding: 20px; text-align: center;">
+                        <div
+                            style="font-size: 9px; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;">
+                            VCN Pending</div>
+                        <div id="reward-pending-vcn"
+                            style="font-size: 24px; font-weight: 900; color: #06b6d4; letter-spacing: -0.5px;">0.000000
+                        </div>
+                        <div style="font-size: 9px; color: #4b5563; margin-top: 4px;">Uptime Mining</div>
+                    </div>
+                    <!-- RP -->
+                    <div
+                        style="background: #111113; border: 1px solid rgba(245,158,11,0.15); border-radius: 20px; padding: 20px; text-align: center;">
+                        <div
+                            style="font-size: 9px; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;">
+                            RP Points</div>
+                        <div id="reward-pending-rp"
+                            style="font-size: 24px; font-weight: 900; color: #f59e0b; letter-spacing: -0.5px;">0</div>
+                        <div style="font-size: 9px; color: #4b5563; margin-top: 4px;">Pre-listing Bonus</div>
                     </div>
                 </div>
 
-                <div class="stats-grid cols-2">
+                <!-- Lifetime Totals + Weight -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
                     <div class="stat-card">
-                        <div class="stat-label">Total Earned</div>
-                        <div class="stat-value green" id="reward-earned">0.00</div>
-                        <div class="stat-sub">VCN</div>
+                        <div class="stat-label">Total USDT</div>
+                        <div class="stat-value green" id="reward-earned-usdt" style="font-size: 14px;">$0.00</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Current Weight</div>
+                        <div class="stat-label">Total VCN</div>
+                        <div class="stat-value" id="reward-earned-vcn" style="font-size: 14px; color: #06b6d4;">0.00
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total RP</div>
+                        <div class="stat-value" id="reward-earned-rp" style="font-size: 14px; color: #f59e0b;">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Weight</div>
                         <div class="stat-value" id="reward-weight">0.00x</div>
                         <div id="reward-weight-breakdown" class="stat-sub"
-                            style="font-size:10px; color:#94a3b8; margin-top:2px;">Desktop full mode</div>
+                            style="font-size: 9px; color: #94a3b8; margin-top: 2px;">Desktop full mode</div>
                     </div>
                 </div>
 
                 <div class="info-card">
-                    <div class="info-header">How Rewards Work</div>
+                    <div class="info-header">3-Tier Reward System</div>
                     <div class="help-text">
-                        <p>Your node earns VCN rewards by maintaining uptime and providing storage to the network.</p>
-                        <p>Rewards are calculated as: <strong style="color:#06b6d4;">Weight x Uptime x Reward
-                                Rate</strong></p>
-                        <p><strong style="color:#a5b4fc;">Weight Formula:</strong> Base Weight (device/mode) + Storage
-                            Bonus (0.001x per chunk stored). Store more chunks to increase your weight and earnings.</p>
-                        <p style="color:#6b7280; font-size:11px; margin-top:8px;">Example: Desktop WiFi (0.02x base) +
-                            100 chunks (0.1x bonus) = 0.12x total weight</p>
+                        <p><strong style="color:#10b981;">USDT (Storage Revenue)</strong> — Earned from actual data
+                            stored on your node. Rate: $0.005/GB/month (Filecoin-competitive). Node keeps 70% revenue
+                            share.</p>
+                        <p><strong style="color:#06b6d4;">VCN (Uptime Mining)</strong> — Earned continuously from
+                            uptime. Formula: Weight x Uptime x 0.001 VCN/sec. Store more chunks to increase weight.</p>
+                        <p><strong style="color:#f59e0b;">RP (Reward Points)</strong> — Pre-listing participation bonus.
+                            1 RP per heartbeat + 1 RP per 10 chunks stored. Convertible after VCN listing.</p>
                     </div>
                 </div>
             </div>

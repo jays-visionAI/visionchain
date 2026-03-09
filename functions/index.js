@@ -13510,14 +13510,37 @@ exports.agentGateway = onRequest({
         // Check if epoch changed (new day) -> reset daily uptime
         const isNewEpoch = currentEpoch !== (mnData.current_epoch || 0);
 
-        // Calculate reward for this heartbeat interval
-        // Base reward rate: weight * uptimeDelta * REWARD_RATE_PER_SEC
-        // REWARD_RATE_PER_SEC is dynamically set, for now: 0.001 VCN/sec for weight=1.0
-        const REWARD_RATE_PER_SEC = 0.001;
-        const heartbeatReward = weight * uptimeDelta * REWARD_RATE_PER_SEC;
+        // ═══ 3-TIER REWARD CALCULATION ═══
+        // Tier 1: USDT — Storage revenue share (based on actual GB stored, Filecoin benchmark)
+        // Tier 2: VCN  — Uptime mining reward (weight × uptime × rate)
+        // Tier 3: RP   — Participation points (until VCN listing)
 
-        const prevPending = parseFloat(mnData.pending_reward || "0");
-        const newPending = isNewEpoch ? heartbeatReward : prevPending + heartbeatReward;
+        // --- Tier 1: USDT (Storage Usage Revenue) ---
+        // Benchmark: Filecoin market rate ~$0.005/GB/month (competitive pricing)
+        // Node gets 70% of storage revenue, 30% protocol fee
+        const STORAGE_RATE_USD_PER_GB_MONTH = 0.005; // Filecoin-competitive rate
+        const NODE_REVENUE_SHARE = 0.70; // node keeps 70%
+        const storedGB = chunksHeld * 256 / (1024 * 1024); // 256KB per chunk → GB
+        const monthSeconds = 30 * 24 * 3600;
+        const usdtPerSec = (storedGB * STORAGE_RATE_USD_PER_GB_MONTH * NODE_REVENUE_SHARE) / monthSeconds;
+        const usdtReward = usdtPerSec * uptimeDelta;
+        const prevUsdtPending = parseFloat(mnData.pending_usdt || "0");
+        const newUsdtPending = isNewEpoch ? usdtReward : prevUsdtPending + usdtReward;
+
+        // --- Tier 2: VCN (Uptime Mining) ---
+        // Rate: 0.001 VCN/sec at weight 1.0x (testnet incentive rate, ~5000x mainnet target)
+        const VCN_REWARD_RATE_PER_SEC = 0.001;
+        const vcnReward = weight * uptimeDelta * VCN_REWARD_RATE_PER_SEC;
+        const prevVcnPending = parseFloat(mnData.pending_reward || "0");
+        const newVcnPending = isNewEpoch ? vcnReward : prevVcnPending + vcnReward;
+
+        // --- Tier 3: RP (Participation Points — pre-listing VCN substitute) ---
+        // Base: 1 RP per heartbeat + storage bonus (1 RP per 10 chunks held)
+        const rpBase = 1; // per heartbeat
+        const rpStorageBonus = Math.floor(chunksHeld / 10); // 1 RP per 10 chunks
+        const rpReward = rpBase + rpStorageBonus;
+        const prevRpPending = parseFloat(mnData.pending_rp || "0");
+        const newRpPending = isNewEpoch ? rpReward : prevRpPending + rpReward;
 
         const prevTodayUptime = isNewEpoch ? 0 : (mnData.today_uptime_seconds || 0);
 
@@ -13529,7 +13552,13 @@ exports.agentGateway = onRequest({
           total_uptime_seconds: (mnData.total_uptime_seconds || 0) + uptimeDelta,
           today_uptime_seconds: prevTodayUptime + uptimeDelta,
           current_epoch: currentEpoch,
-          pending_reward: newPending.toFixed(6),
+          // 3-tier pending rewards
+          pending_reward: newVcnPending.toFixed(6),       // VCN
+          pending_usdt: newUsdtPending.toFixed(8),         // USDT
+          pending_rp: Math.floor(newRpPending),            // RP
+          // Lifetime totals
+          total_usdt_earned: ((parseFloat(mnData.total_usdt_earned || "0")) + usdtReward).toFixed(8),
+          total_rp_earned: (mnData.total_rp_earned || 0) + rpReward,
           heartbeat_count: (mnData.heartbeat_count || 0) + 1,
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         };
@@ -13558,12 +13587,22 @@ exports.agentGateway = onRequest({
           ).catch((e) => console.warn("[Mobile Node] RP award failed:", e.message));
         }
 
+        // Also award storage contribution RP via rp_history (for daily digest email)
+        if (rpStorageBonus > 0 && mnData.email) {
+          serverAddRewardPoints(
+            mnData.email, rpStorageBonus,
+            "storage_contribution", `Storage contribution: ${chunksHeld} chunks`, rpCfg
+          ).catch(() => { });
+        }
+
         // Log heartbeat to subcollection for analytics
         await mnDoc.ref.collection("heartbeats").add({
           mode,
           weight,
           uptime_delta: uptimeDelta,
-          reward: heartbeatReward.toFixed(6),
+          vcn_reward: vcnReward.toFixed(6),
+          usdt_reward: usdtReward.toFixed(8),
+          rp_reward: rpReward,
           battery_pct: batteryPct || null,
           timestamp: admin.firestore.Timestamp.fromDate(now),
         });
@@ -13576,12 +13615,23 @@ exports.agentGateway = onRequest({
           base_weight: baseWeight,
           storage_bonus: Math.round(storageBonus * 100000) / 100000,
           chunks_held: chunksHeld,
+          stored_gb: Math.round(storedGB * 10000) / 10000,
           uptime_delta_sec: uptimeDelta,
           epoch: currentEpoch,
           uptime_today_sec: prevTodayUptime + uptimeDelta,
-          pending_reward: newPending.toFixed(6),
-          heartbeat_reward: heartbeatReward.toFixed(6),
+          // 3-tier rewards
+          pending_reward: newVcnPending.toFixed(6),        // VCN
+          heartbeat_reward: vcnReward.toFixed(6),           // VCN this heartbeat
+          pending_usdt: newUsdtPending.toFixed(8),          // USDT
+          heartbeat_usdt: usdtReward.toFixed(8),            // USDT this heartbeat
+          pending_rp: Math.floor(newRpPending),             // RP
+          heartbeat_rp: rpReward,                           // RP this heartbeat
           total_earned: mnData.claimed_reward || "0",
+          total_usdt_earned: updateData.total_usdt_earned,
+          total_rp_earned: updateData.total_rp_earned,
+          // Rates for display
+          usdt_rate_gb_month: STORAGE_RATE_USD_PER_GB_MONTH,
+          node_revenue_share: NODE_REVENUE_SHARE,
           next_heartbeat_sec: mode === "wifi_full" ? 300 : 1800,
         });
       } catch (e) {
@@ -13635,8 +13685,12 @@ exports.agentGateway = onRequest({
           today_uptime_hours: parseFloat(((mn.today_uptime_seconds || 0) / 3600).toFixed(2)),
           current_epoch: mn.current_epoch || 0,
           pending_reward: mn.pending_reward || "0",
+          pending_usdt: mn.pending_usdt || "0",
+          pending_rp: mn.pending_rp || 0,
           claimed_reward: mn.claimed_reward || "0",
           total_earned: mn.total_earned || "0",
+          total_usdt_earned: mn.total_usdt_earned || "0",
+          total_rp_earned: mn.total_rp_earned || 0,
           heartbeat_count: mn.heartbeat_count || 0,
           streak_days: mn.streak_days || 0,
           last_heartbeat: mn.last_heartbeat?.toDate?.()?.toISOString() || null,

@@ -43,6 +43,10 @@ interface NodeStatus {
     total_nodes: number;
     referral_code: string;
     created_at: string;
+    pending_usdt: string;
+    pending_rp: number;
+    total_usdt_earned: string;
+    total_rp_earned: number;
 }
 
 interface NodeQuality {
@@ -544,7 +548,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                         <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         <span class="text-[8px] font-black text-emerald-400/80 uppercase tracking-wider">USDT</span>
                                     </div>
-                                    <div class="text-lg font-black text-emerald-400">$0.00</div>
+                                    <div class="text-lg font-black text-emerald-400">${parseFloat(nodeStatus()!.pending_usdt || '0').toFixed(6)}</div>
                                     <div class="text-[9px] text-gray-500">Storage Usage</div>
                                 </div>
                                 {/* VCN */}
@@ -562,7 +566,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                         <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
                                         <span class="text-[8px] font-black text-amber-400/80 uppercase tracking-wider">RP</span>
                                     </div>
-                                    <div class="text-lg font-black text-amber-400">{nodeStatus()!.streak_days * 10}</div>
+                                    <div class="text-lg font-black text-amber-400">{(nodeStatus()!.pending_rp || 0).toLocaleString()}</div>
                                     <div class="text-[9px] text-gray-500">Testnet Bonus</div>
                                 </div>
                             </div>

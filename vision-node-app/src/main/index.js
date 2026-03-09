@@ -25,10 +25,15 @@ let nodeStats = {
     lastHeartbeat: null,
     pendingReward: 0,
     totalEarned: 0,
+    pendingUsdt: 0,
+    totalUsdtEarned: 0,
+    pendingRp: 0,
+    totalRpEarned: 0,
     weight: 0,
     baseWeight: 0,
     storageBonus: 0,
     chunksHeld: 0,
+    storedGB: 0,
     uptimeSeconds: 0,
     startedAt: null,
     errors: [],
@@ -195,8 +200,14 @@ async function sendHeartbeat() {
             nodeStats.baseWeight = result.base_weight || 0;
             nodeStats.storageBonus = result.storage_bonus || 0;
             nodeStats.chunksHeld = result.chunks_held || 0;
+            nodeStats.storedGB = result.stored_gb || 0;
+            // 3-tier rewards
             nodeStats.pendingReward = result.pending_reward || nodeStats.pendingReward;
             nodeStats.totalEarned = result.total_earned || nodeStats.totalEarned;
+            nodeStats.pendingUsdt = result.pending_usdt || nodeStats.pendingUsdt;
+            nodeStats.totalUsdtEarned = result.total_usdt_earned || nodeStats.totalUsdtEarned;
+            nodeStats.pendingRp = result.pending_rp || nodeStats.pendingRp;
+            nodeStats.totalRpEarned = result.total_rp_earned || nodeStats.totalRpEarned;
         }
 
         // Update uptime
@@ -211,8 +222,14 @@ async function sendHeartbeat() {
             base_weight: result.base_weight,
             storage_bonus: result.storage_bonus,
             chunks_held: result.chunks_held,
-            reward: result.heartbeat_reward,
-            pending: result.pending_reward,
+            // 3-tier rewards for this heartbeat
+            vcn_reward: result.heartbeat_reward,
+            usdt_reward: result.heartbeat_usdt,
+            rp_reward: result.heartbeat_rp,
+            // Pending totals
+            pending_vcn: result.pending_reward,
+            pending_usdt: result.pending_usdt,
+            pending_rp: result.pending_rp,
         });
         sendToRenderer('node:stats', getNodeStatus());
 
@@ -245,6 +262,12 @@ function getNodeStatus() {
         baseWeight: nodeStats.baseWeight,
         storageBonus: nodeStats.storageBonus,
         chunksHeld: nodeStats.chunksHeld,
+        storedGB: nodeStats.storedGB,
+        // 3-tier rewards
+        pendingUsdt: nodeStats.pendingUsdt,
+        totalUsdtEarned: nodeStats.totalUsdtEarned,
+        pendingRp: nodeStats.pendingRp,
+        totalRpEarned: nodeStats.totalRpEarned,
         uptimeSeconds: uptime,
         errors: nodeStats.errors.slice(-5),
         // Storage stats
