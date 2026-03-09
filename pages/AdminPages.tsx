@@ -32,6 +32,12 @@ export const AdminUserAnalytics = lazy(() => import('../components/admin/AdminUs
 export const AdminRewardHub = lazy(() => import('../components/admin/AdminRewardHub'));
 export const AIStorageAdmin = lazy(() => import('../components/admin/AIStorageAdmin'));
 
+// ── Consolidated Hub Pages (tabbed) ──
+export const AdminRPRewards = lazy(() => import('../components/admin/AdminRPRewards'));
+export const AdminUsersHub = lazy(() => import('../components/admin/AdminUsersHub'));
+export const AdminNodesHub = lazy(() => import('../components/admin/AdminNodesHub'));
+export const AdminContentHub = lazy(() => import('../components/admin/AdminContentHub'));
+
 
 // Loading spinner component
 export function PageLoader() {
@@ -54,12 +60,13 @@ export function AdminDashboardPage() {
     );
 }
 
+// Users → tabbed (User Management + Analytics)
 export function AdminUsersPage() {
-    document.title = 'User Management | Admin';
+    document.title = 'Users | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminUsers />
+                <AdminUsersHub />
             </AdminLayout>
         </Suspense>
     );
@@ -120,12 +127,13 @@ export function AdminCampaignPage() {
     );
 }
 
+// Activity Feed → now a tab inside RP Rewards, keep route for backward compat
 export function AdminActivityPage() {
-    document.title = 'System Activity | Admin';
+    document.title = 'RP Rewards | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminActivity />
+                <AdminRPRewards />
             </AdminLayout>
         </Suspense>
     );
@@ -207,12 +215,13 @@ export function AdminDeFiPage() {
     );
 }
 
+// Announcements → tabbed (Announcements + Daily Tips)
 export function AdminAnnouncementsPage() {
-    document.title = 'System Announcements | Admin';
+    document.title = 'Content | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminAnnouncements />
+                <AdminContentHub />
             </AdminLayout>
         </Suspense>
     );
@@ -284,67 +293,73 @@ export function AdminApiPricingPage() {
     );
 }
 
+// Nodes → tabbed (Vision Nodes + Node Health)
 export function AdminVisionNodesPage() {
     document.title = 'Vision Nodes | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminVisionNodes />
+                <AdminNodesHub />
             </AdminLayout>
         </Suspense>
     );
 }
 
+// NodeHealth → redirect to tabbed Nodes page
 export function AdminNodeHealthPage() {
-    document.title = 'Node Health | Admin';
+    document.title = 'Vision Nodes | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminNodeHealth />
+                <AdminNodesHub />
             </AdminLayout>
         </Suspense>
     );
 }
 
+// Daily Tips → now a tab inside Content, keep route for backward compat
 export function AdminDailyTipsPage() {
-    document.title = 'Daily Tips | Admin';
+    document.title = 'Content | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminDailyTips />
+                <AdminContentHub />
             </AdminLayout>
         </Suspense>
     );
 }
 
+// RP Config → tabbed (RP Config + Activity Feed + Reward Engine)
 export function AdminRPConfigPage() {
-    document.title = 'RP Rewards Config | Admin';
+    document.title = 'RP Rewards | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminRPConfig />
+                <AdminRPRewards />
             </AdminLayout>
         </Suspense>
     );
 }
 
+// User Analytics → now a tab inside Users, keep route for backward compat
 export function AdminUserAnalyticsPage() {
-    document.title = 'User Analytics | Admin';
+    document.title = 'Users | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminUserAnalytics />
+                <AdminUsersHub />
             </AdminLayout>
         </Suspense>
     );
 }
 
+// Reward Engine → now a tab inside RP Rewards
 export function AdminRewardHubPage() {
-    document.title = 'Reward Engine | Admin';
+    document.title = 'RP Rewards | Admin';
     return (
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
-                <AdminRewardHub />
+                <AdminRPRewards />
             </AdminLayout>
         </Suspense>
     );
@@ -356,6 +371,18 @@ export function AIStorageAdminPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AIStorageAdmin />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+// Content Hub (Announcements + Daily Tips) — new consolidated route
+export function AdminContentPage() {
+    document.title = 'Content | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminContentHub />
             </AdminLayout>
         </Suspense>
     );

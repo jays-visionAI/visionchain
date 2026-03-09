@@ -87,22 +87,14 @@ export interface AdminMenuItem {
 /**
  * Admin Menu Configuration
  * 
- * Developers can extend this configuration by adding new menu items.
+ * Consolidated layout: related pages are grouped into tabbed views.
+ * This keeps the sidebar clean while maintaining all functionality.
  * 
- * Categories:
- * - 'core': Built-in admin pages (Dashboard, Users, Settings)
- * - 'developer': Developer tools (API Docs, Webhooks, etc.)
- * - 'custom': Custom pages added by developers
- * 
- * Example: Adding a new page
- * {
- *   id: 'my-custom-page',
- *   path: '/admin/my-custom-page',
- *   label: 'My Custom Page',
- *   icon: 'Puzzle',
- *   category: 'custom',
- *   order: 100
- * }
+ * Consolidation map:
+ *   Users + User Analytics        → "Users" (tabbed)
+ *   RP Rewards + Activity + Engine → "RP Rewards" (tabbed)
+ *   Vision Nodes + Node Health    → "Vision Nodes" (tabbed)
+ *   Announcements + Daily Tips    → "Content" (tabbed)
  */
 export const adminMenuConfig: AdminMenuItem[] = [
     // ===== CORE PAGES =====
@@ -166,14 +158,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
         category: 'core',
         order: 7
     },
-    {
-        id: 'system-activity',
-        path: '/adminsystem/activity',
-        label: 'Activity Feed',
-        icon: 'Activity',
-        category: 'core',
-        order: 8
-    },
+    // "Activity Feed" merged into RP Rewards tab
     {
         id: 'vcn-distribution',
         path: '/adminsystem/vcn',
@@ -191,44 +176,26 @@ export const adminMenuConfig: AdminMenuItem[] = [
         category: 'core',
         order: 10
     },
+    // Announcements + Daily Tips → Content (tabbed)
     {
-        id: 'announcements',
-        path: '/adminsystem/announcements',
-        label: 'Announcements',
+        id: 'content',
+        path: '/adminsystem/content',
+        label: 'Content',
         icon: 'Megaphone',
-        badge: 'NEW',
         category: 'core',
         order: 11
     },
-    {
-        id: 'daily-tips',
-        path: '/adminsystem/daily-tips',
-        label: 'Daily Tips',
-        icon: 'Lightbulb',
-        badge: 'NEW',
-        category: 'core',
-        order: 11.5
-    },
+    // RP Rewards + Activity Feed + Reward Engine → RP Rewards (tabbed)
     {
         id: 'rp-config',
         path: '/adminsystem/rp-config',
         label: 'RP Rewards',
         icon: 'Gift',
-        badge: 'NEW',
         category: 'core',
         order: 11.7,
         requiredRole: 'admin'
     },
-    {
-        id: 'user-analytics',
-        path: '/adminsystem/user-analytics',
-        label: 'User Analytics',
-        icon: 'BarChart3',
-        badge: 'NEW',
-        category: 'core',
-        order: 11.8,
-        requiredRole: 'admin'
-    },
+    // Users + User Analytics merged above in "Users"
     {
         id: 'vcn-settings',
         path: '/adminsystem/vcn-settings',
@@ -294,16 +261,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
         order: 15,
         requiredRole: 'admin'
     },
-    {
-        id: 'api-pricing',
-        path: '/adminsystem/api-pricing',
-        label: 'API Pricing',
-        icon: 'Coins',
-        badge: 'NEW',
-        category: 'custom',
-        order: 16,
-        requiredRole: 'admin'
-    },
+    // Vision Nodes + Node Health → Nodes (tabbed)
     {
         id: 'vision-nodes',
         path: '/adminsystem/vision-nodes',
@@ -312,15 +270,6 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 16.5,
-        requiredRole: 'admin'
-    },
-    {
-        id: 'node-health',
-        path: '/adminsystem/node-health',
-        label: 'Node Health',
-        icon: 'Server',
-        category: 'custom',
-        order: 18,
         requiredRole: 'admin'
     },
     {
@@ -334,13 +283,13 @@ export const adminMenuConfig: AdminMenuItem[] = [
         requiredRole: 'admin'
     },
     {
-        id: 'reward-engine',
-        path: '/adminsystem/reward-engine',
-        label: 'Reward Engine',
+        id: 'api-pricing',
+        path: '/adminsystem/api-pricing',
+        label: 'API Pricing',
         icon: 'Coins',
         badge: 'NEW',
         category: 'custom',
-        order: 19,
+        order: 16,
         requiredRole: 'admin'
     },
 

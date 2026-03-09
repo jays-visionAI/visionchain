@@ -144,6 +144,7 @@ render(() => (
         <Route path="/adminsystem/user-analytics" component={Admin.AdminUserAnalyticsPage} />
         <Route path="/adminsystem/reward-engine" component={Admin.AdminRewardHubPage} />
         <Route path="/adminsystem/ai-storage" component={Admin.AIStorageAdminPage} />
+        <Route path="/adminsystem/content" component={Admin.AdminContentPage} />
 
         {/* Trading Admin Routes (Separate system) */}
         <Route path="/trading-login" component={TradingAdmin.TradingAdminLoginPage} />
