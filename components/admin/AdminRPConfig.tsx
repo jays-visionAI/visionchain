@@ -37,6 +37,12 @@ const RP_ACTION_DEFS: { key: keyof RPConfig; label: string; category: string; de
     // Referral RP Propagation (rates, not fixed amounts -- stored as decimals)
     { key: 'referral_rp_tier1_rate', label: 'Tier 1 RP Rate', category: 'Referral RP Propagation', description: 'Direct referrer gets this % of earned RP (0.10 = 10%)' },
     { key: 'referral_rp_tier2_rate', label: 'Tier 2 RP Rate', category: 'Referral RP Propagation', description: 'Grand referrer gets this % of earned RP (0.02 = 2%)' },
+    // Referral Rush Leaderboard Rewards
+    { key: 'rush_1st', label: '1st Place', category: 'Referral Rush', description: 'Season winner bonus RP' },
+    { key: 'rush_2nd', label: '2nd Place', category: 'Referral Rush', description: 'Runner-up bonus RP' },
+    { key: 'rush_3rd', label: '3rd Place', category: 'Referral Rush', description: 'Bronze finisher bonus RP' },
+    { key: 'rush_top10', label: 'Top 10', category: 'Referral Rush', description: 'Top 10 finisher bonus RP' },
+    { key: 'rush_top50', label: 'Top 50', category: 'Referral Rush', description: 'Top 50 finisher bonus RP' },
 ];
 
 // Action type display colors

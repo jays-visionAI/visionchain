@@ -19,6 +19,7 @@ import { Motion } from 'solid-motionone';
 import { WalletViewHeader } from './WalletViewHeader';
 import { ReferralLeaderboard } from './ReferralLeaderboard';
 import { useI18n } from '../../i18n/i18nContext';
+import { getRPConfig, RPConfig } from '../../services/firebaseService';
 
 export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (view: string) => void }) => {
     const { t } = useI18n();
@@ -26,6 +27,7 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
     const [totalStaked, setTotalStaked] = createSignal('Loading...');
     const [myRank, setMyRank] = createSignal<number | null>(null);
     const [myReward, setMyReward] = createSignal(0);
+    const [rpConfig, setRpConfig] = createSignal<RPConfig | null>(null);
 
     // Fetch real staking data on mount
     onMount(async () => {
@@ -49,6 +51,12 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             console.error('Failed to fetch total staked:', e);
             setTotalStaked('0 VCN');
         }
+
+        // Fetch RP config for rush rewards display
+        try {
+            const cfg = await getRPConfig();
+            setRpConfig(cfg);
+        } catch { /* silent */ }
     });
 
     const quests = [
@@ -63,7 +71,8 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             btnText: t('campaign.viewLeaderboard'),
             stats: [
                 { label: t('campaign.topReward'), value: '100x VCN' },
-                { label: t('campaign.participants'), value: '2.4K+' }
+                { label: t('campaign.participants'), value: '2.4K+' },
+                { label: 'RP Bonus', value: rpConfig() ? `${rpConfig()!.rush_1st.toLocaleString()} RP` : '...' }
             ],
             footerTag: t('campaign.season1'),
             footerIcon: Sparkles
@@ -171,6 +180,38 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                         setMyReward(reward);
                                     }}
                                 />
+
+                                {/* RP Reward Tiers */}
+                                <Show when={rpConfig()}>
+                                    <div class="bg-[#111113] border border-white/[0.06] rounded-[24px] p-6 lg:p-8">
+                                        <div class="flex items-center gap-3 mb-6">
+                                            <svg class="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" /><path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
+                                                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+                                            </svg>
+                                            <h3 class="text-lg font-black text-white uppercase italic tracking-tight">RP Bonus Rewards</h3>
+                                        </div>
+                                        <p class="text-sm text-gray-500 mb-6">Top Referral Rush finishers earn bonus Reward Points at the end of each season.</p>
+                                        <div class="space-y-2">
+                                            {[
+                                                { rank: '1st Place', color: '#eab308', rp: rpConfig()!.rush_1st },
+                                                { rank: '2nd Place', color: '#9ca3af', rp: rpConfig()!.rush_2nd },
+                                                { rank: '3rd Place', color: '#cd7f32', rp: rpConfig()!.rush_3rd },
+                                                { rank: 'Top 10', color: '#06b6d4', rp: rpConfig()!.rush_top10 },
+                                                { rank: 'Top 50', color: '#6b7280', rp: rpConfig()!.rush_top50 },
+                                            ].map(tier => (
+                                                <div class="flex items-center justify-between px-4 py-3 bg-white/[0.02] border border-white/[0.04] rounded-xl hover:bg-white/[0.04] transition-colors">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style={`background: ${tier.color}`} />
+                                                        <span class="text-sm font-bold text-gray-200">{tier.rank}</span>
+                                                    </div>
+                                                    <span class="text-sm font-black" style={`color: ${tier.color}`}>+{tier.rp.toLocaleString()} RP</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p class="text-[10px] text-gray-600 mt-4 text-center">RP bonus is awarded automatically when the season ends.</p>
+                                    </div>
+                                </Show>
                             </div>
                         </Show>
 

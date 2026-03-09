@@ -1,5 +1,5 @@
 import { createSignal, onMount, For, Show, createMemo } from 'solid-js';
-import { collection, getDocs, getFirestore } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, getFirestore } from 'firebase/firestore';
 import { getFirebaseApp } from '../../services/firebaseService';
 
 const db = getFirestore(getFirebaseApp());
@@ -15,9 +15,22 @@ interface NodeOverviewStats {
     totalStorageGB: number;
     totalChunks: number;
     avgProofSuccessRate: number;
+    // 3-tier reward totals
+    totalUsdtPending: number;
+    totalUsdtEarned: number;
+    totalRpPending: number;
+    totalRpEarned: number;
     byType: { mobile: number; desktop: number; agent: number; lite: number; standard: number; full: number };
     byPlatform: { android: number; ios: number; pwa: number; windows: number; macos: number; linux: number; other: number };
     byStatus: { active: number; inactive: number; suspended: number };
+}
+
+interface RevenuePoolInfo {
+    monthlyRevenue: number;
+    poolRatio: number;
+    poolUSD: number;
+    month: string;
+    confirmed: boolean;
 }
 
 interface NodeRow {
@@ -51,10 +64,12 @@ export default function AdminVisionNodes() {
         totalNodes: 0, activeNodes: 0, onlineNow: 0, totalUptimeHours: 0,
         totalRewardsDistributed: 0, totalRewardsPending: 0, totalHeartbeats: 0,
         totalStorageGB: 0, totalChunks: 0, avgProofSuccessRate: 0,
+        totalUsdtPending: 0, totalUsdtEarned: 0, totalRpPending: 0, totalRpEarned: 0,
         byType: { mobile: 0, desktop: 0, agent: 0, lite: 0, standard: 0, full: 0 },
         byPlatform: { android: 0, ios: 0, pwa: 0, windows: 0, macos: 0, linux: 0, other: 0 },
         byStatus: { active: 0, inactive: 0, suspended: 0 },
     });
+    const [revenuePool, setRevenuePool] = createSignal<RevenuePoolInfo>({ monthlyRevenue: 0, poolRatio: 0.30, poolUSD: 0, month: '', confirmed: false });
     const [nodes, setNodes] = createSignal<NodeRow[]>([]);
     const [loading, setLoading] = createSignal(true);
     const [filter, setFilter] = createSignal<'all' | 'mobile' | 'desktop' | 'online'>('all');
@@ -147,6 +162,7 @@ export default function AdminVisionNodes() {
             const byStatus = { active: 0, inactive: 0, suspended: 0 };
             let totalUptime = 0, totalEarned = 0, totalPending = 0, totalHB = 0;
             let totalStorageMB = 0, totalChunks = 0, onlineCount = 0, activeCount = 0;
+            let totalUsdtPending = 0, totalUsdtEarned = 0, totalRpPending = 0, totalRpEarned = 0;
             let proofPassTotal = 0, proofFailTotal = 0;
             const now = Date.now();
 
@@ -203,6 +219,11 @@ export default function AdminVisionNodes() {
                 totalEarned += earned;
                 totalPending += pending;
                 totalHB += d.heartbeat_count || 0;
+                // 3-tier sums
+                totalUsdtPending += parseFloat(d.pending_usdt || '0') || 0;
+                totalUsdtEarned += parseFloat(d.total_usdt_earned || '0') || 0;
+                totalRpPending += d.pending_rp || 0;
+                totalRpEarned += d.total_rp_earned || 0;
 
                 // Storage max from config (stored during registration for desktop nodes)
                 const storageMaxGB = d.storage_max_gb || 0;
@@ -305,8 +326,31 @@ export default function AdminVisionNodes() {
                 totalRewardsDistributed: totalEarned, totalRewardsPending: totalPending,
                 totalHeartbeats: totalHB, totalStorageGB: totalStorageMB / 1024,
                 totalChunks, avgProofSuccessRate: totalProofs > 0 ? Math.round((proofPassTotal / totalProofs) * 100) : 0,
+                totalUsdtPending, totalUsdtEarned, totalRpPending, totalRpEarned,
                 byType, byPlatform, byStatus,
             });
+
+            // Fetch current month revenue pool info
+            try {
+                const now = new Date();
+                const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const revSnap = await getDoc(doc(db, 'revenue_monthly', currentMonth));
+                if (revSnap.exists()) {
+                    const rev = revSnap.data();
+                    const poolRatio = 0.30; // default, could read from reward_policies
+                    setRevenuePool({
+                        monthlyRevenue: rev.netRevenueUSD || 0,
+                        poolRatio,
+                        poolUSD: (rev.netRevenueUSD || 0) * poolRatio,
+                        month: currentMonth,
+                        confirmed: rev.confirmedByAdmin || false,
+                    });
+                } else {
+                    setRevenuePool({ monthlyRevenue: 0, poolRatio: 0.30, poolUSD: 0, month: currentMonth, confirmed: false });
+                }
+            } catch (e) {
+                console.warn('[AdminVisionNodes] Revenue pool fetch error:', e);
+            }
 
             setNodes(allNodes);
         } catch (e) {
@@ -438,6 +482,52 @@ export default function AdminVisionNodes() {
                 >
                     {loading() ? 'Loading...' : 'Refresh'}
                 </button>
+            </div>
+
+            {/* 3-Tier Reward Overview */}
+            <div class="bg-gradient-to-r from-[#0d0d18] to-[#0c1220] border border-white/5 rounded-2xl p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="text-xs font-black uppercase tracking-[0.2em] text-gray-400">3-Tier Node Rewards</div>
+                    <Show when={revenuePool().month}>
+                        <div class={`text-[10px] font-bold px-3 py-1 rounded-full ${revenuePool().confirmed ? 'bg-green-500/10 text-green-400' : revenuePool().monthlyRevenue > 0 ? 'bg-amber-500/10 text-amber-400' : 'bg-gray-500/10 text-gray-500'}`}>
+                            {revenuePool().month}: {revenuePool().confirmed ? 'Confirmed' : revenuePool().monthlyRevenue > 0 ? 'Pending Confirmation' : 'No Revenue Data'}
+                        </div>
+                    </Show>
+                </div>
+                <div class="grid grid-cols-3 gap-6">
+                    {/* USDT */}
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400">USDT (Storage Revenue)</span>
+                        </div>
+                        <div class="text-2xl font-black text-emerald-400">${stats().totalUsdtEarned.toFixed(6)}</div>
+                        <div class="text-[10px] text-gray-500">Pending: ${stats().totalUsdtPending.toFixed(6)}</div>
+                        <Show when={revenuePool().poolUSD > 0}>
+                            <div class="text-[10px] text-emerald-500/60 border-t border-white/5 pt-2 mt-2">
+                                Pool: ${revenuePool().poolUSD.toFixed(2)} ({(revenuePool().poolRatio * 100).toFixed(0)}% of ${revenuePool().monthlyRevenue.toFixed(2)} revenue)
+                            </div>
+                        </Show>
+                    </div>
+                    {/* VCN */}
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-cyan-400">VCN (Uptime Mining)</span>
+                        </div>
+                        <div class="text-2xl font-black text-cyan-400">{formatVCN(stats().totalRewardsDistributed)}</div>
+                        <div class="text-[10px] text-gray-500">Pending: {formatVCN(stats().totalRewardsPending)} VCN</div>
+                    </div>
+                    {/* RP */}
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">RP (Pre-listing Bonus)</span>
+                        </div>
+                        <div class="text-2xl font-black text-amber-400">{stats().totalRpEarned.toLocaleString()}</div>
+                        <div class="text-[10px] text-gray-500">Pending: {stats().totalRpPending.toLocaleString()} RP</div>
+                    </div>
+                </div>
             </div>
 
             {/* Overview Stats */}

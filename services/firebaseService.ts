@@ -1153,6 +1153,12 @@ export interface RPConfig {
     // CEX & Quant
     cex_connect: number;
     quant_strategy_setup: number;
+    // Referral Rush Leaderboard Rewards
+    rush_1st: number;
+    rush_2nd: number;
+    rush_3rd: number;
+    rush_top10: number;
+    rush_top50: number;
 }
 
 const DEFAULT_RP_CONFIG: RPConfig = {
@@ -1187,6 +1193,12 @@ const DEFAULT_RP_CONFIG: RPConfig = {
     // CEX & Quant
     cex_connect: 15,
     quant_strategy_setup: 20,
+    // Referral Rush Leaderboard Rewards
+    rush_1st: 5000,
+    rush_2nd: 3000,
+    rush_3rd: 1000,
+    rush_top10: 500,
+    rush_top50: 100,
 };
 
 let _rpConfigCache: RPConfig | null = null;
