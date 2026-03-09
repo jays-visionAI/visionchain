@@ -15627,6 +15627,35 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // --- chunk.fetch_staging ---
+    // Node downloads assigned chunk data from staging_chunks
+    if (action === "chunk.fetch_staging") {
+      try {
+        const hash = body.hash;
+        if (!hash) {
+          return res.status(400).json({ error: "hash required" });
+        }
+
+        const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
+        if (!stagingDoc.exists) {
+          return res.status(404).json({ error: "Chunk not found in staging", hash });
+        }
+
+        const chunkData = stagingDoc.data();
+        return res.json({
+          success: true,
+          hash,
+          data: chunkData.data, // base64 encoded chunk data
+          file_key: chunkData.file_key || "",
+          index: chunkData.index || 0,
+          size: chunkData.size || 0,
+        });
+      } catch (e) {
+        console.error("[Chunk Fetch] fetch_staging error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
     // --- storage_node.proof_challenge ---
     // Node requests a storage proof challenge to prove it holds data
     if (action === "storage_node.proof_challenge" || action === "chunk.proof_challenge") {

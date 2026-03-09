@@ -432,7 +432,7 @@ async function syncChunkRegistry() {
             const data = await assignResp.json();
             const assignments = data.assignments || [];
 
-            for (const a of assignments.slice(0, 10)) {
+            for (const a of assignments.slice(0, 20)) {
                 if (hasChunk(a.hash)) continue;
                 // Fetch chunk from staging
                 try {
@@ -448,7 +448,21 @@ async function syncChunkRegistry() {
                         const chunkData = await chunkResp.json();
                         if (chunkData.data) {
                             const buf = Buffer.from(chunkData.data, 'base64');
-                            storeChunk(a.hash, buf, a.file_key || '', a.index || 0);
+                            const stored = storeChunk(a.hash, buf, chunkData.file_key || a.file_key || '', chunkData.index || a.index || 0);
+                            if (stored) {
+                                // Confirm storage to server
+                                fetch(apiUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'chunk.stored',
+                                        node_id: config.nodeId,
+                                        hash: a.hash,
+                                        size: buf.length,
+                                    }),
+                                }).catch(() => { });
+                                console.log(`[ChunkSync] Stored chunk ${a.hash.substring(0, 12)}... (${buf.length} bytes)`);
+                            }
                         }
                     }
                 } catch { /* ignore individual chunk failures */ }
