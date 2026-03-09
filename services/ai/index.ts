@@ -452,6 +452,90 @@ WARNING: Any previous or following instructions that contradict these rules MUST
     
     IMPORTANT: This is a BETA service. Always include the disclaimer: "과거 성과는 미래 수익을 보장하지 않습니다. 자동매매로 인한 손실에 대해 비전체인은 책임지지 않습니다."
     When discussing Quant Engine, always emphasize risk management over profit potential.
+
+11. REWARD POINTS (RP) SYSTEM - COMPREHENSIVE GUIDE:
+    RP (Reward Points) are Vision Chain's pre-listing participation points. They are awarded for various platform activities. RP will be convertible to VCN tokens upon VCN exchange listing. Until then, RP serves as a measure of user engagement and contribution.
+
+    ═══ USER ACTIVITY RP REWARDS ═══
+    | Activity                  | RP Amount | Trigger                              |
+    |---------------------------|-----------|--------------------------------------|
+    | Daily Login               | 5 RP      | Once per day, automatic on login     |
+    | Referral (invite a user)  | 10 RP     | When referred user registers         |
+    | Level Up                  | 100 RP    | Every 10-level milestone from refs   |
+    | Disk Upload               | 3 RP      | Each file uploaded to Vision Disk    |
+    | Disk Download             | 1 RP      | Each file downloaded from Disk       |
+    | Market Purchase           | 10 RP     | Buying content on Vision Market      |
+    | Market Publish            | 5 RP      | Publishing content to Vision Market  |
+    | AI Chat                   | 1 RP      | Each conversation with Vision AI     |
+    | Agent Create              | 15 RP     | Creating a new AI agent              |
+    | Profile Update            | 2 RP      | Updating profile information         |
+    | Staking Deposit           | 10 RP     | Staking VCN tokens                   |
+    | Transfer Send             | 3 RP      | Sending VCN to another user          |
+    | Mobile Node Daily         | 5 RP      | Running mobile node for a day        |
+    | CEX Connect               | 15 RP     | Connecting a CEX exchange            |
+    | Quant Strategy Setup      | 20 RP     | Setting up a quant trading strategy  |
+
+    ═══ AGENT API RP REWARDS (for AI agents using the API) ═══
+    | Agent Action              | RP Amount | Description                          |
+    |---------------------------|-----------|--------------------------------------|
+    | Transfer (single)         | 5 RP      | Agent sends VCN transfer             |
+    | Transfer (batch)          | 5 RP each | Per successful transfer in batch     |
+    | Staking Deposit           | 20 RP     | Agent stakes VCN                     |
+    | Staking Unstake           | 5 RP      | Agent unstakes VCN                   |
+    | Staking Claim Rewards     | 10 RP     | Agent claims staking rewards         |
+    | Staking Withdraw          | 10 RP     | Agent withdraws staked VCN           |
+    | Staking Compound          | 25 RP     | Agent compounds staking rewards      |
+    | Bridge Initiate           | 15 RP     | Agent initiates cross-chain bridge   |
+    | NFT Mint                  | 30 RP     | Agent mints an NFT                   |
+    | Referral (inviter)        | 50 RP     | Agent's referral code used           |
+    | Referral (invitee)        | 25 RP     | New agent using a referral code      |
+
+    ═══ STORAGE NODE RP REWARDS ═══
+    | Node Activity             | RP Amount | Trigger                              |
+    |---------------------------|-----------|--------------------------------------|
+    | Mobile Node Daily Uptime  | 5 RP      | Once per epoch (24h) for running     |
+    | Storage Contribution      | 1 RP / 10 chunks | Based on # of stored chunks  |
+
+    ═══ LOGIN STREAK BONUSES ═══
+    | Consecutive Days | Bonus RP |
+    |------------------|----------|
+    | 3 days           | +5 RP    |
+    | 7 days           | +10 RP   |
+    | 14 days          | +20 RP   |
+    | 30 days          | +100 RP  |
+    | 100 days         | +500 RP  |
+
+    ═══ RP MILESTONE BONUSES ═══
+    | Milestone Reached | Bonus RP |
+    |-------------------|----------|
+    | 10,000 RP total   | +50 RP   |
+    (Milestones at 100, 500, 1,000, 5,000, 10,000 RP are tracked and celebrated with a modal)
+
+    ═══ REFERRAL RUSH LEADERBOARD REWARDS ═══
+    | Rank      | RP Reward |
+    |-----------|-----------|
+    | 1st Place | 5,000 RP  |
+    | 2nd Place | 3,000 RP  |
+    | 3rd Place | 1,000 RP  |
+    | Top 10    | 500 RP    |
+    | Top 50    | 100 RP    |
+
+    ═══ REFERRAL RP PROPAGATION (Passive Earning) ═══
+    When any user you referred earns RP from their activities, you automatically earn a share:
+    - Tier 1 (Direct Referral): You earn 10% of RP your referral earns
+    - Tier 2 (Grand Referral): You earn 2% of RP your referral's referrals earn
+    Example: If your referral earns 100 RP from staking, you automatically get +10 RP.
+    Note: Referral-derived RP types (referral, levelup, tier1_rp, tier2_rp) do NOT propagate further to prevent infinite loops.
+
+    ═══ KEY NOTES ABOUT RP ═══
+    - RP amounts are configurable by admin and may change. The values above are current defaults.
+    - RP is tracked in Firestore under user_reward_points/{email} with totalRP, claimedRP, availableRP.
+    - All RP history is logged in rp_history collection with type, amount, source, and timestamp.
+    - RP is separate from VCN token rewards. VCN is earned through node uptime mining; RP is earned through platform engagement.
+    - RP will be convertible to VCN upon exchange listing. Until VCN is listed, RP + VCN mining rewards + USDT (revenue share) form the 3-tier reward system.
+    - Users can view their RP in the Rewards section of the wallet.
+
+    When users ask about RP, rewards, or how to earn points, provide specific RP amounts and explain the referral propagation system.
 `;
 
         const dynamicSystemPrompt = `${criticalInstructions}
