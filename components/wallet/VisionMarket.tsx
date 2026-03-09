@@ -87,8 +87,10 @@ const VisionMarket = (props: { walletAddress?: string }) => {
 
     // Preview state
     const [previewUrl, setPreviewUrl] = createSignal('');
-    const [previewType, setPreviewType] = createSignal<'video' | 'image' | 'audio' | 'pdf' | 'document' | 'other'>('other');
+    const [previewType, setPreviewType] = createSignal<'video' | 'image' | 'audio' | 'pdf' | 'text' | 'document' | 'other'>('other');
     const [previewBlob, setPreviewBlob] = createSignal<Blob | null>(null);
+    const [previewText, setPreviewText] = createSignal('');
+    const [imageZoomed, setImageZoomed] = createSignal(false);
 
     // Cleanup preview URLs on unmount
     onCleanup(() => {
@@ -128,19 +130,22 @@ const VisionMarket = (props: { walletAddress?: string }) => {
     });
 
     // ── Determine preview type from MIME ──
-    const getPreviewType = (mime: string, name: string): 'video' | 'image' | 'audio' | 'pdf' | 'document' | 'other' => {
+    const TEXT_EXTENSIONS = ['txt', 'md', 'csv', 'json', 'js', 'ts', 'tsx', 'jsx', 'py', 'html', 'css', 'xml', 'yaml', 'yml', 'log', 'sh', 'sql', 'env', 'conf', 'ini', 'toml', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'rb', 'php', 'swift', 'kt', 'lua', 'r', 'vim', 'makefile', 'dockerfile', 'gitignore'];
+    const getPreviewType = (mime: string, name: string): 'video' | 'image' | 'audio' | 'pdf' | 'text' | 'document' | 'other' => {
         // Check MIME type first
         if (mime.startsWith('video/')) return 'video';
         if (mime.startsWith('image/')) return 'image';
         if (mime.startsWith('audio/')) return 'audio';
         if (mime.includes('pdf')) return 'pdf';
+        if (mime.startsWith('text/') || mime.includes('json') || mime.includes('xml') || mime.includes('yaml') || mime.includes('javascript') || mime.includes('typescript')) return 'text';
         // Fallback: check file extension
         const ext = name.split('.').pop()?.toLowerCase() || '';
         if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v', 'ogv', '3gp'].includes(ext)) return 'video';
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(ext)) return 'image';
         if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) return 'audio';
         if (ext === 'pdf') return 'pdf';
-        if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv'].includes(ext)) return 'document';
+        if (TEXT_EXTENSIONS.includes(ext)) return 'text';
+        if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return 'document';
         return 'other';
     };
 
@@ -242,20 +247,33 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                 setPreviewUrl(url);
                 setPreviewType(finalPType);
                 setPreviewBlob(blob);
+                setImageZoomed(false);
                 setPurchaseStep('preview');
             } else if (finalPType === 'pdf') {
-                // Open PDF in new tab for viewing
+                // Inline PDF viewer using iframe
                 const url = window.URL.createObjectURL(blob);
-                window.open(url, '_blank');
-                setPreviewBlob(blob);
                 setPreviewUrl(url);
                 setPreviewType('pdf');
-                setPurchaseStep('success');
-            } else if (finalPType === 'document') {
-                triggerBlobDownload(blob, fileName);
-                setPurchaseStep('success');
+                setPreviewBlob(blob);
+                setPurchaseStep('preview');
+            } else if (finalPType === 'text') {
+                // Read blob as text and show in code viewer
+                try {
+                    const text = await blob.text();
+                    setPreviewText(text.length > 500000 ? text.slice(0, 500000) + '\n\n--- Content truncated (500KB limit) ---' : text);
+                    setPreviewType('text');
+                    setPreviewBlob(blob);
+                    setPurchaseStep('preview');
+                } catch {
+                    // Fallback: download
+                    triggerBlobDownload(blob, fileName);
+                    setPreviewBlob(blob);
+                    setPurchaseStep('success');
+                }
             } else {
+                // Documents, archives, and other: auto-download + show success with info
                 triggerBlobDownload(blob, fileName);
+                setPreviewBlob(blob);
                 setPurchaseStep('success');
             }
         } catch (err: any) {
@@ -444,6 +462,8 @@ const VisionMarket = (props: { walletAddress?: string }) => {
         }
         setPreviewBlob(null);
         setPreviewType('other');
+        setPreviewText('');
+        setImageZoomed(false);
     };
 
     return (
@@ -596,7 +616,7 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                     <Motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        class={`w-full bg-[#0d0d14] border border-white/[0.08] rounded-3xl p-6 shadow-2xl relative ${purchaseStep() === 'preview' ? 'max-w-2xl' : 'max-w-md'}`}
+                        class={`w-full bg-[#0d0d14] border border-white/[0.08] rounded-3xl p-6 shadow-2xl relative ${purchaseStep() === 'preview' ? (previewType() === 'pdf' || previewType() === 'text' ? 'max-w-4xl max-h-[90vh] overflow-hidden flex flex-col' : 'max-w-2xl') : 'max-w-md'}`}
                     >
                         {/* Close button */}
                         <button
@@ -767,16 +787,54 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                             </div>
                         </Show>
 
-                        {/* ── Step: Preview (Video / Image / Audio) ── */}
+                        {/* \u2500\u2500 Step: Preview (Video / Image / Audio / PDF / Text) \u2500\u2500 */}
                         <Show when={purchaseStep() === 'preview'}>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <h3 class="text-lg font-black text-white truncate pr-8">{selectedItem()?.name}</h3>
+                            <div class={`space-y-4 ${previewType() === 'pdf' || previewType() === 'text' ? 'flex flex-col min-h-0 flex-1' : ''}`}>
+                                {/* Header with file info */}
+                                <div class="flex items-center justify-between shrink-0">
+                                    <div class="flex items-center gap-3 min-w-0 pr-10">
+                                        <div class={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center border ${previewType() === 'video' ? 'bg-purple-500/10 border-purple-500/20' :
+                                                previewType() === 'image' ? 'bg-pink-500/10 border-pink-500/20' :
+                                                    previewType() === 'audio' ? 'bg-amber-500/10 border-amber-500/20' :
+                                                        previewType() === 'pdf' ? 'bg-red-500/10 border-red-500/20' :
+                                                            'bg-cyan-500/10 border-cyan-500/20'
+                                            }`}>
+                                            <FileTypeIcon type={selectedItem()?.type || ''} name={selectedItem()?.name || ''} class={`w-4 h-4 ${previewType() === 'video' ? 'text-purple-400' :
+                                                    previewType() === 'image' ? 'text-pink-400' :
+                                                        previewType() === 'audio' ? 'text-amber-400' :
+                                                            previewType() === 'pdf' ? 'text-red-400' :
+                                                                'text-cyan-400'
+                                                }`} />
+                                        </div>
+                                        <div class="min-w-0">
+                                            <h3 class="text-sm font-black text-white truncate">{selectedItem()?.name}</h3>
+                                            <div class="text-[10px] text-gray-500">{formatFileSize(selectedItem()?.size || 0)} &middot; {selectedItem()?.type || 'Unknown type'}</div>
+                                        </div>
+                                    </div>
+                                    {/* Fullscreen button for video/image/pdf */}
+                                    <Show when={previewType() === 'video' || previewType() === 'image' || previewType() === 'pdf'}>
+                                        <button
+                                            onClick={() => {
+                                                const el = document.getElementById('preview-content-area');
+                                                if (el) {
+                                                    if (document.fullscreenElement) {
+                                                        document.exitFullscreen();
+                                                    } else {
+                                                        el.requestFullscreen().catch(() => { });
+                                                    }
+                                                }
+                                            }}
+                                            class="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-gray-400 hover:text-white transition-all mr-8"
+                                            title="Toggle fullscreen"
+                                        >
+                                            <Maximize2 class="w-4 h-4" />
+                                        </button>
+                                    </Show>
                                 </div>
 
                                 {/* Video Player */}
                                 <Show when={previewType() === 'video'}>
-                                    <div class="rounded-2xl overflow-hidden bg-black border border-white/10">
+                                    <div id="preview-content-area" class="rounded-2xl overflow-hidden bg-black border border-white/10">
                                         <video
                                             src={previewUrl()}
                                             controls
@@ -788,15 +846,24 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                     </div>
                                 </Show>
 
-                                {/* Image Viewer */}
+                                {/* Image Viewer with zoom */}
                                 <Show when={previewType() === 'image'}>
-                                    <div class="rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                                    <div
+                                        id="preview-content-area"
+                                        class="rounded-2xl overflow-auto bg-black/60 border border-white/10 flex items-center justify-center cursor-zoom-in"
+                                        style={{ "max-height": "60vh" }}
+                                        onClick={() => setImageZoomed(!imageZoomed())}
+                                    >
                                         <img
                                             src={previewUrl()}
                                             alt={selectedItem()?.name || ''}
-                                            class="w-full max-h-[60vh] object-contain"
+                                            class={`transition-all duration-300 ${imageZoomed() ? 'max-w-none w-auto' : 'w-full max-h-[60vh] object-contain'}`}
+                                            style={{ cursor: imageZoomed() ? 'zoom-out' : 'zoom-in' }}
                                         />
                                     </div>
+                                    <Show when={imageZoomed()}>
+                                        <div class="text-center text-[10px] text-gray-600 shrink-0">Click image to toggle zoom</div>
+                                    </Show>
                                 </Show>
 
                                 {/* Audio Player */}
@@ -805,6 +872,7 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                         <div class="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
                                             <FileAudio class="w-10 h-10 text-amber-400" />
                                         </div>
+                                        <div class="text-sm font-bold text-white">{selectedItem()?.name}</div>
                                         <audio
                                             src={previewUrl()}
                                             controls
@@ -814,8 +882,53 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                     </div>
                                 </Show>
 
+                                {/* PDF Inline Viewer */}
+                                <Show when={previewType() === 'pdf'}>
+                                    <div id="preview-content-area" class="flex-1 min-h-0 rounded-2xl overflow-hidden border border-white/10" style={{ "min-height": "500px" }}>
+                                        <iframe
+                                            src={previewUrl()}
+                                            class="w-full h-full border-0"
+                                            style={{ "min-height": "500px", "background-color": "#fff" }}
+                                            title="PDF Viewer"
+                                        />
+                                    </div>
+                                </Show>
+
+                                {/* Text/Code Viewer */}
+                                <Show when={previewType() === 'text'}>
+                                    <div class="flex-1 min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a12] flex flex-col" style={{ "min-height": "400px" }}>
+                                        {/* Mini toolbar */}
+                                        <div class="flex items-center justify-between px-4 py-2 bg-white/[0.02] border-b border-white/[0.05] shrink-0">
+                                            <div class="flex items-center gap-2 text-[10px] text-gray-500">
+                                                <FileText class="w-3 h-3" />
+                                                <span>{selectedItem()?.name?.split('.').pop()?.toUpperCase() || 'TEXT'}</span>
+                                                <span class="text-gray-700">&middot;</span>
+                                                <span>{previewText().split('\n').length} lines</span>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(previewText());
+                                                    // Brief visual feedback
+                                                    const btn = document.getElementById('copy-text-btn');
+                                                    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy All', 1500); }
+                                                }}
+                                                id="copy-text-btn"
+                                                class="px-3 py-1 text-[10px] font-bold text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-all border border-white/[0.05]"
+                                            >
+                                                Copy All
+                                            </button>
+                                        </div>
+                                        {/* Code content with line numbers */}
+                                        <div class="flex-1 overflow-auto custom-scrollbar">
+                                            <pre class="p-4 text-xs leading-relaxed" style={{ "font-family": "'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace", "tab-size": "4", "white-space": "pre-wrap", "word-break": "break-all" }}>
+                                                <code class="text-gray-300">{previewText()}</code>
+                                            </pre>
+                                        </div>
+                                    </div>
+                                </Show>
+
                                 {/* Action Buttons */}
-                                <div class="flex gap-3">
+                                <div class="flex gap-3 shrink-0">
                                     <button
                                         onClick={() => {
                                             const blob = previewBlob();
@@ -827,6 +940,17 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                         <Download class="w-4 h-4" />
                                         Save to Device
                                     </button>
+                                    <Show when={previewType() === 'pdf'}>
+                                        <button
+                                            onClick={() => {
+                                                if (previewUrl()) window.open(previewUrl(), '_blank');
+                                            }}
+                                            class="h-10 px-5 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-xs rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2"
+                                        >
+                                            <ExternalLink class="w-3.5 h-3.5" />
+                                            Open in Tab
+                                        </button>
+                                    </Show>
                                     <button
                                         onClick={closePurchaseModal}
                                         class="h-10 px-6 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-xs rounded-xl transition-all border border-white/10"

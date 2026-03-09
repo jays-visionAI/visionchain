@@ -8780,13 +8780,48 @@ exports.getAdminCexStats = onCall({
         }
       }
 
+      // Fetch quant agents if subcollection exists
+      const quantAgents = [];
+      try {
+        const quantSnap = await db.collection(`users/${userDoc.id}/quant_agents`).get();
+        quantSnap.forEach((qDoc) => {
+          const q = qDoc.data();
+          quantAgents.push({
+            name: q.name || "Agent",
+            strategy: q.strategyName || q.strategyTemplateId || "Custom",
+            status: q.status || "unknown",
+            assets: q.selectedAssets || [],
+            startedAt: q.createdAt?.toDate?.()?.toISOString() || q.createdAt || null,
+          });
+        });
+      } catch (_) { /* no quant_agents subcollection */ }
+
+      const exchanges = [...new Set(credentials.map((c) => c.exchange))];
+      const multiExchange = exchanges.length >= 2;
+      const quantActiveAgents = quantAgents.filter((a) => a.status === "active");
+      const quantStatus = quantActiveAgents.length > 0 ? "active" : (quantAgents.length > 0 ? "paused" : "none");
+
+      // Activity status based on last sync
+      const now30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const now7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      let activityStatus = "at_risk";
+      if (lastSyncTime && lastSyncTime >= now7d) activityStatus = "active";
+      else if (lastSyncTime && lastSyncTime >= now30d) activityStatus = "idle";
+
+      // Sync count in last 30 days (count credentials synced recently)
+      const syncCount30d = credentials.filter((c) => {
+        if (!c.lastSyncAt) return false;
+        return new Date(c.lastSyncAt) >= now30d;
+      }).length;
+
       userList.push({
         email: userDoc.id,
         name: userData.name || "",
         walletAddress: userData.walletAddress || "",
         credentials,
         exchangeCount: credentials.length,
-        exchanges: [...new Set(credentials.map((c) => c.exchange))],
+        exchanges,
+        multiExchange,
         totalValueKrw,
         totalValueUsd,
         assetCount,
@@ -8794,6 +8829,10 @@ exports.getAdminCexStats = onCall({
         registeredAt: credentials[0]?.registeredAt || null,
         status: credentials.some((c) => c.status === "active") ? "active" : "inactive",
         assets: snapshotAssets,
+        quantStatus,
+        quantAgents,
+        activityStatus,
+        syncCount30d,
       });
     }
 
@@ -8887,6 +8926,24 @@ exports.getAdminCexStats = onCall({
       return new Date(u.registeredAt) >= todayStart;
     }).length;
 
+    // ── New aggregate stats ──
+    const multiExchangeUsers = userList.filter((u) => u.multiExchange).length;
+    const quantActiveUsers = userList.filter((u) => u.quantStatus === "active").length;
+    const weeklyActiveUsers = userList.filter((u) => u.activityStatus === "active").length;
+    const monthlyActiveUsers = userList.filter((u) => u.activityStatus !== "at_risk").length;
+    const atRiskUsers = userList.filter((u) => u.activityStatus === "at_risk").length;
+
+    // Strategy usage breakdown
+    const strategyMap = {};
+    userList.forEach((u) => {
+      u.quantAgents.forEach((a) => {
+        if (!strategyMap[a.strategy]) strategyMap[a.strategy] = { name: a.strategy, users: 0, active: 0 };
+        strategyMap[a.strategy].users++;
+        if (a.status === "active") strategyMap[a.strategy].active++;
+      });
+    });
+    const strategyUsage = Object.values(strategyMap).sort((a, b) => b.users - a.users);
+
     // Strip assets from user list to reduce payload size
     const usersSummary = userList.map((u) => ({
       email: u.email,
@@ -8901,6 +8958,11 @@ exports.getAdminCexStats = onCall({
       lastSync: u.lastSync,
       registeredAt: u.registeredAt,
       status: u.status,
+      multiExchange: u.multiExchange,
+      quantStatus: u.quantStatus,
+      quantAgents: u.quantAgents,
+      activityStatus: u.activityStatus,
+      syncCount30d: u.syncCount30d,
     }));
 
     return {
@@ -8913,10 +8975,16 @@ exports.getAdminCexStats = onCall({
         totalAumUsd,
         recentRegistrations,
         todayRegistrations,
+        multiExchangeUsers,
+        quantActiveUsers,
+        weeklyActiveUsers,
+        monthlyActiveUsers,
+        atRiskUsers,
       },
       exchangeBreakdown,
       topCoins,
       sizeDistribution,
+      strategyUsage,
       users: usersSummary,
     };
   } catch (err) {
