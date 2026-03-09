@@ -16622,7 +16622,7 @@ async function callLLM(model, systemPrompt, userPrompt, availableTools) {
       (await getApiKeyFromFirestore("gemini")) ||
       process.env.GEMINI_API_KEY ||
       "";
-    if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not configured");
+    if (!GEMINI_KEY) throw new Error("LLM API key not configured");
 
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
@@ -16646,7 +16646,7 @@ async function callLLM(model, systemPrompt, userPrompt, availableTools) {
       (await getApiKeyFromFirestore("deepseek")) ||
       process.env.DEEPSEEK_API_KEY ||
       "";
-    if (!DEEPSEEK_KEY) throw new Error("DEEPSEEK_API_KEY not configured");
+    if (!DEEPSEEK_KEY) throw new Error("LLM API key not configured");
 
     const response = await axios.post(
       "https://api.deepseek.com/chat/completions",

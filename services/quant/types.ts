@@ -6,7 +6,7 @@
 
 // ─── Strategy Types ────────────────────────────────────────────────────────
 
-export type StrategyCategory = 'trend_following' | 'mean_reversion' | 'multi_signal' | 'breakout' | 'risk_overlay';
+export type StrategyCategory = 'trend_following' | 'mean_reversion' | 'multi_signal' | 'breakout' | 'risk_overlay' | 'turtle_trading' | 'momentum_swing' | 'williams' | 'stage_analysis';
 
 export type RiskLevel = 'low' | 'medium' | 'medium_high' | 'high';
 
@@ -71,6 +71,17 @@ export interface StrategyParameter {
     group: 'entry' | 'exit' | 'risk' | 'filter';
 }
 
+export interface StrategyBlogContent {
+    heroImage: string;
+    traderName: string;
+    traderTitle: string;
+    origin: string;
+    sections: {
+        heading: string;
+        body: string;
+    }[];
+}
+
 export interface StrategyTemplate {
     id: string;
     name: string;
@@ -95,6 +106,8 @@ export interface StrategyTemplate {
     parameters: StrategyParameter[];
     userCount: number;
     avgReturn30d?: number;
+    premium?: boolean;
+    blogContent?: StrategyBlogContent;
 }
 
 // ─── Agent Types ───────────────────────────────────────────────────────────

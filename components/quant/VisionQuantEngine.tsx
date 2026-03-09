@@ -47,7 +47,7 @@ import {
     getCategoryLabel,
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
@@ -136,6 +136,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const filteredStrategies = createMemo(() => {
         const strategies = getSignalStrategies();
         if (categoryFilter() === 'all') return strategies;
+        if (categoryFilter() === 'premium') return strategies.filter(s => s.premium);
         return strategies.filter(s => s.category === categoryFilter());
     });
 
@@ -297,18 +298,26 @@ const VisionQuantEngine = (): JSX.Element => {
                             <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
                                 {[
                                     { id: 'all', label: 'All' },
+                                    { id: 'premium', label: 'Premium' },
                                     { id: 'trend_following', label: 'Trend' },
                                     { id: 'mean_reversion', label: 'Mean Reversion' },
                                     { id: 'multi_signal', label: 'Multi-Signal' },
                                     { id: 'breakout', label: 'Breakout' },
+                                    { id: 'turtle_trading', label: 'Turtle' },
+                                    { id: 'momentum_swing', label: 'Momentum' },
+                                    { id: 'williams', label: 'Williams' },
+                                    { id: 'stage_analysis', label: 'Stage' },
                                 ].map(cat => (
                                     <button
                                         onClick={() => setCategoryFilter(cat.id)}
                                         class={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap border ${categoryFilter() === cat.id
-                                            ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                            ? cat.id === 'premium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
                                             : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white hover:border-white/[0.1]'
                                             }`}
                                     >
+                                        {cat.id === 'premium' && (
+                                            <svg viewBox="0 0 24 24" class="w-3 h-3 inline mr-1 -mt-0.5" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                                        )}
                                         {cat.label}
                                     </button>
                                 ))}
@@ -318,7 +327,17 @@ const VisionQuantEngine = (): JSX.Element => {
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <For each={filteredStrategies()}>
                                     {(strategy) => (
-                                        <div class="bg-[#111113]/60 rounded-2xl border border-white/[0.04] hover:border-white/[0.1] transition-all group overflow-hidden">
+                                        <div class={`bg-[#111113]/60 rounded-2xl border ${strategy.premium ? 'border-amber-500/15 hover:border-amber-500/30 ring-1 ring-amber-500/5' : 'border-white/[0.04] hover:border-white/[0.1]'} transition-all group overflow-hidden`}>
+                                            {/* Premium Banner */}
+                                            <Show when={strategy.premium}>
+                                                <div class="flex items-center justify-between px-4 py-1.5 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border-b border-amber-500/10">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <svg viewBox="0 0 24 24" class="w-3 h-3 text-amber-400" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                                                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-widest">Premium Strategy</span>
+                                                    </div>
+                                                    <span class="text-[8px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">FREE (Limited)</span>
+                                                </div>
+                                            </Show>
                                             {/* Card Header */}
                                             <div class="p-4 pb-3">
                                                 <div class="flex items-start justify-between mb-2">
@@ -436,6 +455,63 @@ const VisionQuantEngine = (): JSX.Element => {
 
                             {/* Detail Body */}
                             <div class="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
+                                {/* Premium Notice */}
+                                <Show when={selectedStrategy()!.premium}>
+                                    <div class="p-4 bg-gradient-to-br from-amber-500/[0.08] via-amber-400/[0.04] to-transparent rounded-2xl border border-amber-500/15">
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                                            <span class="text-xs font-black text-amber-400">Premium Strategy</span>
+                                        </div>
+                                        <p class="text-[11px] text-amber-300/70 leading-relaxed mb-2">
+                                            This premium strategy is currently available <span class="text-emerald-400 font-bold">free of charge</span> during our early access period. In the future, Premium strategies will require a paid subscription or eligible user level (Level 5+) to access for free.
+                                        </p>
+                                        <div class="flex items-center gap-3 text-[10px]">
+                                            <div class="flex items-center gap-1 text-amber-400/60">
+                                                <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                                                <span>Early Access</span>
+                                            </div>
+                                            <div class="flex items-center gap-1 text-amber-400/60">
+                                                <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                                                <span>Level 5+ for free access</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Show>
+
+                                {/* Blog Content for Premium Strategies */}
+                                <Show when={selectedStrategy()!.blogContent}>
+                                    {(() => {
+                                        const blog = selectedStrategy()!.blogContent!;
+                                        return (
+                                            <div class="space-y-4">
+                                                {/* Hero Image */}
+                                                <div class="relative rounded-xl overflow-hidden">
+                                                    <img src={blog.heroImage} alt={blog.traderName} class="w-full h-44 object-cover" />
+                                                    <div class="absolute inset-0 bg-gradient-to-t from-[#111113] via-transparent to-transparent" />
+                                                    <div class="absolute bottom-3 left-4">
+                                                        <div class="text-xs font-black text-white">{blog.traderName}</div>
+                                                        <div class="text-[10px] text-gray-400 italic">{blog.traderTitle}</div>
+                                                        <div class="text-[9px] text-gray-500 mt-0.5">{blog.origin}</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Blog Sections */}
+                                                <For each={blog.sections}>
+                                                    {(section) => (
+                                                        <div class="group">
+                                                            <h5 class="text-[12px] font-black text-white mb-2 leading-snug">{section.heading}</h5>
+                                                            <p class="text-[11px] text-gray-400 leading-relaxed">{section.body}</p>
+                                                        </div>
+                                                    )}
+                                                </For>
+
+                                                {/* Divider */}
+                                                <div class="border-t border-white/[0.04]" />
+                                            </div>
+                                        );
+                                    })()}
+                                </Show>
+
                                 {/* Description */}
                                 <div>
                                     <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Description</h4>
