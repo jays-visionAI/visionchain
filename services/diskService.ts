@@ -1297,3 +1297,137 @@ export const decryptFile = async (data: ArrayBuffer, password: string, saltBase6
 
     return new Blob([decryptedData], { type });
 };
+
+// ─── Sharing Functions ───
+
+export interface ShareInfo {
+    shareId: string;
+    ownerEmail: string;
+    targetEmail?: string;
+    type: 'file' | 'folder';
+    resourceId: string;
+    resourceName: string;
+    permission: string;
+    createdAt: string;
+    resource?: DiskFile | any;
+}
+
+export interface SharedFolder {
+    id: string;
+    name: string;
+    ownerEmail: string;
+    members: { email: string; role: 'owner' | 'editor' | 'viewer'; joinedAt: string }[];
+    memberEmails: string[];
+    createdAt: string;
+    updatedAt: string;
+    totalSize: number;
+    fileCount: number;
+}
+
+export const shareResource = async (targetEmail: string, type: 'file' | 'folder', resourceId: string, resourceName: string) => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { success: boolean; shareId: string }>(functions, 'diskShareResource');
+    const result = await call({ targetEmail, type, resourceId, resourceName });
+    return result.data;
+};
+
+export const revokeShare = async (shareId: string) => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { success: boolean }>(functions, 'diskRevokeShare');
+    await call({ shareId });
+};
+
+export const getSharedWithMe = async (): Promise<{ shares: ShareInfo[]; sharedFolders: SharedFolder[] }> => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { shares: ShareInfo[]; sharedFolders: SharedFolder[] }>(functions, 'diskGetSharedWithMe');
+    const result = await call({});
+    return result.data;
+};
+
+export const getMyShares = async (): Promise<ShareInfo[]> => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { shares: ShareInfo[] }>(functions, 'diskGetMyShares');
+    const result = await call({});
+    return result.data.shares;
+};
+
+export const createSharedFolder = async (name: string, memberEmails: string[]) => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { success: boolean; folderId: string; members: any[] }>(functions, 'diskCreateSharedFolder');
+    const result = await call({ name, memberEmails });
+    return result.data;
+};
+
+export const manageSharedFolderMember = async (folderId: string, action: 'add' | 'remove' | 'updateRole', targetEmail: string, role?: string) => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { success: boolean }>(functions, 'diskManageSharedFolderMember');
+    const result = await call({ folderId, action, targetEmail, role });
+    return result.data;
+};
+
+export const getSharedFolderFiles = async (folderId: string) => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { folder: any; files: DiskFile[] }>(functions, 'diskGetSharedFolderFiles');
+    const result = await call({ folderId });
+    return result.data;
+};
+
+export const uploadToSharedFolder = async (
+    folderId: string,
+    file: File,
+    onProgress?: (p: UploadProgress) => void
+) => {
+    const functions = getFunctions(getFirebaseApp());
+    const DIRECT_LIMIT = 5 * 1024 * 1024;
+    const PART_SIZE = 700 * 1024;
+    const PARALLEL = 5;
+
+    let callPayload: any = { folderId, fileName: file.name, fileType: file.type, fileSize: file.size };
+
+    if (file.size <= DIRECT_LIMIT) {
+        const ab = await file.arrayBuffer();
+        const base64 = arrayBufferToBase64(ab);
+        callPayload.fileData = base64;
+        onProgress?.({ fileName: file.name, progress: 50, bytesTransferred: file.size * 0.5, totalBytes: file.size, status: 'uploading' });
+    } else {
+        // Multipart upload
+        const uploadPartCall = httpsCallable<any, any>(functions, 'diskUploadPart', { timeout: 60000 });
+        const ab = await file.arrayBuffer();
+        const totalParts = Math.ceil(ab.byteLength / PART_SIZE);
+        const sessionId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        let completed = 0;
+
+        for (let batch = 0; batch < totalParts; batch += PARALLEL) {
+            const end = Math.min(batch + PARALLEL, totalParts);
+            const promises = [];
+            for (let i = batch; i < end; i++) {
+                const start = i * PART_SIZE;
+                const partEnd = Math.min(start + PART_SIZE, ab.byteLength);
+                const partBase64 = arrayBufferToBase64(ab.slice(start, partEnd));
+                promises.push(
+                    uploadPartCall({ uploadSessionId: sessionId, partIndex: i, totalParts, partData: partBase64 })
+                        .then(() => {
+                            completed++;
+                            onProgress?.({ fileName: file.name, progress: 10 + Math.round((completed / totalParts) * 55), bytesTransferred: Math.min(completed * PART_SIZE, file.size), totalBytes: file.size, status: 'uploading' });
+                        })
+                );
+            }
+            await Promise.all(promises);
+        }
+        callPayload.uploadSessionId = sessionId;
+    }
+
+    onProgress?.({ fileName: file.name, progress: 70, bytesTransferred: file.size * 0.7, totalBytes: file.size, status: 'uploading' });
+
+    const uploadCall = httpsCallable<any, any>(functions, 'diskUploadToSharedFolder', { timeout: 300000 });
+    const result = await uploadCall(callPayload);
+
+    onProgress?.({ fileName: file.name, progress: 100, bytesTransferred: file.size, totalBytes: file.size, status: 'success' });
+    return result.data;
+};
+
+export const deleteSharedFolderFile = async (folderId: string, fileId: string) => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<any, { success: boolean }>(functions, 'diskDeleteSharedFolderFile');
+    await call({ folderId, fileId });
+};
