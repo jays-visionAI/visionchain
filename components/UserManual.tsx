@@ -110,6 +110,7 @@ const sections: Section[] = [
             { id: 'disk-folders', title: 'Folder Management' },
             { id: 'disk-share', title: 'Sharing & Publishing' },
             { id: 'disk-encryption', title: 'Encryption & Passkey' },
+            { id: 'disk-ai-memory', title: 'AI Memory & Indexing' },
             { id: 'disk-chatbot', title: 'AI Chat File Sharing' },
             { id: 'disk-plans', title: 'Storage Plans' },
         ]
@@ -1029,10 +1030,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 <p class="text-sm text-gray-400">Vision Disk encrypts files locally in your browser using AES-GCM with a key derived from your wallet private key. Encrypted data is stored on Vision Cloud, and file metadata is anchored on-chain. Only you can decrypt your files.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                        { t: 'AES-GCM Encryption', d: 'Files are encrypted client-side before upload using AES-256-GCM. The encryption key is derived from your wallet private key, so only you can decrypt.' },
+                        { t: 'AES-GCM Encryption', d: 'Files are encrypted client-side before upload using AES-256-GCM. The encryption key is derived from your passphrase, so only you can decrypt.' },
                         { t: 'Gasless Payments', d: 'Storage subscriptions use EIP-2612 Permit signatures. You sign a permit, and the Paymaster executes the VCN transfer on-chain without you paying gas.' },
                         { t: 'Drag & Drop Upload', d: 'Drag files directly onto the Disk page or click the upload area to select files. Multiple file upload supported.' },
                         { t: 'File Operations', d: 'Rename, move, delete, publish/unpublish, and download files. Context menu available via right-click or long-press.' },
+                        { t: 'AI Memory Storage', d: 'Every file is enriched with AI-compatible metadata: language detection, source type classification, tags, abstracts, and content hashing for deduplication and retrieval.' },
+                        { t: 'Model Compatibility', d: 'Files are structured for seamless integration with OpenAI, Gemini, and other AI models. The indexing pipeline extracts text, generates embeddings, and prepares retrieval-ready data.' },
                     ].map(c => (
                         <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                             <div class="text-sm font-bold text-white mb-1">{c.t}</div>
@@ -1176,6 +1179,85 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <Tip><>Your passkey is stored locally on your device only. If you switch devices, you will need to enter the password manually once and register a new passkey on the new device.</></Tip>
                 <Warning><>If you forget your encryption password and don't have a passkey saved, your encrypted files cannot be recovered. Vision Chain does not have access to your password.</></Warning>
+            </div>
+        );
+        case 'disk-ai-memory': return (
+            <div class="space-y-6">
+                <SectionHeader title="AI Memory & Indexing" desc="Vision Disk serves as a persistent memory layer for AI. Every uploaded file is enriched with structured metadata, enabling AI models to search, retrieve, and reason over your personal data." />
+
+                <h3 class="text-lg font-bold text-white mb-3">Why Disk as AI Memory?</h3>
+                <p class="text-sm text-gray-400 mb-3">Traditional cloud storage stores files as opaque blobs. Vision Disk goes further by treating every file as a structured knowledge unit that AI can understand, index, and retrieve. This enables your chatbot to find documents, answer questions from your files, and share them intelligently.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                        { t: 'Structured Metadata', d: 'Each file has language, source type, tags, abstract, and content hash -- not just a filename and size' },
+                        { t: 'AI-Ready Indexing', d: 'Files go through an indexing pipeline that extracts text, generates summaries, and prepares embeddings for vector search' },
+                        { t: 'Version Tracking', d: 'Every file version is tracked with content hashing (SHA-256) and parent version linking for change detection' },
+                        { t: 'Multi-Model Support', d: 'Data structures are compatible with OpenAI, Gemini, and other AI models for seamless retrieval-augmented generation (RAG)' },
+                    ].map(c => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <div class="text-sm font-bold text-white mb-1">{c.t}</div>
+                            <div class="text-xs text-gray-500">{c.d}</div>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">AI Storage Data Structure</h3>
+                <p class="text-sm text-gray-400 mb-3">Each file in Vision Disk carries the following AI-specific metadata fields that extend the standard file properties:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="grid grid-cols-[1fr_1fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
+                        <div>Field</div><div>Type</div><div>Description</div>
+                    </div>
+                    {[
+                        { f: 'language', t: 'ISO 639-1', d: 'Detected language (e.g., "ko", "en"). Used for language-specific search and translation.' },
+                        { f: 'tags', t: 'string[]', d: 'Auto-generated or user-defined tags for categorization and filtered search.' },
+                        { f: 'sourceType', t: 'enum', d: 'File classification: document, image, audio, video, chat_log, code, data, or other.' },
+                        { f: 'abstract', t: 'string', d: 'AI-generated summary of document content. Used by chatbot for file search and context.' },
+                        { f: 'parsedTextUri', t: 'URI', d: 'Link to extracted plain text from documents (PDF, DOCX, etc.) for full-text search.' },
+                        { f: 'transcriptUri', t: 'URI', d: 'Link to auto-generated transcript for audio/video files.' },
+                        { f: 'contentHash', t: 'SHA-256', d: 'Hash of raw file content for deduplication and change detection across versions.' },
+                        { f: 'version', t: 'number', d: 'File version number. Incremented on each update for version history tracking.' },
+                        { f: 'parentVersionId', t: 'string', d: 'Link to previous version for version chain reconstruction.' },
+                        { f: 'indexingStatus', t: 'enum', d: 'Pipeline status: none, queued, processing, indexed, or error.' },
+                        { f: 'memoryEligibility', t: 'boolean', d: 'Whether this file qualifies as AI memory (e.g., text-based, non-trivial content).' },
+                        { f: 'modelCompatibility', t: 'enum', d: 'Target AI model: openai, gemini, or both. Determines embedding format.' },
+                    ].map(r => (
+                        <div class="grid grid-cols-[1fr_1fr_2fr] gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
+                            <code class="text-cyan-400 text-xs">{r.f}</code>
+                            <span class="text-gray-400 text-xs">{r.t}</span>
+                            <span class="text-gray-400 text-xs">{r.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Indexing Pipeline</h3>
+                <p class="text-sm text-gray-400 mb-3">When a file is uploaded, it enters an indexing pipeline that prepares it for AI retrieval:</p>
+                <StepList steps={[
+                    { title: 'Upload & Metadata Extraction', desc: 'File is uploaded and basic metadata is extracted: size, type, MIME type. Language is auto-detected from filename and content.' },
+                    { title: 'Source Type Classification', desc: 'The file is classified based on MIME type: documents (PDF, DOCX), images (JPG, PNG), audio (MP3, WAV), video (MP4), code files, data files (CSV, JSON), or chat logs.' },
+                    { title: 'Text Extraction', desc: 'For documents, text is extracted and stored at parsedTextUri. For audio/video, a transcript is generated at transcriptUri. Images may get OCR text extraction.' },
+                    { title: 'Abstract Generation', desc: 'AI generates a brief summary (abstract) of the document content. This is used by the chatbot for file search results.' },
+                    { title: 'Tag Auto-Generation', desc: 'AI analyzes content and assigns relevant tags for categorization. Users can also add custom tags.' },
+                    { title: 'Content Hashing', desc: 'SHA-256 hash is computed for deduplication. If an identical file already exists, the system links to the existing version.' },
+                    { title: 'Memory Eligibility Check', desc: 'Files with extractable text content are marked as memory-eligible, making them available for AI retrieval and chatbot context.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">How AI Uses Your Files</h3>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Chatbot File Search', d: 'The AI chatbot searches files by name, tags, abstract, and folder to help you find and share documents' },
+                        { n: 'Context-Aware Answers', d: 'When indexed, file contents can be referenced by AI to answer questions about your documents' },
+                        { n: 'Smart Sharing', d: 'When you ask the chatbot to share a file, it uses metadata (tags, abstract) to find the best match' },
+                        { n: 'Version Intelligence', d: 'AI tracks file versions and can identify the latest version of a document automatically' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <Tip><>Files with sourceType "document", "code", or "data" are automatically marked as memory-eligible. Image and video files become eligible only if text extraction (OCR/transcript) is successful.</></Tip>
+                <Note><>The indexing pipeline runs asynchronously after upload. You can check a file's indexing status in its metadata. Most files are indexed within seconds.</></Note>
             </div>
         );
         case 'disk-chatbot': return (
