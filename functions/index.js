@@ -23482,7 +23482,7 @@ async function sendDiskUploadEmail(memberEmail, uploaderEmail, fileName, folderN
 exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30, secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const ownerEmail = request.auth.token.email.toLowerCase();
-  const { targetEmail, type, resourceId, resourceName } = request.data;
+  const { targetEmail, type, resourceId, resourceName, encryptionPassword } = request.data;
 
   if (!targetEmail || !type || !resourceId) {
     throw new HttpsError("invalid-argument", "targetEmail, type, and resourceId are required.");
@@ -23503,9 +23503,11 @@ exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSecond
   }
 
   // Verify resource exists and belongs to owner
+  let isEncryptedFile = false;
   if (type === "file") {
     const fileDoc = await db.collection("users").doc(ownerEmail).collection("disk_files").doc(resourceId).get();
     if (!fileDoc.exists) throw new HttpsError("not-found", "File not found.");
+    isEncryptedFile = !!fileDoc.data()?.isEncrypted;
   } else {
     const folderDoc = await db.collection("users").doc(ownerEmail).collection("disk_folders").doc(resourceId).get();
     if (!folderDoc.exists) throw new HttpsError("not-found", "Folder not found.");
@@ -23520,12 +23522,16 @@ exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSecond
     .limit(1).get();
 
   if (!existing.empty) {
+    // Update encryption password if provided on re-share
+    if (encryptionPassword && isEncryptedFile) {
+      await existing.docs[0].ref.update({ encryptionPassword });
+    }
     return { success: true, shareId: existing.docs[0].id, message: "Already shared." };
   }
 
   const shareRef = db.collection("disk_shares").doc();
   const now = new Date().toISOString();
-  await shareRef.set({
+  const shareData = {
     id: shareRef.id,
     ownerEmail,
     targetEmail: normalizedTarget,
@@ -23535,9 +23541,16 @@ exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSecond
     permission: "view",
     status: "active",
     createdAt: now,
-  });
+  };
 
-  console.log(`[Disk] ${ownerEmail} shared ${type} ${resourceId} with ${normalizedTarget}`);
+  // Include encryption password for encrypted files
+  if (encryptionPassword && isEncryptedFile) {
+    shareData.encryptionPassword = encryptionPassword;
+  }
+
+  await shareRef.set(shareData);
+
+  console.log(`[Disk] ${ownerEmail} shared ${type} ${resourceId} with ${normalizedTarget}${isEncryptedFile ? ' (encrypted, password included)' : ''}`);
 
   // Send notification to target user
   try {
@@ -23624,6 +23637,7 @@ exports.diskGetSharedWithMe = onCall({ cors: true, maxInstances: 10, timeoutSeco
       permission: share.permission,
       createdAt: share.createdAt,
       resource: resourceMeta,
+      ...(share.encryptionPassword ? { encryptionPassword: share.encryptionPassword } : {}),
     });
   }
 

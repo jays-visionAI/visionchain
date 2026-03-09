@@ -1310,6 +1310,7 @@ export interface ShareInfo {
     permission: string;
     createdAt: string;
     resource?: DiskFile | any;
+    encryptionPassword?: string;
 }
 
 export interface SharedFolder {
@@ -1324,10 +1325,12 @@ export interface SharedFolder {
     fileCount: number;
 }
 
-export const shareResource = async (targetEmail: string, type: 'file' | 'folder', resourceId: string, resourceName: string) => {
+export const shareResource = async (targetEmail: string, type: 'file' | 'folder', resourceId: string, resourceName: string, encryptionPassword?: string) => {
     const functions = getFunctions(getFirebaseApp());
     const call = httpsCallable<any, { success: boolean; shareId: string }>(functions, 'diskShareResource');
-    const result = await call({ targetEmail, type, resourceId, resourceName });
+    const payload: any = { targetEmail, type, resourceId, resourceName };
+    if (encryptionPassword) payload.encryptionPassword = encryptionPassword;
+    const result = await call(payload);
     return result.data;
 };
 

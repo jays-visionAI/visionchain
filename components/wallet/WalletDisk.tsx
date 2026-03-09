@@ -28,6 +28,7 @@ import { ethers } from 'ethers';
 import VCNTokenABI from '../../services/abi/VCNToken.json';
 import { Globe, Share2, ShieldCheck, ShieldAlert, Lock, Unlock, RotateCw, Users, UserPlus, UserMinus } from 'lucide-solid';
 import NodeRewardPanel from './NodeRewardPanel';
+import { isBiometricAvailable, hasStoredPassword, savePasswordWithBiometric, getPasswordWithBiometric } from '../../services/diskPasskeyService';
 
 // ─── Gasless Permit Constants (must match transferService / contractService) ───
 const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
@@ -199,6 +200,10 @@ export const WalletDisk = (props: {
     const [decryptingFileId, setDecryptingFileId] = createSignal('');
     const [useDistributed, setUseDistributed] = createSignal(true);
     const [preserveOriginal, setPreserveOriginal] = createSignal(false);
+    // Passkey / Biometric
+    const [biometricAvailable, setBiometricAvailable] = createSignal(false);
+    const [hasPasskey, setHasPasskey] = createSignal(false);
+    const [passkeyLoading, setPasskeyLoading] = createSignal(false);
 
     // Reward
     const [nodeId, setNodeId] = createSignal<string | null>(null);
@@ -488,6 +493,13 @@ export const WalletDisk = (props: {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'mobile_node.status', email: email() }),
         }).then(r => r.json()).then(d => { if (d.success && d.node_id) setNodeId(d.node_id); }).catch(() => { });
+        // Check biometric availability and existing passkey
+        isBiometricAvailable().then(avail => {
+            setBiometricAvailable(avail);
+            if (avail && email()) {
+                hasStoredPassword(email()).then(has => setHasPasskey(has));
+            }
+        });
     });
 
     createEffect(() => {
@@ -967,7 +979,12 @@ export const WalletDisk = (props: {
         if (!target || !contact) return;
         setSharingInProgress(true);
         try {
-            await shareResource(contact.email, target.type, target.item.id, target.item.name);
+            // If sharing an encrypted file, pass the encryption password
+            let sharePassword: string | undefined;
+            if (target.type === 'file' && (target.item as DiskFile).isEncrypted) {
+                sharePassword = encryptionPassword() || undefined;
+            }
+            await shareResource(contact.email, target.type, target.item.id, target.item.name, sharePassword);
             setShareSuccess(true);
             // Auto-close after 2 seconds
             setTimeout(() => {
@@ -2314,6 +2331,11 @@ export const WalletDisk = (props: {
                                                         <button
                                                             onClick={() => {
                                                                 if (share.resource) {
+                                                                    // If shared file is encrypted and share includes password, auto-set it
+                                                                    if ((share.resource as DiskFile).isEncrypted && share.encryptionPassword) {
+                                                                        setEncryptionPassword(share.encryptionPassword);
+                                                                        setUseEncryption(true);
+                                                                    }
                                                                     setPreviewFile(share.resource as DiskFile);
                                                                 }
                                                             }}
@@ -3112,6 +3134,14 @@ export const WalletDisk = (props: {
                                     </p>
                                     <p class="text-xs text-gray-500 truncate max-w-[250px] mt-1">"{shareTarget()!.item.name}"</p>
                                     <p class="text-sm text-emerald-400 mt-2 font-bold">파일이 공유되었습니다</p>
+                                    {shareTarget()!.item && (shareTarget()!.item as DiskFile).isEncrypted && encryptionPassword() && (
+                                        <div class="mt-3 bg-cyan-500/5 border border-cyan-500/20 rounded-xl px-4 py-2">
+                                            <div class="flex items-center gap-2 justify-center">
+                                                <svg class="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                                                <p class="text-[11px] text-cyan-300/80">암호가 함께 전달되었습니다</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </Show>
 
@@ -3353,15 +3383,56 @@ export const WalletDisk = (props: {
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
                             class="bg-[#1a1a24] border border-white/10 rounded-[32px] p-8 max-w-sm w-full shadow-2xl"
                         >
-                            <div class="flex flex-col items-center text-center mb-8">
-                                <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 border border-cyan-500/20">
+                            <div class="flex flex-col items-center text-center mb-6">
+                                <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-4 border border-cyan-500/20">
                                     <Lock class="w-8 h-8 text-cyan-400" />
                                 </div>
-                                <h1 class="text-2xl font-black text-white mb-2 uppercase tracking-tight">Encryption Key</h1>
-                                <p class="text-sm text-gray-500 leading-relaxed font-medium">This password is required to encrypt your private files. <b>Vision Chain does not store this key.</b></p>
+                                <h1 class="text-xl font-black text-white mb-2 uppercase tracking-tight">Encryption Key</h1>
+                                <p class="text-xs text-gray-500 leading-relaxed font-medium">This password is required to encrypt your private files. <b>Vision Chain does not store this key.</b></p>
                             </div>
 
-                            <div class="space-y-4 mb-8">
+                            {/* Biometric unlock button - only if passkey is saved */}
+                            <Show when={biometricAvailable() && hasPasskey()}>
+                                <button
+                                    onClick={async () => {
+                                        setPasskeyLoading(true);
+                                        try {
+                                            const pwd = await getPasswordWithBiometric(email());
+                                            if (pwd) {
+                                                setEncryptionPassword(pwd);
+                                                setShowPasswordModal(false);
+                                                setUseEncryption(true);
+                                                // Auto-resume pending operations
+                                                const pendingPreview = pendingPreviewFile();
+                                                if (pendingPreview) { setPendingPreviewFile(null); setPreviewFile(pendingPreview); }
+                                                const files = pendingFiles();
+                                                if (files && files.length > 0) { setPendingFiles(null); handleFiles(files); }
+                                            }
+                                        } catch { /* user cancelled */ }
+                                        finally { setPasskeyLoading(false); }
+                                    }}
+                                    disabled={passkeyLoading()}
+                                    class="w-full h-14 rounded-2xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 hover:border-cyan-400/40 text-white text-sm font-black uppercase tracking-tight transition-all flex items-center justify-center gap-3 mb-4"
+                                >
+                                    <Show when={passkeyLoading()} fallback={
+                                        <>
+                                            <svg class="w-6 h-6 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10v4" /><path d="M7.5 7.5C9 6 11 5 12 5s3 1 4.5 2.5" /><path d="M16.5 16.5C15 18 13 19 12 19s-3-1-4.5-2.5" /><circle cx="12" cy="12" r="3" /><path d="M2 12h3m14 0h3M12 2v3m0 14v3" /></svg>
+                                            Unlock with Biometrics
+                                        </>
+                                    }>
+                                        <div class="w-5 h-5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+                                        Authenticating...
+                                    </Show>
+                                </button>
+
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="flex-1 h-px bg-white/[0.06]" />
+                                    <span class="text-[10px] text-gray-600 font-bold uppercase">or enter manually</span>
+                                    <div class="flex-1 h-px bg-white/[0.06]" />
+                                </div>
+                            </Show>
+
+                            <div class="space-y-4 mb-6">
                                 <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all">
                                     <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Passphrase</div>
                                     <input
@@ -3385,13 +3456,23 @@ export const WalletDisk = (props: {
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         if (encryptionPassword().length < 4) {
                                             alert('Password must be at least 4 characters.');
                                             return;
                                         }
                                         setShowPasswordModal(false);
                                         setUseEncryption(true);
+
+                                        // Offer to save with biometric if available and not yet saved
+                                        if (biometricAvailable() && !hasPasskey()) {
+                                            const save = confirm('Save this password with biometrics (fingerprint/Face ID) for quick unlock next time?');
+                                            if (save) {
+                                                const saved = await savePasswordWithBiometric(email(), encryptionPassword());
+                                                if (saved) setHasPasskey(true);
+                                            }
+                                        }
+
                                         // Auto-resume preview with pending file
                                         const pendingPreview = pendingPreviewFile();
                                         if (pendingPreview) {
