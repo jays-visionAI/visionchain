@@ -172,6 +172,7 @@ export const WalletDisk = (props: {
     const [encryptionPassword, setEncryptionPassword] = createSignal('');
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
     const [pendingFiles, setPendingFiles] = createSignal<(FileList | File[]) | null>(null);
+    const [pendingPreviewFile, setPendingPreviewFile] = createSignal<DiskFile | null>(null);
     const [decryptingFileId, setDecryptingFileId] = createSignal('');
     const [useDistributed, setUseDistributed] = createSignal(true);
     const [preserveOriginal, setPreserveOriginal] = createSignal(false);
@@ -875,9 +876,9 @@ export const WalletDisk = (props: {
                     }
                     if (file.isEncrypted) {
                         if (!encryptionPassword()) {
+                            setPendingPreviewFile(file);
                             setShowPasswordModal(true);
                             setPreviewFile(null);
-                            alert('암호화된 파일입니다. 비밀번호를 입력해주세요.');
                             return;
                         }
                         const buffer = await blob.arrayBuffer();
@@ -966,9 +967,9 @@ export const WalletDisk = (props: {
 
                 if (file.isEncrypted) {
                     if (!encryptionPassword()) {
+                        setPendingPreviewFile(file);
                         setShowPasswordModal(true);
                         setPreviewFile(null);
-                        alert('Please enter your encryption password to preview this file.');
                         return;
                     }
                     const buffer = await blob.arrayBuffer();
@@ -2271,6 +2272,12 @@ export const WalletDisk = (props: {
                                         }
                                         setShowPasswordModal(false);
                                         setUseEncryption(true);
+                                        // Auto-resume preview with pending file
+                                        const pendingPreview = pendingPreviewFile();
+                                        if (pendingPreview) {
+                                            setPendingPreviewFile(null);
+                                            setPreviewFile(pendingPreview);
+                                        }
                                         // Auto-resume upload with pending files
                                         const files = pendingFiles();
                                         if (files && files.length > 0) {
