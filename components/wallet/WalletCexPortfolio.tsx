@@ -16,7 +16,8 @@ import {
     Key,
     HelpCircle,
     Copy,
-    ExternalLink
+    ExternalLink,
+    Activity
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useI18n } from '../../i18n/i18nContext';
@@ -40,6 +41,11 @@ import {
     type CexAsset
 } from '../../services/cexService';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
+import { lazy } from 'solid-js';
+
+const VisionQuantEngine = lazy(() => import('../quant/VisionQuantEngine'));
+
+type CexTab = 'portfolio' | 'quant';
 
 // SVG Icons (no emoji/emoticon usage)
 const UpbitIcon = () => (
@@ -196,6 +202,9 @@ const WalletCexPortfolio = (): JSX.Element => {
 
     // View mode
     const [viewCurrency, setViewCurrency] = createSignal<'krw' | 'usd'>('krw');
+
+    // Top-level tab
+    const [activeTab, setActiveTab] = createSignal<CexTab>('portfolio');
 
     // === Data Loading ===
     const loadData = async () => {
@@ -367,6 +376,38 @@ const WalletCexPortfolio = (): JSX.Element => {
                     }
                 />
 
+                {/* Tab Navigation */}
+                <Show when={hasCredentials() && !isLoading()}>
+                    <div class="flex items-center gap-1 bg-[#111113]/40 rounded-xl p-1 border border-white/[0.04]">
+                        <button
+                            onClick={() => setActiveTab('portfolio')}
+                            class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === 'portfolio'
+                                    ? 'bg-white/[0.08] text-white shadow-lg'
+                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                                }`}
+                        >
+                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                                <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                            </svg>
+                            Portfolio
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('quant')}
+                            class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === 'quant'
+                                    ? 'bg-white/[0.08] text-white shadow-lg'
+                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                                }`}
+                        >
+                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 3v18h18" /><path d="M7 16l4-8 4 4 5-9" />
+                            </svg>
+                            Quant
+                            <span class="text-[8px] font-black px-1 py-0.5 bg-amber-500/20 text-amber-400 rounded border border-amber-500/20">BETA</span>
+                        </button>
+                    </div>
+                </Show>
+
                 {/* Error Banner */}
                 <Show when={error()}>
                     <div class="flex items-center gap-3 px-4 py-3 bg-red-500/8 border border-red-500/15 rounded-2xl">
@@ -420,15 +461,17 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <ChevronRight class="w-4 h-4 text-gray-600 ml-auto group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
                             </button>
                             <button
-                                onClick={() => { setAddExchange('bithumb'); setShowAddModal(true); setRegisterError(''); setRegisterSuccess(''); }}
-                                class="flex-1 flex items-center gap-3 p-4 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-orange-500/20 rounded-2xl transition-all group"
+                                onClick={() => { setAddExchange('binance'); setShowAddModal(true); setRegisterError(''); setRegisterSuccess(''); }}
+                                class="flex-1 flex items-center gap-3 p-4 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-yellow-500/20 rounded-2xl transition-all group"
                             >
-                                <div class="p-2.5 bg-[#F37021]/20 rounded-xl"><BithumbIcon /></div>
-                                <div class="text-left">
-                                    <div class="text-sm font-black text-white">Bithumb</div>
-                                    <div class="text-[10px] text-gray-500">{t('cex.koreanExchange')}</div>
+                                <div class="p-2.5 bg-yellow-500/20 rounded-xl">
+                                    <div class="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-yellow-300">B</div>
                                 </div>
-                                <ChevronRight class="w-4 h-4 text-gray-600 ml-auto group-hover:text-orange-400 group-hover:translate-x-0.5 transition-all" />
+                                <div class="text-left">
+                                    <div class="text-sm font-black text-white">Binance</div>
+                                    <div class="text-[10px] text-gray-500">Global Exchange</div>
+                                </div>
+                                <ChevronRight class="w-4 h-4 text-gray-600 ml-auto group-hover:text-yellow-400 group-hover:translate-x-0.5 transition-all" />
                             </button>
                         </div>
 
@@ -445,8 +488,13 @@ const WalletCexPortfolio = (): JSX.Element => {
                     </div>
                 </Show>
 
+                {/* Quant Tab */}
+                <Show when={!isLoading() && hasCredentials() && activeTab() === 'quant'}>
+                    <VisionQuantEngine />
+                </Show>
+
                 {/* Portfolio Dashboard (when connected) */}
-                <Show when={!isLoading() && hasCredentials()}>
+                <Show when={!isLoading() && hasCredentials() && activeTab() === 'portfolio'}>
                     {/* Connected Exchanges */}
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">

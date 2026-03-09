@@ -8,13 +8,14 @@ const cexFunctions = getFunctions(getFirebaseApp(), 'asia-northeast3');
 // Type Definitions
 // =============================================================================
 
-export type SupportedExchange = 'upbit' | 'bithumb' | 'binance' | 'bybit' | 'bitget' | 'okx' | 'kucoin' | 'mexc' | 'bitkub';
+export type SupportedExchange = 'upbit' | 'bithumb' | 'binance' | 'bybit' | 'bitget' | 'okx' | 'kucoin' | 'mexc' | 'bitkub' | 'coinbase' | 'bitflyer' | 'gmo' | 'coincheck' | 'coinone' | 'cryptocom';
 
 export const SUPPORTED_EXCHANGES: SupportedExchange[] = [
     'upbit', 'bithumb', 'binance', 'bybit', 'bitget', 'okx', 'kucoin', 'mexc', 'bitkub',
+    'coinbase', 'bitflyer', 'gmo', 'coincheck', 'coinone', 'cryptocom',
 ];
 
-export const PASSPHRASE_EXCHANGES: SupportedExchange[] = ['bitget', 'okx', 'kucoin'];
+export const PASSPHRASE_EXCHANGES: SupportedExchange[] = ['bitget', 'okx', 'kucoin', 'cryptocom'];
 
 export const EXCHANGE_LABELS: Record<SupportedExchange, string> = {
     upbit: 'Upbit',
@@ -26,13 +27,19 @@ export const EXCHANGE_LABELS: Record<SupportedExchange, string> = {
     kucoin: 'KuCoin',
     mexc: 'MEXC',
     bitkub: 'Bitkub',
+    coinbase: 'Coinbase',
+    bitflyer: 'bitFlyer',
+    gmo: 'GMO Coin',
+    coincheck: 'Coincheck',
+    coinone: 'Coinone',
+    cryptocom: 'Crypto.com',
 };
 
 export interface ExchangeCapabilities {
     spot: boolean;
     futures: boolean;
     margin: boolean;
-    baseCurrency: 'KRW' | 'USDT' | 'THB';
+    baseCurrency: 'KRW' | 'USDT' | 'THB' | 'USD' | 'JPY';
 }
 
 export interface CexCredential {

@@ -98,7 +98,9 @@ const sections: Section[] = [
         id: 'cex', title: 'CEX Portfolio', icon: '9',
         children: [
             { id: 'cex-connect', title: 'Connecting Exchanges' },
+            { id: 'cex-exchanges', title: 'Supported Exchanges' },
             { id: 'cex-portfolio', title: 'Portfolio Overview' },
+            { id: 'cex-quant', title: 'Quant Engine (BETA)' },
             { id: 'cex-security', title: 'Security & IP Whitelist' },
         ]
     },
@@ -962,64 +964,466 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         // ─── CEX Portfolio ───
         case 'cex-connect': return (
             <div class="space-y-6">
-                <SectionHeader title="Connecting Your Exchange" desc="Link your Upbit or Bithumb account to view all crypto holdings in one unified dashboard." />
-                <Prerequisites items={['An active account on Upbit or Bithumb', 'API key and Secret key generated from the exchange (read-only recommended)', 'The server IP address whitelisted on your exchange API settings']} />
-                <StepList steps={[
-                    { title: 'Open CEX Portfolio', desc: 'From the sidebar menu, tap "CEX Portfolio" to open the exchange integration page.' },
-                    { title: 'Tap "Add Exchange"', desc: 'Click the "Add Exchange" button. A modal form appears with fields for exchange selection, API key, and Secret key.' },
-                    { title: 'Select Exchange', desc: 'Choose either "Upbit" or "Bithumb" from the dropdown. Each exchange has its own icon displayed next to the name.' },
-                    { title: 'Enter API Key & Secret', desc: 'Paste your API Key and Secret Key into the respective fields. These are generated from your exchange account settings under "API Management".' },
-                    { title: 'Whitelist Server IP', desc: 'The modal displays the server IP address that needs to be whitelisted on your exchange. Tap the copy icon next to the IP address, then add it to your exchange API whitelist. This ensures only our server can read your data.' },
-                    { title: 'Click "Connect"', desc: 'The system verifies your credentials by making a test API call. On success, your exchange appears in the connected list and portfolio data syncs automatically.' },
+                <SectionHeader title="Connecting Your Exchange" desc="Link your centralized exchange account to Vision Chain using API credentials. Vision Chain supports 15 exchanges across Korea, Japan, USA, and global markets." />
+
+                <Prerequisites items={[
+                    'An active, verified account on a supported exchange (identity verification completed)',
+                    'API Key and Secret Key generated from the exchange (read-only / balance inquiry permission)',
+                    'Passphrase (required only for Bitget, OKX, KuCoin, and Crypto.com)',
+                    'Server IP address whitelisted in your exchange API settings (varies by exchange)',
+                    'PC or desktop browser recommended for initial API key setup on most exchanges',
                 ]} />
-                <Warning><>Only use read-only API keys. Never enable trading or withdrawal permissions. Vision Chain only reads balance data and never executes trades or withdrawals on your behalf.</></Warning>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Step-by-Step Connection Guide</h3>
+                <StepList steps={[
+                    { title: 'Navigate to CEX Portfolio', desc: 'Open the sidebar menu and tap "CEX Portfolio". If you have no exchanges connected yet, you will see the empty state with quick-connect cards for Upbit and Binance.' },
+                    { title: 'Open the "Add Exchange" Modal', desc: 'Tap the "+" button in the header (or one of the quick-connect exchange cards). A modal will appear showing all 15 supported exchanges arranged in a 3-column grid.' },
+                    { title: 'Select Your Exchange', desc: 'Tap on the exchange you want to connect. The selected exchange will be highlighted with a cyan border. Exchanges are sorted by region and popularity.' },
+                    { title: 'Enter API Key', desc: 'Paste your API Key (also called "Access Key" on some exchanges) into the first credential field. This key is a public identifier and does not grant access alone.' },
+                    { title: 'Enter Secret Key', desc: 'Paste your Secret Key into the password field. You can toggle visibility using the eye icon. This key is shown only once during creation on most exchanges -- store it securely.' },
+                    { title: 'Enter Passphrase (if required)', desc: 'For Bitget, OKX, KuCoin, and Crypto.com, an additional "Passphrase" field appears automatically. Enter the passphrase you set during API key creation on the exchange. This cannot be recovered if lost.' },
+                    { title: 'Optional: Add a Label', desc: 'Give this connection a descriptive name (e.g., "My Main Binance" or "Upbit Trading Account"). This helps identify connections when you have multiple exchanges or accounts.' },
+                    { title: 'Click "Connect"', desc: 'The system sends a test API call to verify your credentials. If successful, your exchange will appear in the connected exchanges list and portfolio data will sync automatically within a few seconds.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">API Authentication Types</h3>
+                <div class="space-y-3">
+                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                        <h4 class="text-sm font-bold text-white mb-2">2-Field Authentication (API Key + Secret)</h4>
+                        <p class="text-xs text-gray-400 mb-2">Used by: Upbit, Bithumb, Coinone, Binance, Bybit, MEXC, Coinbase, bitFlyer, GMO Coin, Coincheck, Bitkub</p>
+                        <p class="text-xs text-gray-500">Standard API authentication requiring an API Key (public) and Secret Key (private). The Secret Key is encrypted on our server and never stored in plaintext or sent to the client after initial registration.</p>
+                    </div>
+                    <div class="bg-[#0a0a12] border border-amber-500/10 rounded-xl p-5">
+                        <h4 class="text-sm font-bold text-amber-400 mb-2">3-Field Authentication (API Key + Secret + Passphrase)</h4>
+                        <p class="text-xs text-gray-400 mb-2">Used by: Bitget, OKX, KuCoin, Crypto.com</p>
+                        <p class="text-xs text-gray-500">These exchanges require an additional passphrase that acts as a third layer of security. The passphrase is set by you during API key creation on the exchange website and must be entered exactly as created. If you forget your passphrase, you will need to create a new API key on the exchange.</p>
+                    </div>
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelist Setup</h3>
+                <p class="text-sm text-gray-400 mb-3">Most exchanges require (or strongly recommend) restricting API access to specific IP addresses. Vision Chain provides a static server IP for this purpose.</p>
+                <StepList steps={[
+                    { title: 'View the Server IP', desc: 'Tap the "?" help icon on the CEX Portfolio page. The IP Setup Guide modal will display the static server IP address prominently at the top.' },
+                    { title: 'Copy the IP Address', desc: 'Tap the "Copy" button next to the IP address. The IP will be copied to your clipboard.' },
+                    { title: 'Add to Exchange API Settings', desc: 'Go to your exchange\'s API management page. Find the IP whitelist or IP restriction section for your API key. Paste the copied IP address and save.' },
+                    { title: 'Verify Connection', desc: 'Return to Vision Chain and connect your exchange. If the IP is correctly whitelisted, the verification test will succeed immediately.' },
+                ]} />
+
+                <Warning><>Only use read-only API keys. Never enable trading, withdrawal, or transfer permissions. Vision Chain only reads balance and ticker data. Never executes trades or withdrawals on your behalf. Your funds remain fully under your control at all times.</></Warning>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Troubleshooting</h3>
+                <div class="space-y-3">
+                    {[
+                        { q: 'Connection fails with "Invalid API Key"', a: 'Double-check that you copied the full API Key and Secret Key without trailing spaces. Some exchanges display keys in multiple lines -- make sure you copy the complete string.' },
+                        { q: 'Connection fails with "IP not whitelisted"', a: 'Ensure you added the correct server IP to your exchange API settings. Some exchanges take 1-2 minutes for IP whitelist changes to propagate.' },
+                        { q: 'Connection fails with "Permission denied"', a: 'Your API key may not have the required read/balance permissions. Re-create the API key on the exchange with at least "Read" or "Balance Inquiry" permission enabled.' },
+                        { q: 'Passphrase error on Bitget/OKX/KuCoin', a: 'The passphrase must match exactly (case-sensitive) what you set during API key creation. If unsure, create a new API key with a known passphrase.' },
+                    ].map(item => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4">
+                            <h4 class="text-xs font-bold text-red-400 mb-1">{item.q}</h4>
+                            <p class="text-[11px] text-gray-400">{item.a}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+        case 'cex-exchanges': return (
+            <div class="space-y-6">
+                <SectionHeader title="Supported Exchanges" desc="Vision Chain supports 15 centralized exchanges across Korea, Japan, USA, and global markets. Each exchange uses read-only API access for portfolio tracking." />
+
+                {/* Full Exchange Compatibility Table */}
+                <h3 class="text-lg font-bold text-white mb-3">Exchange Compatibility Matrix</h3>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="grid grid-cols-12 gap-2 px-5 py-3 border-b border-white/[0.06] text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                        <div class="col-span-3">Exchange</div>
+                        <div class="col-span-2">Region</div>
+                        <div class="col-span-2">Base CCY</div>
+                        <div class="col-span-2">Spot</div>
+                        <div class="col-span-3">Passphrase</div>
+                    </div>
+                    {[
+                        { n: 'Upbit', r: 'Korea', b: 'KRW', p: false },
+                        { n: 'Bithumb', r: 'Korea', b: 'KRW', p: false },
+                        { n: 'Coinone', r: 'Korea', b: 'KRW', p: false },
+                        { n: 'Binance', r: 'Global', b: 'USDT', p: false },
+                        { n: 'Bybit', r: 'Global', b: 'USDT', p: false },
+                        { n: 'Bitget', r: 'Global', b: 'USDT', p: true },
+                        { n: 'OKX', r: 'Global', b: 'USDT', p: true },
+                        { n: 'KuCoin', r: 'Global', b: 'USDT', p: true },
+                        { n: 'MEXC', r: 'Global', b: 'USDT', p: false },
+                        { n: 'Coinbase', r: 'USA', b: 'USD', p: false },
+                        { n: 'Crypto.com', r: 'Global', b: 'USDT', p: true },
+                        { n: 'bitFlyer', r: 'Japan', b: 'JPY', p: false },
+                        { n: 'GMO Coin', r: 'Japan', b: 'JPY', p: false },
+                        { n: 'Coincheck', r: 'Japan', b: 'JPY', p: false },
+                        { n: 'Bitkub', r: 'Thailand', b: 'THB', p: false },
+                    ].map(ex => (
+                        <div class="grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-white/[0.03] hover:bg-white/[0.02]">
+                            <span class="col-span-3 text-sm font-bold text-white">{ex.n}</span>
+                            <span class="col-span-2 text-xs text-gray-400">{ex.r}</span>
+                            <span class="col-span-2 text-xs text-cyan-400 font-mono">{ex.b}</span>
+                            <span class="col-span-2 text-xs text-green-400">Yes</span>
+                            <span class="col-span-3 text-xs text-gray-400">{ex.p ? 'Required' : 'Not needed'}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Regional Breakdown */}
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Exchange Details by Region</h3>
+
+                {/* Korean Exchanges */}
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5 space-y-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-cyan-400 uppercase tracking-widest px-2 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">Korea</span>
+                        <span class="text-sm font-bold text-white">Korean Exchanges (KRW)</span>
+                    </div>
+                    {[
+                        { name: 'Upbit', url: 'upbit.com/mypage/open_api_management', notes: 'Largest Korean exchange by volume. API key generation requires 2FA (OTP). IP whitelisting is mandatory. Only read-only (balance inquiry) permissions should be granted. API keys expire after 90 days by default.' },
+                        { name: 'Bithumb', url: 'bithumb.com/api_support/management_api', notes: 'Second-largest Korean exchange. API key is generated from the API Management page. Requires identity verification (Level 2+). IP whitelist must include our server IP. Read permission only required.' },
+                        { name: 'Coinone', url: 'coinone.co.kr/developer/app', notes: 'Korean exchange supporting KRW trading pairs. API keys are created via the Developer App menu. Requires OAuth2-style app creation. Select "Account" scope for balance reading. No passphrase needed.' },
+                    ].map(ex => (
+                        <div class="pl-3 border-l-2 border-cyan-500/20 space-y-1">
+                            <div class="text-sm font-bold text-white">{ex.name}</div>
+                            <p class="text-xs text-gray-400 leading-relaxed">{ex.notes}</p>
+                            <a href={`https://${ex.url}`} target="_blank" rel="noopener" class="text-[10px] text-cyan-400 hover:underline">{ex.url}</a>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Global Exchanges */}
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5 space-y-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-green-400 uppercase tracking-widest px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg">Global</span>
+                        <span class="text-sm font-bold text-white">Global Exchanges (USDT)</span>
+                    </div>
+                    {[
+                        { name: 'Binance', notes: 'World\'s largest exchange. Navigate to API Management under Account settings. Create a new API key with "Read Only" access. Restrict to our server IP. No passphrase required. API keys can be set to never expire.' },
+                        { name: 'Bybit', notes: 'Major derivatives and spot exchange. Create API key from Account & Security > API Management. Enable "Read-Only" permissions. IP restriction is recommended. Supports both Unified and Standard accounts.' },
+                        { name: 'Bitget', notes: 'Requires API Key + Secret Key + Passphrase (3-field auth). The passphrase is set during API creation and cannot be recovered later. Enable "Read" permission only. IP whitelist required for security.' },
+                        { name: 'OKX', notes: 'Requires API Key + Secret Key + Passphrase (3-field auth). Create from Account > API under "Trade" section. Select "Read" permission. Passphrase must be 8-32 characters. Supports sub-accounts.' },
+                        { name: 'KuCoin', notes: 'Requires API Key + Secret Key + Passphrase (3-field auth). Navigate to API Management in account settings. Set a trading passphrase during creation. Select "General" permission for balance reading.' },
+                        { name: 'MEXC', notes: 'Go to Account > API Management to create keys. Grant "Read" permission only. IP restriction available. No passphrase needed. Keys support both spot and futures reading.' },
+                        { name: 'Crypto.com', notes: 'Requires API Key + Secret Key + Passphrase (3-field auth). Go to Settings > API Keys in the Crypto.com Exchange (not the Crypto.com App). Read-only access recommended.' },
+                    ].map(ex => (
+                        <div class="pl-3 border-l-2 border-green-500/20 space-y-1">
+                            <div class="text-sm font-bold text-white">{ex.name}</div>
+                            <p class="text-xs text-gray-400 leading-relaxed">{ex.notes}</p>
+                        </div>
+                    ))}
+                </div>
+
+                {/* US & Japan & Thailand */}
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5 space-y-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-purple-400 uppercase tracking-widest px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded-lg">US / Japan / Thailand</span>
+                        <span class="text-sm font-bold text-white">Regional Exchanges (USD / JPY / THB)</span>
+                    </div>
+                    {[
+                        { name: 'Coinbase', ccy: 'USD', notes: 'Largest US exchange. Uses Coinbase Advanced Trade API. Create API key from Settings > API. Select "View" permission for portfolio data. No passphrase needed. Portfolio values are quoted in USD and converted to KRW using real-time CoinGecko rates.' },
+                        { name: 'bitFlyer', ccy: 'JPY', notes: 'Japan\'s leading exchange. API key created from bitFlyer Lightning under API settings. Provides balance inquiry and ticker data in JPY. IP whitelist supported. Values auto-converted to KRW via JPY/KRW exchange rate.' },
+                        { name: 'GMO Coin', ccy: 'JPY', notes: 'Japanese exchange operated by GMO Internet Group. API key from Account > API settings. Read-only permission for asset balances. JPY values are converted to KRW using real-time exchange rates from CoinGecko.' },
+                        { name: 'Coincheck', ccy: 'JPY', notes: 'Japanese exchange with simple API setup. Create keys from Settings > API. Supports balance reading and order book data. All JPY-denominated values are automatically converted to KRW.' },
+                        { name: 'Bitkub', ccy: 'THB', notes: 'Thailand\'s largest exchange. API keys from Bitkub.com under API Key menu. Thai Baht (THB) values are converted to KRW using CoinGecko exchange rates. Read-only access only.' },
+                    ].map(ex => (
+                        <div class="pl-3 border-l-2 border-purple-500/20 space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-bold text-white">{ex.name}</span>
+                                <span class="text-[9px] font-mono text-purple-400 px-1.5 py-0.5 bg-purple-500/10 rounded">{ex.ccy}</span>
+                            </div>
+                            <p class="text-xs text-gray-400 leading-relaxed">{ex.notes}</p>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Multi-Currency Conversion */}
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Multi-Currency Conversion Engine</h3>
+                <p class="text-sm text-gray-400 mb-4">All portfolio values are automatically converted to KRW and USD using real-time exchange rates fetched from CoinGecko. The conversion pipeline works as follows:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'KRW-based exchanges', d: 'Upbit, Bithumb, Coinone: Prices are natively in KRW. No conversion needed for KRW display. USD value = KRW value / USD_KRW rate.' },
+                        { n: 'USDT-based exchanges', d: 'Binance, Bybit, OKX, Bitget, KuCoin, MEXC, Crypto.com: Prices in USDT. KRW value = USDT price x USDT_KRW rate (fetched from CoinGecko tether price in KRW).' },
+                        { n: 'USD-based exchanges', d: 'Coinbase: Prices in USD. KRW value = USD price x USD_KRW rate. USD_KRW rate is fetched from CoinGecko USD-KRW pair.' },
+                        { n: 'JPY-based exchanges', d: 'bitFlyer, GMO, Coincheck: Prices in JPY. KRW value = JPY price x JPY_KRW rate. The JPY_KRW rate is derived from CoinGecko API.' },
+                        { n: 'THB-based exchanges', d: 'Bitkub: Prices in THB. KRW value = THB price x THB_KRW rate. Exchange rates are cached for 5 minutes to minimize API calls.' },
+                    ].map(item => (
+                        <div class="flex items-start gap-3 px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-bold text-white whitespace-nowrap min-w-[180px]">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <Tip><>You can connect multiple exchanges simultaneously. Assets with the same symbol from different exchanges are aggregated into a single row with source exchange badges. The toggle switch at the top lets you view values in either KRW or USD.</></Tip>
             </div>
         );
         case 'cex-portfolio': return (
             <div class="space-y-6">
-                <SectionHeader title="Portfolio Overview" desc="Understanding the unified portfolio view with charts, asset breakdown, and sync controls." />
-                <p class="text-sm text-gray-400 mb-3">After connecting at least one exchange, the CEX Portfolio page shows your aggregated holdings:</p>
+                <SectionHeader title="Portfolio Overview" desc="A unified view of all your crypto holdings across connected exchanges, with real-time valuation, charts, and P&L tracking." />
+
+                <p class="text-sm text-gray-400 mb-3">After connecting at least one exchange, you will see the Portfolio dashboard as the default view. The page is organized into three main sections: Summary Cards, Asset Allocation Chart, and Asset List.</p>
+
+                <h3 class="text-lg font-bold text-white mt-4 mb-3">Dashboard Layout</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
-                        { n: 'Total Portfolio Value', d: 'Combined value of all connected exchanges displayed in both KRW and USD. Conversion uses real-time exchange rate.' },
-                        { n: 'Donut Chart', d: 'Visual SVG asset allocation chart. Each coin gets a proportional colored segment. Hover to see percentage and value.' },
-                        { n: 'Asset List', d: 'Detailed table showing: Coin name/icon, balance amount, current value (KRW & USD), 24h change percentage with color (green=up, red=down).' },
-                        { n: 'Exchange Badges', d: 'Each asset shows which exchange it belongs to (Upbit icon or Bithumb icon).' },
-                        { n: 'Coin Icons', d: 'Automatically loaded from CoinGecko API based on coin symbol for visual identification.' },
+                        { n: 'Tab Navigation', d: 'At the top of the page, two tabs are available: "Portfolio" (default, showing your assets) and "Quant" (BETA, for strategy trading). The Portfolio tab is active by default.' },
+                        { n: 'Total Portfolio Value', d: 'Displays the combined value of all connected exchange assets. Shown in KRW by default with a toggle button to switch to USD. Updates on each sync.' },
+                        { n: 'P&L Indicator', d: 'Shows the percentage change since the last sync. Green arrow and text for positive returns, red for negative. Calculated by comparing current total value vs. previous snapshot.' },
+                        { n: 'Connected Exchanges', d: 'A horizontal list of all connected exchanges with their individual total values. Each shows the exchange label, masked API key (last 4 characters), and a sync/delete action.' },
+                        { n: 'Donut Chart', d: 'Interactive SVG pie chart showing asset allocation by percentage. Each coin gets a unique color segment. The center displays the total portfolio value. Segment labels show coin name and percentage.' },
+                        { n: 'Asset Table', d: 'Scrollable list of all assets sorted by value (descending). Each row shows: coin name with icon, balance quantity, current price, total value (KRW/USD), P&L percentage, and source exchange badge.' },
+                        { n: 'Exchange Source Badge', d: 'A small icon or letter badge next to each asset indicating which exchange holds it. If the same coin exists on multiple exchanges, all badges are shown.' },
+                        { n: 'Coin Icons', d: 'Automatically loaded from CoinGecko CDN based on the coin symbol. If an icon is not found, a fallback letter avatar (first letter of coin name) is displayed.' },
                     ].map(item => (
-                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
-                            <span class="text-sm font-medium text-white">{item.n}</span>
-                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        <div class="flex items-start gap-3 px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-bold text-white whitespace-nowrap min-w-[180px]">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Syncing Data</h3>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Syncing Portfolio Data</h3>
+                <p class="text-sm text-gray-400 mb-3">Portfolio data is fetched from each exchange via their official REST APIs through our Cloud Functions server. Here is how the sync process works:</p>
                 <StepList steps={[
-                    { title: 'Manual Sync', desc: 'Tap the "Sync" button (refresh icon) to fetch the latest balances from all connected exchanges. A loading spinner shows while syncing.' },
-                    { title: 'Auto-refresh', desc: 'Portfolio snapshots are saved with timestamps. The "Last synced" timestamp shows at the bottom of the page.' },
-                    { title: 'View History', desc: 'Previous portfolio snapshots are stored, allowing you to track portfolio changes over time.' },
+                    { title: 'Manual Sync', desc: 'Tap the "Sync" button (refresh icon) at the top-right of the page. The system calls each connected exchange\'s API in parallel to fetch latest balances and ticker data. A loading spinner shows while syncing.' },
+                    { title: 'Data Processing', desc: 'For each exchange, the server fetches: (1) Account balances for all coins, (2) Current ticker prices for all held assets, (3) Average buy prices where available. Values are then converted to KRW using the multi-currency conversion engine.' },
+                    { title: 'Snapshot Storage', desc: 'Each sync creates a portfolio snapshot saved to Firestore with a timestamp. This allows historical tracking and P&L comparisons over time.' },
+                    { title: 'Last Synced Timestamp', desc: 'The "Last synced" text at the bottom of the page shows the exact time of the most recent successful sync. This helps you know how fresh the data is.' },
                 ]} />
-                <Tip><>Sync your portfolio before and after major trades to keep your dashboard accurate. Data is cached to minimize API calls to exchanges.</></Tip>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Managing Connected Exchanges</h3>
+                <div class="space-y-3">
+                    {[
+                        { n: 'Adding More Exchanges', d: 'You can connect up to 15 different exchanges (and multiple accounts on the same exchange). Each connection is independent with its own API credentials.' },
+                        { n: 'Removing an Exchange', d: 'Tap the trash icon next to any connected exchange. A confirmation dialog appears. Upon confirmation, the encrypted API credentials are permanently deleted from our server. The API key on the exchange remains active until you revoke it manually.' },
+                        { n: 'Labeling Connections', d: 'Each connection can have an optional label (e.g., "Main Trading" or "Long-term Hold"). This is helpful when connecting multiple accounts from the same exchange.' },
+                        { n: 'Re-syncing Individual Exchanges', d: 'The sync button refreshes all connected exchanges at once. Individual exchange sync is not currently supported -- all exchanges sync together.' },
+                    ].map(item => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4">
+                            <h4 class="text-sm font-bold text-white mb-1">{item.n}</h4>
+                            <p class="text-xs text-gray-400">{item.d}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <Tip><>Sync your portfolio regularly, especially before and after major trades. Portfolio snapshots are compared to calculate P&L, so more frequent syncs give more accurate performance tracking. Exchange rate data is cached for 5 minutes to minimize external API calls.</></Tip>
+            </div>
+        );
+        case 'cex-quant': return (
+            <div class="space-y-6">
+                <SectionHeader title="Quant Engine - Strategy Settings" desc="Configure and deploy automated trading strategies on your connected exchanges. The Quant Engine provides 6 research-backed strategy templates with full parameter control." />
+                <Note><>Quant Engine is currently in BETA. Connect at least one exchange via CEX Portfolio to access Quant features. Access it by switching to the "Quant" tab in the CEX Portfolio page.</></Note>
+
+                <h3 class="text-lg font-bold text-white mt-4 mb-3">How to Access</h3>
+                <StepList steps={[
+                    { title: 'Open CEX Portfolio', desc: 'Navigate to CEX Portfolio from the sidebar. You must have at least one exchange connected.' },
+                    { title: 'Switch to Quant Tab', desc: 'At the top of the page, tap the "Quant" tab (with the BETA badge). The tab navigation shows "Portfolio" and "Quant" side by side.' },
+                    { title: 'Browse Strategy Templates', desc: 'The Quant Engine displays 6 pre-built strategy template cards. Each card shows the strategy name, category, risk level, recommended assets, and 30-day average return.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Available Strategy Templates (6 Modules)</h3>
+                <p class="text-sm text-gray-400 mb-4">Each strategy is designed for explainability, controllability, and risk engine compatibility. Below are the details for all 6 built-in strategies:</p>
+
+                {/* Strategy 1 */}
+                <div class="bg-[#0a0a12] border border-green-500/10 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-black text-white">Module 1: Conservative Trend Core</h4>
+                            <span class="text-[10px] text-gray-500">Category: Trend Following</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg">LOW RISK</span>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">Time-series momentum strategy using EMA crossover with volume and volatility filters. Enters only when the long-term trend is confirmed (price above 200 EMA) and market conditions are favorable. Designed for capital preservation with moderate upside capture.</p>
+                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div class="text-gray-500"><span class="text-white font-bold">Entry:</span> EMA 20/50 crossover + 200 EMA trend + volume confirmation</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Exit:</span> 4% stop-loss, 8% take-profit, 2.5% trailing stop</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Best in:</span> Strong trending markets with clear momentum</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Weak in:</span> Choppy sideways markets with frequent whipsaws</div>
+                    </div>
+                </div>
+
+                {/* Strategy 2 */}
+                <div class="bg-[#0a0a12] border border-yellow-500/10 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-black text-white">Module 2: Bollinger Mean Reversion Guarded</h4>
+                            <span class="text-[10px] text-gray-500">Category: Mean Reversion</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-lg">MEDIUM RISK</span>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">Enters when price bounces back from the lower Bollinger Band with RSI recovery confirmation. A trend filter prevents entries during strong downtrends. Includes partial exit at the mid-band and full exit at the upper band.</p>
+                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div class="text-gray-500"><span class="text-white font-bold">Entry:</span> Bollinger lower band reentry + RSI oversold recovery</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Exit:</span> 3% stop-loss, band-based partial exit</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Best in:</span> Range-bound markets with clear support/resistance</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Weak in:</span> Strong directional trends breaking bands</div>
+                    </div>
+                </div>
+
+                {/* Strategy 3 */}
+                <div class="bg-[#0a0a12] border border-yellow-500/10 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-black text-white">Module 3: RSI Reversal Filtered</h4>
+                            <span class="text-[10px] text-gray-500">Category: Mean Reversion</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-lg">MEDIUM RISK</span>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">A safer version of the classic RSI strategy. Never enters on RSI signal alone -- requires MACD histogram improvement or short-term price recovery as confirmation. Includes scale-in logic and consecutive loss auto-pause (3 losses triggers cooldown).</p>
+                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div class="text-gray-500"><span class="text-white font-bold">Entry:</span> RSI below 28 then cross above 32 + MACD improving</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Exit:</span> 2.8% stop-loss, 5.5% take-profit</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Best in:</span> Markets with periodic oversold bounces</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Weak in:</span> Persistent downtrend with extended oversold RSI</div>
+                    </div>
+                </div>
+
+                {/* Strategy 4 */}
+                <div class="bg-[#0a0a12] border border-orange-500/10 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-black text-white">Module 4: Donchian Breakout Swing</h4>
+                            <span class="text-[10px] text-gray-500">Category: Breakout</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-lg">MEDIUM-HIGH</span>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">Captures strong breakouts above N-period highs with volume confirmation. Only enters long when the market is above the long-term 200 EMA trend. ATR-based dynamic stops provide adaptive risk management that adjusts to current volatility conditions.</p>
+                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div class="text-gray-500"><span class="text-white font-bold">Entry:</span> 20-period Donchian high breakout + volume 1.3x + EMA 200</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Exit:</span> 1.8x ATR stop-loss, 2.0x ATR trailing stop</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Best in:</span> Markets transitioning from consolidation to trends</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Weak in:</span> Low-volume consolidation with false breakouts</div>
+                    </div>
+                </div>
+
+                {/* Strategy 5 */}
+                <div class="bg-[#0a0a12] border border-cyan-500/10 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-black text-white">Module 5: Multi-Factor Quant Guard</h4>
+                            <span class="text-[10px] text-cyan-400 font-bold">FLAGSHIP STRATEGY</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-lg">MEDIUM RISK</span>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">Vision Chain's flagship strategy combining trend, momentum, volume, and volatility filters. Requires all 6 conditions to confirm before entry, significantly reducing false signals. Features ATR-based dynamic exit management for both stop-loss and profit-taking.</p>
+                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div class="text-gray-500"><span class="text-white font-bold">Entry:</span> 200 EMA + EMA cross + RSI 40 + MACD + volume + ATR filter</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Exit:</span> 1.6x ATR stop, 3.0x ATR profit, 2% trailing</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Best in:</span> Clear trend recovery after pullbacks</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Weak in:</span> Rapid reversals without pullback patterns</div>
+                    </div>
+                </div>
+
+                {/* Strategy 6 */}
+                <div class="bg-[#0a0a12] border border-blue-500/10 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-black text-white">Module 6: Volatility Target Overlay</h4>
+                            <span class="text-[10px] text-gray-500">Category: Risk Overlay</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg">LOW RISK</span>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">Not a signal generator -- this is a protective risk control layer that sits on top of all other strategies. Adjusts position sizes based on realized volatility (20-period window). Enforces drawdown kill switches: 3% daily and 7% weekly loss limits. Applied by default to all active strategies.</p>
+                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div class="text-gray-500"><span class="text-white font-bold">Low volatility:</span> 100% position size allowed</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Mid volatility:</span> Reduced to 70% position size</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">High volatility:</span> Reduced to 40% position size</div>
+                        <div class="text-gray-500"><span class="text-white font-bold">Extreme:</span> All positions paused (0% allocation)</div>
+                    </div>
+                </div>
+
+                {/* Parameter Configuration */}
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Configuring Strategy Parameters</h3>
+                <p class="text-sm text-gray-400 mb-3">Each strategy has tunable parameters organized into 4 groups. You can adjust these when deploying or editing a strategy agent:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Entry Parameters', d: 'Control when a trade is opened: EMA periods, RSI thresholds, Bollinger lengths, Donchian periods. Higher values = fewer but more reliable signals.' },
+                        { n: 'Filter Parameters', d: 'Additional confirmation requirements: minimum volume ratio, trend filter EMA, ATR ceiling. These reduce false signals but may miss some opportunities.' },
+                        { n: 'Exit Parameters', d: 'Define how trades are closed: stop-loss % or ATR multiple, take-profit target, trailing stop distance. Tighter stops reduce losses but increase the chance of premature exit.' },
+                        { n: 'Risk Parameters', d: 'Position sizing and loss limits: maximum position % of portfolio, daily/weekly drawdown kill switches, maximum simultaneous positions, maximum correlated positions.' },
+                    ].map(item => (
+                        <div class="flex items-start gap-3 px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-bold text-white whitespace-nowrap min-w-[160px]">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Agent Deployment */}
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Deploying a Quant Agent</h3>
+                <StepList steps={[
+                    { title: 'Select a Strategy', desc: 'Tap on any strategy card to view its full details including entry/exit rules, risk parameters, recommended assets, and historical performance.' },
+                    { title: 'Choose Target Assets', desc: 'Select which trading pairs to apply the strategy to (e.g., KRW-BTC, KRW-ETH). You can select multiple assets. The recommended assets for each strategy are pre-highlighted.' },
+                    { title: 'Tune Parameters', desc: 'Adjust the strategy parameters using the slider controls. Each parameter shows its current value, min/max range, and step size. Default values are optimized for general use.' },
+                    { title: 'Review & Deploy', desc: 'Review all settings on the confirmation screen. The agent will start monitoring the market and generating signals based on your configuration. No actual trades are executed without explicit approval.' },
+                    { title: 'Monitor Active Agents', desc: 'View all running agents in the Quant dashboard. Each agent shows: current status (active/paused), cumulative P&L, number of signals generated, and last signal time.' },
+                ]} />
+
+                <Warning><>Quant strategies involve market risk. Past performance and 30-day average returns shown on strategy cards do not guarantee future results. The Volatility Target Overlay (Module 6) is applied by default to protect against extreme drawdowns. Always start with conservative parameter settings and small position sizes.</></Warning>
             </div>
         );
         case 'cex-security': return (
             <div class="space-y-6">
-                <SectionHeader title="API Security & Best Practices" desc="How your exchange credentials are protected and best practices for secure API usage." />
-                <div class="space-y-3">
+                <SectionHeader title="Security & IP Whitelist" desc="How your exchange API credentials are protected, the data flow architecture, and best practices for secure API usage." />
+
+                <h3 class="text-lg font-bold text-white mb-3">Data Flow Architecture</h3>
+                <p class="text-sm text-gray-400 mb-3">Understanding how your API credentials are handled at each stage:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
-                        { q: 'How are my API keys stored?', a: 'API credentials are encrypted and stored in Firebase Firestore. The Secret Key is never displayed in full after initial entry -- it is partially masked with asterisks.' },
-                        { q: 'Can Vision Chain trade on my behalf?', a: 'No. The system only uses read-only API access to fetch balances. It cannot and will not execute any trades, withdrawals, or account changes.' },
-                        { q: 'What is IP whitelisting?', a: 'Exchanges allow you to restrict API access to specific IP addresses. By whitelisting only our server IP, you ensure that even if someone obtains your API key, they cannot use it from a different server.' },
-                        { q: 'How do I disconnect an exchange?', a: 'Tap the trash icon next to a connected exchange. A confirmation dialog appears. After confirming, the API credentials are permanently deleted from our server. The exchange-side API key remains valid until you revoke it on the exchange.' },
-                        { q: 'What if my API key expires?', a: 'Some exchanges rotate API keys periodically. If sync fails, delete the old connection and add a new one with fresh API credentials.' },
+                        { n: 'Step 1: Registration', d: 'When you enter API credentials, they are sent over HTTPS to our Cloud Function endpoint. The Secret Key and Passphrase are immediately encrypted using AES-256 before storage.' },
+                        { n: 'Step 2: Storage', d: 'Encrypted credentials are stored in Firebase Firestore under your user account. The encryption key is managed by Google Cloud KMS. Only the Cloud Function service account can decrypt.' },
+                        { n: 'Step 3: Sync Request', d: 'When you tap "Sync", the Cloud Function decrypts your credentials server-side, calls the exchange API to fetch balances, and returns only the portfolio data (never the raw credentials) to your browser.' },
+                        { n: 'Step 4: Client Display', d: 'Your browser only receives asset data (coin names, balances, prices). The Secret Key is never sent back to the client -- it is shown as partially masked (e.g., ****abcd) in the UI.' },
                     ].map(item => (
-                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                            <h4 class="text-sm font-bold text-white mb-1">{item.q}</h4>
-                            <p class="text-xs text-gray-400">{item.a}</p>
+                        <div class="flex items-start gap-3 px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-bold text-white whitespace-nowrap min-w-[140px]">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
                         </div>
                     ))}
                 </div>
-                <Note><>For maximum security: (1) Use read-only API keys, (2) Always whitelist our server IP, (3) Revoke API keys on the exchange if you stop using this feature, (4) Never share API keys with anyone.</></Note>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelisting Explained</h3>
+                <div class="bg-[#0a0a12] border border-cyan-500/10 rounded-xl p-5 space-y-3">
+                    <p class="text-xs text-gray-400 leading-relaxed">IP whitelisting is the most important security measure for API key protection. When you restrict your API key to our server's static IP address, only our server can make API calls using your credentials. Even if someone obtains your API Key and Secret Key, they cannot use them from any other IP address.</p>
+                    <p class="text-xs text-gray-400 leading-relaxed">Vision Chain operates from a single static IP address for all exchange API calls. This address is displayed in the "IP Setup Guide" modal (tap the "?" icon on the CEX Portfolio page). The IP is permanent and does not change.</p>
+                    <p class="text-xs text-gray-400 leading-relaxed">Some exchanges (like Upbit) require IP whitelisting as mandatory. Others (like Binance) strongly recommend it but allow unrestricted access. We recommend always enabling IP restriction regardless of whether the exchange requires it.</p>
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Frequently Asked Questions</h3>
+                <div class="space-y-3">
+                    {[
+                        { q: 'How are my API keys stored?', a: 'API credentials are encrypted using AES-256 and stored in Firebase Firestore. The Secret Key is never displayed in full after initial entry -- it is partially masked with asterisks. The encryption key is managed by Google Cloud KMS and is not accessible to application code.' },
+                        { q: 'Can Vision Chain trade on my behalf?', a: 'No. The system only uses read-only API access to fetch balances and ticker prices. It cannot and will not execute any trades, withdrawals, or account changes. We recommend only granting "Read" or "Balance Inquiry" permissions when creating API keys.' },
+                        { q: 'What is IP whitelisting?', a: 'Exchanges allow you to restrict API access to specific IP addresses. By whitelisting only our server IP, you ensure that even if someone obtains your API key, they cannot use it from a different server. This is the single most effective security measure.' },
+                        { q: 'How do I disconnect an exchange?', a: 'Tap the trash icon next to a connected exchange. A confirmation dialog appears. After confirming, the API credentials are permanently deleted from our server (not recoverable). The exchange-side API key remains valid until you revoke it on the exchange website.' },
+                        { q: 'What if my API key expires?', a: 'Some exchanges rotate API keys periodically (e.g., Upbit defaults to 90-day expiration). If sync fails due to an expired key, delete the old connection and add a new one with freshly generated API credentials from the exchange.' },
+                        { q: 'Which exchanges need a passphrase?', a: 'Bitget, OKX, KuCoin, and Crypto.com require a passphrase in addition to API Key and Secret Key. This passphrase is set by you during API key creation on the exchange and is stored encrypted alongside the Secret Key.' },
+                        { q: 'What happens if Vision Chain servers are compromised?', a: 'Even in the worst case, your API keys only have read-only access. An attacker could see your balance data but cannot move any funds. Additionally, IP whitelisting means your keys cannot be used from any other server.' },
+                        { q: 'Can I connect multiple accounts from the same exchange?', a: 'Yes. You can connect multiple API keys from the same exchange (e.g., two Binance accounts). Each connection is independent and can have its own label for identification.' },
+                    ].map(item => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <h4 class="text-sm font-bold text-white mb-1">{item.q}</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed">{item.a}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Security Best Practices Checklist</h3>
+                <div class="bg-[#0a0a12] border border-green-500/10 rounded-xl p-5">
+                    {[
+                        'Always use read-only API keys -- never enable trading or withdrawal permissions',
+                        'Whitelist our server IP on every exchange that supports it',
+                        'Set API key expiration dates where available (e.g., Upbit allows 90-day rotation)',
+                        'Revoke API keys on the exchange website if you stop using the CEX Portfolio feature',
+                        'Never share your API keys, Secret Keys, or Passphrases with anyone',
+                        'Use a unique API key for Vision Chain -- do not reuse keys used by other services',
+                        'Periodically review your connected exchanges and remove any no longer needed',
+                        'Enable 2FA/OTP on your exchange account for API key management access',
+                    ].map(item => (
+                        <div class="flex items-start gap-2 py-1.5">
+                            <svg class="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            <span class="text-xs text-gray-400">{item}</span>
+                        </div>
+                    ))}
+                </div>
             </div>
         );
 

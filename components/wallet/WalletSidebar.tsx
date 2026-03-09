@@ -57,14 +57,6 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'chat' as ViewType, label: 'Chat', icon: AiChatIcon },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
         { id: 'cex' as ViewType, label: 'CEX Portfolio', icon: BarChart3 },
-        {
-            id: 'quant' as ViewType, label: 'Quant Engine', icon: (props: any) => (
-                <svg xmlns="http://www.w3.org/2000/svg" width={props.size || 20} height={props.size || 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 3v18h18" />
-                    <path d="M7 16l4-8 4 4 5-9" />
-                </svg>
-            )
-        },
         { id: 'bridge' as ViewType, label: 'Bridge', icon: ArrowLeftRight },
         { id: 'staking' as ViewType, label: 'Earn', icon: Shield },
         { id: 'agent' as ViewType, label: 'Agent', icon: Bot },

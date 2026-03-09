@@ -7517,6 +7517,7 @@ class BithumbClient {
  */
 const SUPPORTED_EXCHANGES = [
   "upbit", "bithumb", "binance", "bybit", "bitget", "okx", "kucoin", "mexc", "bitkub",
+  "coinbase", "bitflyer", "gmo", "coincheck", "coinone", "cryptocom",
 ];
 
 /**
@@ -7532,16 +7533,22 @@ const EXCHANGE_CAPABILITIES = {
   kucoin: { spot: true, futures: true, margin: false, baseCurrency: "USDT" },
   mexc: { spot: true, futures: true, margin: false, baseCurrency: "USDT" },
   bitkub: { spot: true, futures: false, margin: false, baseCurrency: "THB" },
+  coinbase: { spot: true, futures: false, margin: false, baseCurrency: "USD" },
+  bitflyer: { spot: true, futures: false, margin: false, baseCurrency: "JPY" },
+  gmo: { spot: true, futures: false, margin: false, baseCurrency: "JPY" },
+  coincheck: { spot: true, futures: false, margin: false, baseCurrency: "JPY" },
+  coinone: { spot: true, futures: false, margin: false, baseCurrency: "KRW" },
+  cryptocom: { spot: true, futures: false, margin: false, baseCurrency: "USDT" },
 };
 
 // --- Exchange Rate Cache ---
-let _exchangeRateCache = { USDT_KRW: 1400, THB_KRW: 40 };
+let _exchangeRateCache = { USDT_KRW: 1400, THB_KRW: 40, USD_KRW: 1380, JPY_KRW: 9.5 };
 let _exchangeRateCacheAt = 0;
 const RATE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 /**
- * Get USDT→KRW and THB→KRW exchange rates
- * @return {Promise<{USDT_KRW: number, THB_KRW: number}>}
+ * Get USDT→KRW, THB→KRW, USD→KRW, JPY→KRW exchange rates
+ * @return {Promise<{USDT_KRW: number, THB_KRW: number, USD_KRW: number, JPY_KRW: number}>}
  */
 async function getExchangeRates() {
   if (Date.now() - _exchangeRateCacheAt < RATE_CACHE_TTL) {
@@ -7549,18 +7556,28 @@ async function getExchangeRates() {
   }
   try {
     const http = getAxios();
-    const resp = await http.get(
-      "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw,thb,usd",
-      { timeout: 5000 },
-    );
-    const usdtKrw = resp.data?.tether?.krw || 1400;
-    const usdtThb = resp.data?.tether?.thb || 35;
+    const [tetherResp, fxResp] = await Promise.all([
+      http.get(
+        "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw,thb,usd",
+        { timeout: 5000 },
+      ),
+      http.get(
+        "https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=krw,jpy",
+        { timeout: 5000 },
+      ),
+    ]);
+    const usdtKrw = tetherResp.data?.tether?.krw || 1400;
+    const usdtThb = tetherResp.data?.tether?.thb || 35;
+    const usdKrw = fxResp.data?.["usd-coin"]?.krw || 1380;
+    const usdJpy = fxResp.data?.["usd-coin"]?.jpy || 150;
     _exchangeRateCache = {
       USDT_KRW: usdtKrw,
       THB_KRW: usdtKrw / usdtThb,
+      USD_KRW: usdKrw,
+      JPY_KRW: usdKrw / usdJpy,
     };
     _exchangeRateCacheAt = Date.now();
-    console.log(`[CEX] Exchange rates updated: USDT/KRW=${usdtKrw}, THB/KRW=${(_exchangeRateCache.THB_KRW).toFixed(2)}`);
+    console.log(`[CEX] Exchange rates updated: USDT/KRW=${usdtKrw}, THB/KRW=${(_exchangeRateCache.THB_KRW).toFixed(2)}, USD/KRW=${usdKrw}, JPY/KRW=${(_exchangeRateCache.JPY_KRW).toFixed(2)}`);
     return _exchangeRateCache;
   } catch (err) {
     console.warn("[CEX] Exchange rate fetch failed, using cached/fallback:", err.message);
@@ -8126,6 +8143,321 @@ class BitkubClient2 {
   }
 }
 
+// --- Coinbase Advanced Trade API Client ---
+class CoinbaseClient {
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.coinbase.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const message = `${timestamp}${method.toUpperCase()}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(message).digest("hex");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = Math.floor(Date.now() / 1000).toString();
+    return {
+      "CB-ACCESS-KEY": this.accessKey,
+      "CB-ACCESS-SIGN": this._sign(ts, method, path, body),
+      "CB-ACCESS-TIMESTAMP": ts,
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/api/v3/brokerage/accounts";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    const accounts = response.data?.accounts || [];
+    return accounts
+      .filter(a => parseFloat(a.available_balance?.value || "0") > 0 || parseFloat(a.hold?.value || "0") > 0)
+      .map(a => ({
+        currency: a.currency,
+        balance: a.available_balance?.value || "0",
+        locked: a.hold?.value || "0",
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers() {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/api/v3/brokerage/market/products`, {
+      headers: this._headers("GET", "/api/v3/brokerage/market/products"),
+      timeout: 10000,
+    });
+    const products = response.data?.products || [];
+    return products
+      .filter(p => p.quote_currency_id === "USD")
+      .map(p => ({
+        market: `USD-${p.base_currency_id}`,
+        trade_price: parseFloat(p.price || "0"),
+        _baseCurrency: "USD",
+      }));
+  }
+}
+
+// --- bitFlyer Client ---
+class BitflyerClient {
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.bitflyer.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const message = `${timestamp}${method}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(message).digest("hex");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = Date.now().toString();
+    return {
+      "ACCESS-KEY": this.accessKey,
+      "ACCESS-TIMESTAMP": ts,
+      "ACCESS-SIGN": this._sign(ts, method, path, body),
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/v1/me/getbalance";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return (response.data || [])
+      .filter(b => parseFloat(b.available) > 0)
+      .map(b => ({
+        currency: b.currency_code,
+        balance: String(b.available),
+        locked: String(b.amount - b.available),
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers() {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/v1/getprices`, { timeout: 10000 });
+    return (response.data || []).map(t => ({
+      market: `JPY-${t.product_code?.replace("_JPY", "")}`,
+      trade_price: parseFloat(t.rate || t.price || "0"),
+      _baseCurrency: "JPY",
+    }));
+  }
+}
+
+// --- GMO Coin Client ---
+class GmoClient {
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.coin.z.com";
+  }
+
+  _sign(timestamp, method, path, body = "") {
+    const message = `${timestamp}${method}${path}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(message).digest("hex");
+  }
+
+  _headers(method, path, body = "") {
+    const ts = Date.now().toString();
+    return {
+      "API-KEY": this.accessKey,
+      "API-TIMESTAMP": ts,
+      "API-SIGN": this._sign(ts, method, path, body),
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const path = "/private/v1/account/assets";
+    const response = await http.get(`${this.baseUrl}${path}`, {
+      headers: this._headers("GET", path),
+      timeout: 10000,
+    });
+    return (response.data?.data || [])
+      .filter(a => parseFloat(a.amount) > 0)
+      .map(a => ({
+        currency: a.symbol,
+        balance: String(a.available),
+        locked: String(parseFloat(a.amount) - parseFloat(a.available)),
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers() {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/public/v1/ticker`, { timeout: 10000 });
+    return (response.data?.data || []).map(t => ({
+      market: `JPY-${t.symbol}`,
+      trade_price: parseFloat(t.last || "0"),
+      _baseCurrency: "JPY",
+    }));
+  }
+}
+
+// --- Coincheck Client ---
+class CoincheckClient {
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://coincheck.com";
+  }
+
+  _sign(nonce, url, body = "") {
+    const message = `${nonce}${url}${body}`;
+    return crypto.createHmac("sha256", this.secretKey).update(message).digest("hex");
+  }
+
+  _headers(url, body = "") {
+    const nonce = Date.now().toString();
+    return {
+      "ACCESS-KEY": this.accessKey,
+      "ACCESS-NONCE": nonce,
+      "ACCESS-SIGNATURE": this._sign(nonce, url, body),
+      "Content-Type": "application/json",
+    };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const url = `${this.baseUrl}/api/accounts/balance`;
+    const response = await http.get(url, {
+      headers: this._headers(url),
+      timeout: 10000,
+    });
+    const data = response.data || {};
+    const currencies = ["btc", "eth", "xrp", "ltc", "bch", "mona", "xlm", "qtum", "bat", "iost", "enj", "plt", "sand", "dot", "flr", "fnct", "dai", "wbtc", "avax", "shib", "matic"];
+    const result = [];
+    for (const c of currencies) {
+      const balance = parseFloat(data[c] || "0");
+      const reserved = parseFloat(data[`${c}_reserved`] || "0");
+      if (balance > 0 || reserved > 0) {
+        result.push({ currency: c.toUpperCase(), balance: String(balance), locked: String(reserved), avg_buy_price: "0" });
+      }
+    }
+    const jpy = parseFloat(data.jpy || "0");
+    if (jpy > 0) result.push({ currency: "JPY", balance: String(jpy), locked: String(parseFloat(data.jpy_reserved || "0")), avg_buy_price: "0" });
+    return result;
+  }
+
+  async getTickers() {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/api/rate/all`, { timeout: 10000 });
+    const data = response.data || {};
+    return Object.entries(data).map(([pair, rate]) => ({
+      market: `JPY-${pair.replace("_jpy", "").toUpperCase()}`,
+      trade_price: parseFloat(rate || "0"),
+      _baseCurrency: "JPY",
+    }));
+  }
+}
+
+// --- Coinone Client ---
+class CoinoneClient {
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.coinone.co.kr";
+  }
+
+  _sign(payload) {
+    const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
+    const sig = crypto.createHmac("sha512", this.secretKey.toUpperCase()).update(encoded).digest("hex");
+    return { encoded, sig };
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const payload = { access_token: this.accessKey, nonce: Date.now() };
+    const { encoded, sig } = this._sign(payload);
+    const response = await http.post(`${this.baseUrl}/v2.1/account/balance/all`, encoded, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-COINONE-PAYLOAD": encoded,
+        "X-COINONE-SIGNATURE": sig,
+      },
+      timeout: 10000,
+    });
+    const balances = response.data?.balances || {};
+    return Object.entries(balances)
+      .filter(([, v]) => parseFloat(v?.available || "0") > 0)
+      .map(([currency, v]) => ({
+        currency: currency.toUpperCase(),
+        balance: v.available || "0",
+        locked: String((parseFloat(v.balance || "0") - parseFloat(v.available || "0")).toFixed(8)),
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers() {
+    const http = getAxios();
+    const response = await http.get(`${this.baseUrl}/public/v2/ticker_new/KRW`, { timeout: 10000 });
+    const tickers = response.data?.tickers || [];
+    return tickers.map(t => ({
+      market: `KRW-${t.target_currency}`,
+      trade_price: parseFloat(t.last || "0"),
+      _baseCurrency: "KRW",
+    }));
+  }
+}
+
+// --- Crypto.com Client ---
+class CryptocomClient {
+  constructor(accessKey, secretKey, passphrase) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.passphrase = passphrase; // not used in v2 but kept for compatibility
+    this.baseUrl = "https://api.crypto.com/exchange/v1";
+  }
+
+  _sign(method, id, params, nonce) {
+    const sortedParams = params ? Object.keys(params).sort().reduce((acc, key) => { acc[key] = params[key]; return acc; }, {}) : {};
+    const paramString = Object.entries(sortedParams).map(([k, v]) => `${k}${v}`).join("");
+    const sigPayload = `${method}${id}${this.accessKey}${paramString}${nonce}`;
+    return crypto.createHmac("sha256", this.secretKey).update(sigPayload).digest("hex");
+  }
+
+  async getAccounts() {
+    const http = getAxios();
+    const id = Date.now();
+    const nonce = Date.now();
+    const method = "private/user-balance";
+    const sig = this._sign(method, id, {}, nonce);
+    const response = await http.post(`${this.baseUrl}/${method}`, {
+      id, method, api_key: this.accessKey, params: {}, sig, nonce,
+    }, { timeout: 10000 });
+    const positions = response.data?.result?.data?.[0]?.position_balances || [];
+    return positions
+      .filter(p => parseFloat(p.quantity) > 0)
+      .map(p => ({
+        currency: p.instrument_name?.replace("USD_", "") || p.instrument_name,
+        balance: String(parseFloat(p.quantity) - parseFloat(p.reserved_qty || "0")),
+        locked: p.reserved_qty || "0",
+        avg_buy_price: "0",
+      }));
+  }
+
+  async getTickers() {
+    const http = getAxios();
+    const response = await http.get("https://api.crypto.com/exchange/v1/public/get-tickers", { timeout: 10000 });
+    const data = response.data?.result?.data || [];
+    return data
+      .filter(t => t.i?.endsWith("_USDT"))
+      .map(t => ({
+        market: `USDT-${t.i.replace("_USDT", "")}`,
+        trade_price: parseFloat(t.a || "0"),
+        _baseCurrency: "USDT",
+      }));
+  }
+}
+
 // =============================================================================
 // EXCHANGE CLIENT FACTORY
 // =============================================================================
@@ -8149,6 +8481,12 @@ function createExchangeClient(exchange, accessKey, secretKey, passphrase = null)
     case "kucoin": return new KucoinClient(accessKey, secretKey, passphrase);
     case "mexc": return new MexcClient(accessKey, secretKey);
     case "bitkub": return new BitkubClient2(accessKey, secretKey);
+    case "coinbase": return new CoinbaseClient(accessKey, secretKey);
+    case "bitflyer": return new BitflyerClient(accessKey, secretKey);
+    case "gmo": return new GmoClient(accessKey, secretKey);
+    case "coincheck": return new CoincheckClient(accessKey, secretKey);
+    case "coinone": return new CoinoneClient(accessKey, secretKey);
+    case "cryptocom": return new CryptocomClient(accessKey, secretKey, passphrase);
     default: throw new Error(`Unsupported exchange: ${exchange}`);
   }
 }
@@ -8234,6 +8572,8 @@ async function performCexSync(uid, credentialId) {
   const rates = await getExchangeRates();
   const USD_KRW_RATE = rates.USDT_KRW || 1400;
   const THB_KRW_RATE = rates.THB_KRW || 40;
+  const FIAT_USD_KRW_RATE = rates.USD_KRW || 1380;
+  const JPY_KRW_RATE = rates.JPY_KRW || 9.5;
 
   // 2. Fetch balances
   const accounts = await client.getAccounts();
@@ -8244,12 +8584,14 @@ async function performCexSync(uid, credentialId) {
   );
 
   // 4. Fetch tickers
-  const stablecoins = ["KRW", "USDT", "USDC", "BUSD", "DAI", "THB", "USD"];
+  const stablecoins = ["KRW", "USDT", "USDC", "BUSD", "DAI", "THB", "USD", "JPY"];
   const tickerSymbols = nonZeroAssets
     .filter((a) => !stablecoins.includes(a.currency.toUpperCase()))
     .map((a) => {
       if (baseCurrency === "KRW") return `KRW-${a.currency}`;
       if (baseCurrency === "THB") return `THB-${a.currency}`;
+      if (baseCurrency === "USD") return `USD-${a.currency}`;
+      if (baseCurrency === "JPY") return `JPY-${a.currency}`;
       return `USDT-${a.currency}`;
     });
 
@@ -8270,6 +8612,10 @@ async function performCexSync(uid, credentialId) {
       currency = marketStr.replace("KRW-", "");
     } else if (baseCurrency === "THB") {
       currency = marketStr.replace("THB-", "");
+    } else if (baseCurrency === "USD") {
+      currency = marketStr.replace("USD-", "");
+    } else if (baseCurrency === "JPY") {
+      currency = marketStr.replace("JPY-", "");
     } else {
       currency = marketStr.replace("USDT-", "");
     }
@@ -8293,6 +8639,10 @@ async function performCexSync(uid, credentialId) {
       currentPriceKrw = USD_KRW_RATE;
     } else if (currencyUpper === "THB") {
       currentPriceKrw = THB_KRW_RATE;
+    } else if (currencyUpper === "USD") {
+      currentPriceKrw = FIAT_USD_KRW_RATE;
+    } else if (currencyUpper === "JPY") {
+      currentPriceKrw = JPY_KRW_RATE;
     } else if (tickerMap[a.currency]) {
       const tickerPrice = tickerMap[a.currency].trade_price ||
         tickerMap[a.currency].closing_price || 0;
@@ -8301,6 +8651,10 @@ async function performCexSync(uid, credentialId) {
         currentPriceKrw = tickerPrice;
       } else if (baseCurrency === "THB") {
         currentPriceKrw = tickerPrice * THB_KRW_RATE;
+      } else if (baseCurrency === "USD") {
+        currentPriceKrw = tickerPrice * FIAT_USD_KRW_RATE;
+      } else if (baseCurrency === "JPY") {
+        currentPriceKrw = tickerPrice * JPY_KRW_RATE;
       } else {
         // USDT base
         currentPriceKrw = tickerPrice * USD_KRW_RATE;
@@ -8317,6 +8671,10 @@ async function performCexSync(uid, credentialId) {
       avgBuyPriceKrw = avgBuyPrice * USD_KRW_RATE;
     } else if (baseCurrency === "THB" && avgBuyPrice > 0) {
       avgBuyPriceKrw = avgBuyPrice * THB_KRW_RATE;
+    } else if (baseCurrency === "USD" && avgBuyPrice > 0) {
+      avgBuyPriceKrw = avgBuyPrice * FIAT_USD_KRW_RATE;
+    } else if (baseCurrency === "JPY" && avgBuyPrice > 0) {
+      avgBuyPriceKrw = avgBuyPrice * JPY_KRW_RATE;
     }
 
     const costBasis = totalBalance * avgBuyPriceKrw;
