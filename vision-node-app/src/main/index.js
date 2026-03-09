@@ -750,6 +750,54 @@ function setupIPC() {
         sendToRenderer('node:stats', getNodeStatus());
         return { success: true, storageMaxGB: clamped };
     });
+
+    // Leaderboard: fetch top nodes from server
+    ipcMain.handle('node:getLeaderboard', async () => {
+        if (!config?.apiKey) return { success: false, error: 'Not registered' };
+        try {
+            const apiUrl = config.apiUrl || PRODUCTION_API;
+            const resp = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mobile_node.leaderboard',
+                    api_key: config.apiKey,
+                }),
+            });
+            const data = await resp.json();
+            return { success: true, ...data };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
+
+    // Claim VCN rewards
+    ipcMain.handle('node:claimVCN', async () => {
+        if (!config?.apiKey) return { success: false, error: 'Not registered' };
+        if (parseFloat(nodeStats.pendingReward) < 0.001) {
+            return { success: false, error: 'Minimum 0.001 VCN required to claim' };
+        }
+        try {
+            const apiUrl = config.apiUrl || PRODUCTION_API;
+            const resp = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mobile_node.claim_reward',
+                    api_key: config.apiKey,
+                }),
+            });
+            const data = await resp.json();
+            if (data.claimed_amount) {
+                nodeStats.pendingReward = '0';
+                nodeStats.totalEarned = data.new_balance || nodeStats.totalEarned;
+                sendToRenderer('node:stats', getNodeStatus());
+            }
+            return { success: true, ...data };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
 }
 
 // ── Singleton: only one app window ──

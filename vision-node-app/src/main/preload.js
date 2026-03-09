@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('visionNode', {
     updateConfig: (updates) => ipcRenderer.invoke('node:updateConfig', updates),
     updateStorage: (newGB) => ipcRenderer.invoke('node:updateStorage', newGB),
 
+    // Leaderboard & Rewards
+    getLeaderboard: () => ipcRenderer.invoke('node:getLeaderboard'),
+    claimVCN: () => ipcRenderer.invoke('node:claimVCN'),
+
     // Events from main process
     onStarted: (cb) => ipcRenderer.on('node:started', (_, data) => cb(data)),
     onStopped: (cb) => ipcRenderer.on('node:stopped', (_, data) => cb(data)),

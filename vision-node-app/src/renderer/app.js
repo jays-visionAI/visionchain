@@ -2,6 +2,7 @@
 
 let currentStatus = null;
 const activityLog = [];
+let heartbeatRefreshCount = 0;
 
 // ── Init ──
 async function init() {
@@ -17,6 +18,7 @@ async function init() {
         initStorageSettings();
         initNodeSettings();
         checkForUpdates();
+        loadLeaderboard();
     }
 
     // Listen for events from main process
@@ -210,6 +212,14 @@ function updateUI(s) {
     document.getElementById('info-wallet').textContent = s.walletAddress ? truncate(s.walletAddress, 16) : '-';
     document.getElementById('info-env').textContent = capitalize(s.environment || '-');
 
+    // Overview 3-tier earnings
+    const oUsdt = document.getElementById('overview-usdt');
+    const oVcn = document.getElementById('overview-vcn');
+    const oRp = document.getElementById('overview-rp');
+    if (oUsdt) oUsdt.textContent = '$' + parseFloat(s.pendingUsdt || 0).toFixed(6);
+    if (oVcn) oVcn.textContent = parseFloat(s.pendingReward || 0).toFixed(4);
+    if (oRp) oRp.textContent = Math.floor(s.pendingRp || 0).toLocaleString();
+
     // Rewards - 3 Tier
     document.getElementById('reward-pending-vcn').textContent = parseFloat(s.pendingReward || 0).toFixed(6);
     document.getElementById('reward-pending-usdt').textContent = '$' + parseFloat(s.pendingUsdt || 0).toFixed(6);
@@ -265,6 +275,8 @@ function onHeartbeat(data) {
     } else {
         addActivity('error', `Heartbeat failed: ${data.error || 'Unknown error'}`);
     }
+    // Refresh leaderboard periodically (every 10th heartbeat)
+    if (heartbeatRefreshCount++ % 10 === 0) loadLeaderboard();
 }
 
 function onStatsUpdate(data) {
@@ -629,3 +641,109 @@ function dismissUpdateBanner() {
     }
 }
 
+// ── Leaderboard ──
+async function loadLeaderboard() {
+    try {
+        const result = await window.visionNode.getLeaderboard();
+        if (result.success && result.leaderboard) {
+            renderLeaderboard(result.leaderboard, result.total_nodes);
+        }
+    } catch (e) {
+        console.warn('Leaderboard load error:', e);
+    }
+}
+
+function renderLeaderboard(entries, totalNodes) {
+    const container = document.getElementById('leaderboard-container');
+    const rankEl = document.getElementById('leaderboard-rank');
+    if (!container) return;
+
+    // Find my rank
+    const myId = currentStatus?.nodeId;
+    const myEntry = myId ? entries.find(e => e.node_id === myId) : null;
+    if (rankEl) {
+        rankEl.textContent = myEntry
+            ? `Your Rank: #${myEntry.rank} of ${totalNodes || entries.length}`
+            : `${totalNodes || entries.length} active nodes`;
+    }
+
+    if (entries.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:#4b5563;font-size:11px;padding:16px;">No active nodes yet</div>';
+        return;
+    }
+
+    const top10 = entries.slice(0, 10);
+    container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6b7280;">#</th>
+                    <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6b7280;">Node</th>
+                    <th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6b7280;">Uptime</th>
+                    <th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6b7280;">Weight</th>
+                    <th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6b7280;">Earned</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${top10.map(e => {
+        const isMe = e.node_id === myId;
+        const bg = isMe ? 'background:rgba(245,158,11,0.06);' : '';
+        const highlight = isMe ? 'color:#f59e0b;font-weight:800;' : 'color:#9ca3af;';
+        const upH = e.total_uptime_hours || 0;
+        const uptimeStr = upH < 24 ? `${upH.toFixed(1)}h` : `${(upH / 24).toFixed(1)}d`;
+        return `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.02);${bg}">
+                            <td style="padding:5px 8px;font-size:11px;font-weight:700;${isMe ? 'color:#f59e0b;' : 'color:#6b7280;'}">${e.rank}</td>
+                            <td style="padding:5px 8px;font-size:10px;${highlight}">${isMe ? 'You' : (e.email_masked || e.node_id.slice(0, 8) + '...')}</td>
+                            <td style="padding:5px 8px;font-size:10px;text-align:right;color:#94a3b8;font-family:monospace;">${uptimeStr}</td>
+                            <td style="padding:5px 8px;font-size:10px;text-align:right;color:#06b6d4;font-family:monospace;">${parseFloat(e.weight || 0).toFixed(2)}x</td>
+                            <td style="padding:5px 8px;font-size:10px;text-align:right;color:#22c55e;font-family:monospace;">${parseFloat(e.total_earned || 0).toFixed(2)}</td>
+                        </tr>
+                    `;
+    }).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+// ── Claim VCN ──
+async function claimVCN() {
+    const btn = document.getElementById('btn-claim-vcn');
+    if (!btn) return;
+
+    const pending = parseFloat(currentStatus?.pendingReward || 0);
+    if (pending < 0.001) {
+        btn.textContent = 'Min 0.001 VCN';
+        btn.style.color = '#ef4444';
+        setTimeout(() => { btn.textContent = 'Claim VCN'; btn.style.color = '#06b6d4'; }, 2000);
+        return;
+    }
+
+    btn.textContent = 'Claiming...';
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+
+    try {
+        const result = await window.visionNode.claimVCN();
+        if (result.success && result.claimed_amount) {
+            btn.textContent = `Claimed ${parseFloat(result.claimed_amount).toFixed(4)} VCN`;
+            btn.style.color = '#22c55e';
+            addActivity('success', `Claimed ${result.claimed_amount} VCN (tx: ${result.tx_hash?.slice(0, 10)}...)`);
+        } else {
+            btn.textContent = result.error || 'Claim failed';
+            btn.style.color = '#ef4444';
+            addActivity('error', `VCN claim failed: ${result.error || 'Unknown error'}`);
+        }
+    } catch (e) {
+        btn.textContent = 'Error';
+        btn.style.color = '#ef4444';
+        addActivity('error', `VCN claim error: ${e.message}`);
+    } finally {
+        setTimeout(() => {
+            btn.textContent = 'Claim VCN';
+            btn.style.color = '#06b6d4';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }, 3000);
+    }
+}

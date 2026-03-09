@@ -1,6 +1,6 @@
 {
     "name": "vision-node-app",
-    "version": "1.1.1-beta",
+    "version": "1.1.2-beta",
     "description": "Vision Chain Node - Desktop Application",
     "main": "src/main/index.js",
     "author": "Vision Chain <hello@visionchain.co>",
