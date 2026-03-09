@@ -139,6 +139,11 @@ export const WalletDisk = (props: {
     const [videoBuffering, setVideoBuffering] = createSignal(false);
     const [videoFullyLoaded, setVideoFullyLoaded] = createSignal(false);
     const [videoBufferReady, setVideoBufferReady] = createSignal(false); // true when 10MB buffered, play button shown
+    // PDF viewer state
+    const [pdfPages, setPdfPages] = createSignal<string[]>([]); // rendered page images as data URLs
+    const [pdfCurrentPage, setPdfCurrentPage] = createSignal(1);
+    const [pdfTotalPages, setPdfTotalPages] = createSignal(0);
+    const [pdfRendering, setPdfRendering] = createSignal(false);
     const [contextMenu, setContextMenu] = createSignal<{ item: DiskFile | DiskFolder; type: 'file' | 'folder'; x: number; y: number } | null>(null);
     const [showNewFolder, setShowNewFolder] = createSignal(false);
     const [newFolderName, setNewFolderName] = createSignal('');
@@ -185,6 +190,68 @@ export const WalletDisk = (props: {
     const [allFolders, setAllFolders] = createSignal<DiskFolder[]>([]);
 
     let fileInputRef: HTMLInputElement | undefined;
+
+    // ─── PDF.js Renderer ───
+    const renderPdfFromBlob = async (blob: Blob) => {
+        try {
+            // Dynamically load pdf.js from CDN
+            if (!(window as any).pdfjsLib) {
+                await new Promise<void>((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.mjs';
+                    script.type = 'module';
+                    // Use legacy build for broader compatibility
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                    script.type = 'text/javascript';
+                    script.onload = () => {
+                        const lib = (window as any).pdfjsLib;
+                        if (lib) {
+                            lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        }
+                        resolve();
+                    };
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+
+            const pdfjsLib = (window as any).pdfjsLib;
+            if (!pdfjsLib) throw new Error('pdf.js failed to load');
+
+            const arrayBuffer = await blob.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const totalPages = pdf.numPages;
+            setPdfTotalPages(totalPages);
+
+            // Render all pages (or first 20 for very large PDFs)
+            const pagesToRender = Math.min(totalPages, 50);
+            const pages: string[] = [];
+            const scale = 2.0; // Higher scale for sharp rendering
+
+            for (let i = 1; i <= pagesToRender; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) continue;
+
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                pages.push(canvas.toDataURL('image/png'));
+
+                // Update state progressively for fast feedback
+                if (i === 1 || i % 5 === 0) {
+                    setPdfPages([...pages]);
+                }
+            }
+
+            setPdfPages(pages);
+            setPdfCurrentPage(1);
+        } catch (err) {
+            console.error('[Disk] PDF render error:', err);
+        }
+    };
 
     // ─── Data Loading ───
 
@@ -763,8 +830,55 @@ export const WalletDisk = (props: {
         setVideoBuffering(false);
         setVideoFullyLoaded(false);
         setVideoBufferReady(false);
+        setPdfPages([]);
+        setPdfCurrentPage(1);
+        setPdfTotalPages(0);
+        setPdfRendering(false);
 
         if (!file) return;
+
+        // PDF files: download blob and render via pdf.js
+        if (file.type.includes('pdf')) {
+            setPreviewLoading(true);
+            setPreviewProgress(null);
+            try {
+                let blob: Blob;
+                if (file.storageType === 'distributed' || file.isEncrypted) {
+                    if (file.storageType === 'distributed') {
+                        blob = await downloadDiskFileGranular(file, (current, total) => {
+                            setPreviewProgress({ current, total });
+                        }, 8);
+                    } else {
+                        const resp = await fetch(file.downloadURL);
+                        blob = await resp.blob();
+                    }
+                    if (file.isEncrypted) {
+                        if (!encryptionPassword()) {
+                            setShowPasswordModal(true);
+                            setPreviewFile(null);
+                            alert('Please enter your encryption password to preview this file.');
+                            return;
+                        }
+                        const buffer = await blob.arrayBuffer();
+                        blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                    }
+                } else {
+                    const resp = await fetch(file.downloadURL);
+                    blob = await resp.blob();
+                }
+                setPreviewLoading(false);
+                setPdfRendering(true);
+                // Render PDF pages using pdf.js
+                await renderPdfFromBlob(blob);
+            } catch (err) {
+                console.error('[Disk] PDF preview failed:', err);
+            } finally {
+                setPreviewLoading(false);
+                setPdfRendering(false);
+                setPreviewProgress(null);
+            }
+            return;
+        }
 
         // Video streaming path (non-encrypted distributed video)
         if (file.type.startsWith('video/') && (file.storageType === 'distributed' || file.cid) && !file.isEncrypted) {
@@ -1849,39 +1963,62 @@ export const WalletDisk = (props: {
                                             </Show>
                                             <Show when={file().type.includes('pdf')}>
                                                 <div class="w-full flex flex-col items-center gap-4">
-                                                    <Show when={previewURL()} fallback={
-                                                        <div class="text-center py-12">
-                                                            <svg class="w-16 h-16 text-red-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-                                                            <div class="text-sm text-gray-400 mb-4">Loading PDF...</div>
+                                                    <Show when={pdfRendering()}>
+                                                        <div class="text-center py-8">
+                                                            <div class="w-10 h-10 border-3 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto mb-3" />
+                                                            <div class="text-sm text-gray-400">PDF 렌더링 중...</div>
                                                         </div>
-                                                    }>
-                                                        <object
-                                                            data={previewURL() + '#toolbar=1&navpanes=0'}
-                                                            type="application/pdf"
-                                                            class="w-full rounded-lg border border-white/10"
-                                                            style={{ height: '70vh', 'min-height': '400px' }}
-                                                        >
-                                                            <div class="w-full flex flex-col items-center justify-center py-12 bg-[#0a0a12] rounded-lg border border-white/10">
-                                                                <svg class="w-16 h-16 text-red-400 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-                                                                <div class="text-sm text-gray-400 mb-4">PDF 미리보기를 지원하지 않는 브라우저입니다.</div>
+                                                    </Show>
+                                                    <Show when={pdfPages().length > 0}>
+                                                        {/* PDF Toolbar */}
+                                                        <div class="w-full flex items-center justify-between bg-[#0e0e16] border border-white/10 rounded-xl px-4 py-2">
+                                                            <div class="flex items-center gap-2">
                                                                 <button
-                                                                    onClick={() => handleDownload(file())}
-                                                                    class="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all"
+                                                                    onClick={() => setPdfCurrentPage(Math.max(1, pdfCurrentPage() - 1))}
+                                                                    disabled={pdfCurrentPage() <= 1}
+                                                                    class="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                                                 >
-                                                                    <Download class="w-4 h-4" /> PDF 다운로드
+                                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
+                                                                </button>
+                                                                <span class="text-sm text-gray-300 font-medium min-w-[80px] text-center">
+                                                                    {pdfCurrentPage()} / {pdfTotalPages()}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => setPdfCurrentPage(Math.min(pdfTotalPages(), pdfCurrentPage() + 1))}
+                                                                    disabled={pdfCurrentPage() >= pdfTotalPages()}
+                                                                    class="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                                                >
+                                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
                                                                 </button>
                                                             </div>
-                                                        </object>
-                                                        <button
-                                                            onClick={() => {
-                                                                const url = previewURL();
-                                                                if (url) window.open(url, '_blank');
-                                                            }}
-                                                            class="inline-flex items-center gap-2 px-4 py-2 bg-white/[0.05] hover:bg-white/[0.1] text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all border border-white/10"
-                                                        >
-                                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-                                                            새 탭에서 열기
-                                                        </button>
+                                                            <button
+                                                                onClick={() => handleDownload(file())}
+                                                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-gray-300 hover:text-white rounded-lg text-xs font-bold transition-all border border-white/10"
+                                                            >
+                                                                <Download class="w-3.5 h-3.5" /> Download
+                                                            </button>
+                                                        </div>
+                                                        {/* PDF Page */}
+                                                        <div class="w-full overflow-auto rounded-lg border border-white/10 bg-[#2a2a2a]" style={{ 'max-height': '65vh' }}>
+                                                            <img
+                                                                src={pdfPages()[pdfCurrentPage() - 1]}
+                                                                alt={`Page ${pdfCurrentPage()}`}
+                                                                class="w-full"
+                                                                style={{ 'image-rendering': 'auto' }}
+                                                            />
+                                                        </div>
+                                                    </Show>
+                                                    <Show when={!pdfRendering() && pdfPages().length === 0 && !previewLoading()}>
+                                                        <div class="text-center py-12">
+                                                            <svg class="w-16 h-16 text-red-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                                                            <div class="text-sm text-gray-400 mb-4">PDF를 불러올 수 없습니다.</div>
+                                                            <button
+                                                                onClick={() => handleDownload(file())}
+                                                                class="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all"
+                                                            >
+                                                                <Download class="w-4 h-4" /> PDF 다운로드
+                                                            </button>
+                                                        </div>
                                                     </Show>
                                                 </div>
                                             </Show>
