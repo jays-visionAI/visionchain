@@ -20344,17 +20344,45 @@ function chunkBuffer(data) {
 }
 
 /**
+ * diskUploadPart - Upload a part of a large file for multipart upload.
+ * Client splits large files into ~3MB parts and sends each via this function.
+ * Parts are stored temporarily in Firestore and assembled during diskUpload.
+ */
+exports.diskUploadPart = onCall({ cors: true, maxInstances: 20, timeoutSeconds: 60, memory: "512MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const { uploadSessionId, partIndex, totalParts, partData } = request.data;
+
+  if (!uploadSessionId || partIndex === undefined || !totalParts || !partData) {
+    throw new HttpsError("invalid-argument", "uploadSessionId, partIndex, totalParts, and partData are required.");
+  }
+
+  // Store part in Firestore
+  const partRef = db.collection("disk_upload_sessions").doc(uploadSessionId)
+    .collection("parts").doc(String(partIndex));
+
+  await partRef.set({
+    index: partIndex,
+    data: partData, // base64 encoded part
+    size: Buffer.from(partData, "base64").length,
+    created_at: Date.now(),
+  });
+
+  return { success: true, partIndex, totalParts };
+});
+
+/**
  * diskUpload - Upload file to distributed storage
  * Receives file as base64, chunks it, stages chunks in Firestore,
  * registers in chunk_registry for Vision Nodes to pull.
+ * Supports: direct base64, temp Storage path, or multipart upload session.
  */
 exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540, memory: "2GiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
-  const { fileData, tempStoragePath, fileName, fileType, folder, fileSize, thumbnail, preserveOriginal } = request.data;
+  const { fileData, tempStoragePath, uploadSessionId, fileName, fileType, folder, fileSize, thumbnail, preserveOriginal } = request.data;
 
-  if (!fileData && !tempStoragePath) {
-    throw new HttpsError("invalid-argument", "fileData (base64) or tempStoragePath is required.");
+  if (!fileData && !tempStoragePath && !uploadSessionId) {
+    throw new HttpsError("invalid-argument", "fileData, tempStoragePath, or uploadSessionId is required.");
   }
   if (!fileName) {
     throw new HttpsError("invalid-argument", "fileName is required.");
@@ -20366,15 +20394,38 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540,
     throw new HttpsError("failed-precondition", "Active disk subscription required.");
   }
 
-  // Get file buffer - either from base64 or from temp Storage
+  // Get file buffer from one of three sources
   let buffer;
-  if (tempStoragePath) {
-    // Large file: read from Firebase Storage temp path
+  if (uploadSessionId) {
+    // Multipart upload: assemble from parts stored in Firestore
+    try {
+      const partsSnap = await db.collection("disk_upload_sessions").doc(uploadSessionId)
+        .collection("parts").orderBy("index").get();
+
+      if (partsSnap.empty) {
+        throw new HttpsError("not-found", "No upload parts found for session " + uploadSessionId);
+      }
+
+      const partBuffers = partsSnap.docs.map(d => Buffer.from(d.data().data, "base64"));
+      buffer = Buffer.concat(partBuffers);
+
+      // Clean up session parts (fire-and-forget)
+      const cleanupBatch = db.batch();
+      partsSnap.docs.forEach(d => cleanupBatch.delete(d.ref));
+      cleanupBatch.delete(db.collection("disk_upload_sessions").doc(uploadSessionId));
+      cleanupBatch.commit().catch(() => { });
+
+      console.log(`[Disk] Assembled ${partsSnap.size} parts for session ${uploadSessionId}: ${buffer.length} bytes`);
+    } catch (sessionErr) {
+      if (sessionErr instanceof HttpsError) throw sessionErr;
+      throw new HttpsError("internal", "Failed to assemble multipart upload: " + sessionErr.message);
+    }
+  } else if (tempStoragePath) {
+    // Large file: read from Firebase Storage temp path (legacy support)
     try {
       const tempFile = admin.storage().bucket().file(tempStoragePath);
       const [fileBuffer] = await tempFile.download();
       buffer = fileBuffer;
-      // Clean up temp file after reading
       tempFile.delete().catch(() => { });
     } catch (storageErr) {
       throw new HttpsError("internal", "Failed to read temp file from storage: " + storageErr.message);

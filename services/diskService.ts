@@ -14,7 +14,7 @@
 import { getFirebaseDb, getFirebaseApp } from './firebaseService';
 import { collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getStorage, ref, uploadBytesResumable } from 'firebase/storage';
+// Firebase Storage import removed - using multipart httpsCallable upload instead
 
 // ─── Types ───
 
@@ -465,11 +465,12 @@ export const uploadDiskFile = async (
 
     // Threshold for direct base64 upload via callable function
     const DIRECT_UPLOAD_LIMIT = 5 * 1024 * 1024; // 5MB (base64 encodes to ~6.65MB, safe under 10MB httpsCallable limit)
+    const PART_SIZE = 3 * 1024 * 1024; // 3MB per part for multipart upload
 
     // Call Cloud Function for distributed upload
     const functions = getFunctions(getFirebaseApp());
     const diskUploadCall = httpsCallable<
-        { fileData?: string; tempStoragePath?: string; fileName: string; fileType: string; folder: string; fileSize: number; thumbnail?: string },
+        { fileData?: string; uploadSessionId?: string; tempStoragePath?: string; fileName: string; fileType: string; folder: string; fileSize: number; thumbnail?: string },
         {
             success: boolean; fileId: string; fileKey: string; cid: string;
             merkleRoot: string; chunkCount: number; totalSize: number; storageType: string;
@@ -501,35 +502,41 @@ export const uploadDiskFile = async (
             thumbnail: thumbnailDataUrl || undefined,
         };
     } else {
-        // Large files: upload to Firebase Storage first, then pass path
-        const storage = getStorage(getFirebaseApp());
-        const tempId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const tempPath = `disk_temp/${email}/${tempId}`;
-        const storageRef = ref(storage, tempPath);
+        // Large files: multipart upload via httpsCallable (no Firebase Storage needed)
+        const uploadPartCall = httpsCallable<
+            { uploadSessionId: string; partIndex: number; totalParts: number; partData: string },
+            { success: boolean; partIndex: number }
+        >(functions, 'diskUploadPart', { timeout: 60000 });
 
-        // Upload with real progress tracking
-        await new Promise<void>((resolve, reject) => {
-            const uploadTask = uploadBytesResumable(storageRef, file, {
-                contentType: file.type,
+        const arrayBuffer = await file.arrayBuffer();
+        const totalParts = Math.ceil(arrayBuffer.byteLength / PART_SIZE);
+        const uploadSessionId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        // Upload parts sequentially to maintain order and show progress
+        for (let i = 0; i < totalParts; i++) {
+            const start = i * PART_SIZE;
+            const end = Math.min(start + PART_SIZE, arrayBuffer.byteLength);
+            const partBuffer = arrayBuffer.slice(start, end);
+            const partBase64 = arrayBufferToBase64(partBuffer);
+
+            await uploadPartCall({
+                uploadSessionId,
+                partIndex: i,
+                totalParts,
+                partData: partBase64,
             });
 
-            uploadTask.on('state_changed',
-                (snapshot) => {
-                    // Map Storage upload progress to 15% - 70% range
-                    const pct = (snapshot.bytesTransferred / snapshot.totalBytes);
-                    const mappedProgress = 15 + Math.round(pct * 55);
-                    onProgress?.({
-                        fileName: file.name,
-                        progress: mappedProgress,
-                        bytesTransferred: snapshot.bytesTransferred,
-                        totalBytes: snapshot.totalBytes,
-                        status: 'uploading',
-                    });
-                },
-                (error) => reject(error),
-                () => resolve(),
-            );
-        });
+            // Map part upload progress to 15% - 70% range
+            const pct = (i + 1) / totalParts;
+            const mappedProgress = 15 + Math.round(pct * 55);
+            onProgress?.({
+                fileName: file.name,
+                progress: mappedProgress,
+                bytesTransferred: end,
+                totalBytes: file.size,
+                status: 'uploading',
+            });
+        }
 
         onProgress?.({
             fileName: file.name,
@@ -540,7 +547,7 @@ export const uploadDiskFile = async (
         });
 
         callPayload = {
-            tempStoragePath: tempPath,
+            uploadSessionId,
             fileName: file.name,
             fileType: file.type,
             folder,
