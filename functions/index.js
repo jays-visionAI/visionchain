@@ -7287,6 +7287,7 @@ exports.getBridgeStatus = onRequest({ cors: true }, async (req, res) => {
 // Only applies in production where cex-vpc-connector exists
 const isProduction = (process.env.GCLOUD_PROJECT || "") === "visionchain-d19ed";
 const cexFunctionConfig = {
+  cors: true,
   region: "asia-northeast3",
   ...(isProduction ? {
     vpcConnector: "cex-vpc-connector",
@@ -17581,6 +17582,7 @@ exports.generateWeeklyTrendReport = onSchedule({
  * Supports format=json (Agent View) and format=ui (default)
  */
 exports.getVisionInsight = onCall({
+  cors: true,
   timeoutSeconds: 30,
   memory: "256MiB",
 }, async (request) => {
@@ -17717,6 +17719,7 @@ exports.getVisionInsight = onCall({
  * Use when scheduled functions haven't run and data is empty/stale
  */
 exports.triggerInsightRefresh = onCall({
+  cors: true,
   timeoutSeconds: 540,
   memory: "512MiB",
 }, async (request) => {
@@ -18440,6 +18443,7 @@ async function executeSocialPost(postType, overrideData = {}) {
  * Manual trigger / test post (callable from Admin UI)
  */
 exports.postToSocialMedia = onCall({
+  cors: true,
   timeoutSeconds: 120,
   memory: "512MiB",
 }, async (request) => {
@@ -22883,7 +22887,7 @@ ${aiPrompt || "None. Just generate the standard template."}
 // ============================================================
 // translateDailyTips - Translate tips to target locale via Gemini
 // ============================================================
-exports.translateDailyTips = onCall({ timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+exports.translateDailyTips = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const { locale, tips } = request.data;
   if (!locale || !tips || !Array.isArray(tips) || tips.length === 0) {
     throw new HttpsError("invalid-argument", "locale and tips[] are required");
