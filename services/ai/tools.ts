@@ -200,5 +200,44 @@ export const AI_TOOLS = [
                 }
             }
         }
+    },
+    {
+        name: "list_user_disk_files",
+        description: "List and search files in the user's Vision Disk cloud storage. Use this when the user mentions their files, documents, disk, or wants to find a specific file. Can filter by folder path and/or search by filename keyword. Returns file IDs, names, sizes, types, and folders. IMPORTANT: Always include the file 'id' in your response context so you can reference it in follow-up actions like sharing.",
+        parameters: {
+            type: "object",
+            properties: {
+                folder: {
+                    type: "string",
+                    description: "Optional folder path to list files from (e.g., '/', '/photos', '/work'). Default: all folders."
+                },
+                search: {
+                    type: "string",
+                    description: "Optional keyword to search/filter files by name. Matches partial file names (e.g., '계약서' matches '업무위탁계약서_v2.pdf')."
+                }
+            }
+        }
+    },
+    {
+        name: "share_disk_file",
+        description: "Share a file from the user's Vision Disk with another person by email. IMPORTANT: Before calling this, you MUST first (1) find the file using list_user_disk_files to get the file_id, and (2) find the recipient using search_user_contacts to get their email. Always confirm with the user which file to share if multiple matches are found. Never call this without explicit user confirmation of the file choice.",
+        parameters: {
+            type: "object",
+            properties: {
+                target_email: {
+                    type: "string",
+                    description: "Email address of the person to share the file with."
+                },
+                file_id: {
+                    type: "string",
+                    description: "The unique ID of the file to share (obtained from list_user_disk_files)."
+                },
+                file_name: {
+                    type: "string",
+                    description: "The display name of the file being shared (for confirmation message)."
+                }
+            },
+            required: ["target_email", "file_id", "file_name"]
+        }
     }
 ];
