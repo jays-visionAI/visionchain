@@ -465,7 +465,8 @@ export const uploadDiskFile = async (
 
     // Threshold for direct base64 upload via callable function
     const DIRECT_UPLOAD_LIMIT = 5 * 1024 * 1024; // 5MB (base64 encodes to ~6.65MB, safe under 10MB httpsCallable limit)
-    const PART_SIZE = 3 * 1024 * 1024; // 3MB per part for multipart upload
+    const PART_SIZE = 700 * 1024; // 700KB per part (base64 ~930KB, fits in Firestore 1MB doc limit)
+    const PARALLEL_PARTS = 5; // Upload 5 parts in parallel for speed
 
     // Call Cloud Function for distributed upload
     const functions = getFunctions(getFirebaseApp());
@@ -511,31 +512,41 @@ export const uploadDiskFile = async (
         const arrayBuffer = await file.arrayBuffer();
         const totalParts = Math.ceil(arrayBuffer.byteLength / PART_SIZE);
         const uploadSessionId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        let completedParts = 0;
 
-        // Upload parts sequentially to maintain order and show progress
-        for (let i = 0; i < totalParts; i++) {
-            const start = i * PART_SIZE;
-            const end = Math.min(start + PART_SIZE, arrayBuffer.byteLength);
-            const partBuffer = arrayBuffer.slice(start, end);
-            const partBase64 = arrayBufferToBase64(partBuffer);
+        // Upload parts in parallel batches for speed
+        for (let batchStart = 0; batchStart < totalParts; batchStart += PARALLEL_PARTS) {
+            const batchEnd = Math.min(batchStart + PARALLEL_PARTS, totalParts);
+            const batchPromises = [];
 
-            await uploadPartCall({
-                uploadSessionId,
-                partIndex: i,
-                totalParts,
-                partData: partBase64,
-            });
+            for (let i = batchStart; i < batchEnd; i++) {
+                const start = i * PART_SIZE;
+                const end = Math.min(start + PART_SIZE, arrayBuffer.byteLength);
+                const partBuffer = arrayBuffer.slice(start, end);
+                const partBase64 = arrayBufferToBase64(partBuffer);
 
-            // Map part upload progress to 15% - 70% range
-            const pct = (i + 1) / totalParts;
-            const mappedProgress = 15 + Math.round(pct * 55);
-            onProgress?.({
-                fileName: file.name,
-                progress: mappedProgress,
-                bytesTransferred: end,
-                totalBytes: file.size,
-                status: 'uploading',
-            });
+                batchPromises.push(
+                    uploadPartCall({
+                        uploadSessionId,
+                        partIndex: i,
+                        totalParts,
+                        partData: partBase64,
+                    }).then(() => {
+                        completedParts++;
+                        const pct = completedParts / totalParts;
+                        const mappedProgress = 15 + Math.round(pct * 55);
+                        onProgress?.({
+                            fileName: file.name,
+                            progress: mappedProgress,
+                            bytesTransferred: Math.min(completedParts * PART_SIZE, file.size),
+                            totalBytes: file.size,
+                            status: 'uploading',
+                        });
+                    })
+                );
+            }
+
+            await Promise.all(batchPromises);
         }
 
         onProgress?.({
