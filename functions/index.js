@@ -23049,3 +23049,506 @@ Output ONLY valid JSON array, no markdown, no explanation.`;
 
   return { translations: result, locale, fromCache: Object.keys(result).length - toTranslate.length };
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ═══ DISK SHARING ════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * diskShareResource - Share a file or folder with another user
+ */
+exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const ownerEmail = request.auth.token.email.toLowerCase();
+  const { targetEmail, type, resourceId, resourceName } = request.data;
+
+  if (!targetEmail || !type || !resourceId) {
+    throw new HttpsError("invalid-argument", "targetEmail, type, and resourceId are required.");
+  }
+  if (!["file", "folder"].includes(type)) {
+    throw new HttpsError("invalid-argument", "type must be 'file' or 'folder'.");
+  }
+
+  const normalizedTarget = targetEmail.toLowerCase().trim();
+  if (normalizedTarget === ownerEmail) {
+    throw new HttpsError("invalid-argument", "Cannot share with yourself.");
+  }
+
+  // Verify target user exists
+  const targetUser = await db.collection("users").doc(normalizedTarget).get();
+  if (!targetUser.exists) {
+    throw new HttpsError("not-found", "User not found: " + normalizedTarget);
+  }
+
+  // Verify resource exists and belongs to owner
+  if (type === "file") {
+    const fileDoc = await db.collection("users").doc(ownerEmail).collection("disk_files").doc(resourceId).get();
+    if (!fileDoc.exists) throw new HttpsError("not-found", "File not found.");
+  } else {
+    const folderDoc = await db.collection("users").doc(ownerEmail).collection("disk_folders").doc(resourceId).get();
+    if (!folderDoc.exists) throw new HttpsError("not-found", "Folder not found.");
+  }
+
+  // Check for duplicate share
+  const existing = await db.collection("disk_shares")
+    .where("ownerEmail", "==", ownerEmail)
+    .where("targetEmail", "==", normalizedTarget)
+    .where("resourceId", "==", resourceId)
+    .where("status", "==", "active")
+    .limit(1).get();
+
+  if (!existing.empty) {
+    return { success: true, shareId: existing.docs[0].id, message: "Already shared." };
+  }
+
+  const shareRef = db.collection("disk_shares").doc();
+  const now = new Date().toISOString();
+  await shareRef.set({
+    id: shareRef.id,
+    ownerEmail,
+    targetEmail: normalizedTarget,
+    type,
+    resourceId,
+    resourceName: resourceName || "",
+    permission: "view",
+    status: "active",
+    createdAt: now,
+  });
+
+  console.log(`[Disk] ${ownerEmail} shared ${type} ${resourceId} with ${normalizedTarget}`);
+  return { success: true, shareId: shareRef.id };
+});
+
+/**
+ * diskRevokeShare - Revoke a share
+ */
+exports.diskRevokeShare = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 15 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { shareId } = request.data;
+
+  if (!shareId) throw new HttpsError("invalid-argument", "shareId required.");
+
+  const shareDoc = await db.collection("disk_shares").doc(shareId).get();
+  if (!shareDoc.exists) throw new HttpsError("not-found", "Share not found.");
+
+  const shareData = shareDoc.data();
+  // Owner or target can revoke
+  if (shareData.ownerEmail !== email && shareData.targetEmail !== email) {
+    throw new HttpsError("permission-denied", "Not authorized to revoke this share.");
+  }
+
+  await shareDoc.ref.update({ status: "revoked", revokedAt: new Date().toISOString() });
+  return { success: true };
+});
+
+/**
+ * diskGetSharedWithMe - Get files/folders shared with current user
+ */
+exports.diskGetSharedWithMe = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+
+  // Get all active shares targeting this user
+  const sharesSnap = await db.collection("disk_shares")
+    .where("targetEmail", "==", email)
+    .where("status", "==", "active")
+    .orderBy("createdAt", "desc")
+    .limit(200).get();
+
+  const shares = [];
+  for (const doc of sharesSnap.docs) {
+    const share = doc.data();
+    // Fetch resource metadata from owner
+    let resourceMeta = null;
+    try {
+      if (share.type === "file") {
+        const fileDoc = await db.collection("users").doc(share.ownerEmail).collection("disk_files").doc(share.resourceId).get();
+        if (fileDoc.exists) resourceMeta = fileDoc.data();
+      } else {
+        const folderDoc = await db.collection("users").doc(share.ownerEmail).collection("disk_folders").doc(share.resourceId).get();
+        if (folderDoc.exists) resourceMeta = folderDoc.data();
+      }
+    } catch (_e) { /* skip if deleted */ }
+
+    shares.push({
+      shareId: share.id,
+      ownerEmail: share.ownerEmail,
+      type: share.type,
+      resourceId: share.resourceId,
+      resourceName: share.resourceName,
+      permission: share.permission,
+      createdAt: share.createdAt,
+      resource: resourceMeta,
+    });
+  }
+
+  // Get shared folders where user is a member
+  const sharedFoldersSnap = await db.collection("disk_shared_folders")
+    .where("memberEmails", "array-contains", email)
+    .orderBy("updatedAt", "desc")
+    .limit(50).get();
+
+  const sharedFolders = sharedFoldersSnap.docs.map(d => d.data());
+
+  return { shares, sharedFolders };
+});
+
+/**
+ * diskGetMyShares - Get items I've shared with others
+ */
+exports.diskGetMyShares = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 15 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+
+  const sharesSnap = await db.collection("disk_shares")
+    .where("ownerEmail", "==", email)
+    .where("status", "==", "active")
+    .orderBy("createdAt", "desc")
+    .limit(200).get();
+
+  return { shares: sharesSnap.docs.map(d => d.data()) };
+});
+
+/**
+ * diskCreateSharedFolder - Create a collaborative folder
+ */
+exports.diskCreateSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const ownerEmail = request.auth.token.email.toLowerCase();
+  const { name, memberEmails } = request.data;
+
+  if (!name || !name.trim()) throw new HttpsError("invalid-argument", "Folder name required.");
+
+  const now = new Date().toISOString();
+  const folderRef = db.collection("disk_shared_folders").doc();
+
+  // Validate member emails
+  const validMembers = [{ email: ownerEmail, role: "owner", joinedAt: now }];
+  const memberEmailList = [ownerEmail]; // for array-contains queries
+
+  if (memberEmails && Array.isArray(memberEmails)) {
+    for (const me of memberEmails) {
+      const normalized = me.toLowerCase().trim();
+      if (normalized === ownerEmail) continue;
+      const userDoc = await db.collection("users").doc(normalized).get();
+      if (userDoc.exists) {
+        validMembers.push({ email: normalized, role: "editor", joinedAt: now });
+        memberEmailList.push(normalized);
+      }
+    }
+  }
+
+  await folderRef.set({
+    id: folderRef.id,
+    name: name.trim(),
+    ownerEmail,
+    members: validMembers,
+    memberEmails: memberEmailList, // flat array for querying
+    createdAt: now,
+    updatedAt: now,
+    totalSize: 0,
+    fileCount: 0,
+  });
+
+  console.log(`[Disk] Shared folder created: ${name} by ${ownerEmail} with ${validMembers.length} members`);
+  return { success: true, folderId: folderRef.id, members: validMembers };
+});
+
+/**
+ * diskManageSharedFolderMember - Add/remove/update members
+ */
+exports.diskManageSharedFolderMember = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { folderId, action, targetEmail, role } = request.data;
+
+  if (!folderId || !action || !targetEmail) {
+    throw new HttpsError("invalid-argument", "folderId, action, and targetEmail required.");
+  }
+
+  const folderRef = db.collection("disk_shared_folders").doc(folderId);
+  const folderDoc = await folderRef.get();
+  if (!folderDoc.exists) throw new HttpsError("not-found", "Shared folder not found.");
+
+  const folder = folderDoc.data();
+  const callerMember = folder.members.find(m => m.email === email);
+  if (!callerMember || callerMember.role !== "owner") {
+    throw new HttpsError("permission-denied", "Only the owner can manage members.");
+  }
+
+  const normalizedTarget = targetEmail.toLowerCase().trim();
+  const now = new Date().toISOString();
+
+  if (action === "add") {
+    // Check user exists
+    const userDoc = await db.collection("users").doc(normalizedTarget).get();
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found.");
+
+    // Check not already member
+    if (folder.members.some(m => m.email === normalizedTarget)) {
+      return { success: true, message: "Already a member." };
+    }
+
+    const newMember = { email: normalizedTarget, role: role || "editor", joinedAt: now };
+    await folderRef.update({
+      members: [...folder.members, newMember],
+      memberEmails: [...folder.memberEmails, normalizedTarget],
+      updatedAt: now,
+    });
+    return { success: true, member: newMember };
+
+  } else if (action === "remove") {
+    if (normalizedTarget === folder.ownerEmail) {
+      throw new HttpsError("invalid-argument", "Cannot remove the owner.");
+    }
+    await folderRef.update({
+      members: folder.members.filter(m => m.email !== normalizedTarget),
+      memberEmails: folder.memberEmails.filter(e => e !== normalizedTarget),
+      updatedAt: now,
+    });
+    return { success: true };
+
+  } else if (action === "updateRole") {
+    if (!role || !["editor", "viewer"].includes(role)) {
+      throw new HttpsError("invalid-argument", "role must be 'editor' or 'viewer'.");
+    }
+    const updatedMembers = folder.members.map(m =>
+      m.email === normalizedTarget ? { ...m, role } : m
+    );
+    await folderRef.update({ members: updatedMembers, updatedAt: now });
+    return { success: true };
+
+  } else {
+    throw new HttpsError("invalid-argument", "action must be 'add', 'remove', or 'updateRole'.");
+  }
+});
+
+/**
+ * diskGetSharedFolderFiles - Get files in a shared folder
+ */
+exports.diskGetSharedFolderFiles = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { folderId } = request.data;
+
+  if (!folderId) throw new HttpsError("invalid-argument", "folderId required.");
+
+  const folderDoc = await db.collection("disk_shared_folders").doc(folderId).get();
+  if (!folderDoc.exists) throw new HttpsError("not-found", "Shared folder not found.");
+
+  const folder = folderDoc.data();
+  if (!folder.memberEmails.includes(email)) {
+    throw new HttpsError("permission-denied", "Not a member of this folder.");
+  }
+
+  const filesSnap = await db.collection("disk_shared_folders").doc(folderId)
+    .collection("files").orderBy("createdAt", "desc").limit(500).get();
+
+  return {
+    folder: { id: folder.id, name: folder.name, ownerEmail: folder.ownerEmail, members: folder.members },
+    files: filesSnap.docs.map(d => d.data()),
+  };
+});
+
+/**
+ * diskUploadToSharedFolder - Upload file to shared folder (delegates to standard chunking)
+ */
+exports.diskUploadToSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540, memory: "2GiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { folderId, fileData, uploadSessionId, fileName, fileType, fileSize, thumbnail } = request.data;
+
+  if (!folderId || !fileName) {
+    throw new HttpsError("invalid-argument", "folderId and fileName required.");
+  }
+
+  // Verify membership with editor or owner role
+  const folderDoc = await db.collection("disk_shared_folders").doc(folderId).get();
+  if (!folderDoc.exists) throw new HttpsError("not-found", "Shared folder not found.");
+
+  const folder = folderDoc.data();
+  const member = folder.members.find(m => m.email === email);
+  if (!member) throw new HttpsError("permission-denied", "Not a member.");
+  if (member.role === "viewer") throw new HttpsError("permission-denied", "Viewers cannot upload.");
+
+  // Get file buffer (same logic as diskUpload)
+  let buffer;
+  if (uploadSessionId) {
+    const partsSnap = await db.collection("disk_upload_sessions").doc(uploadSessionId)
+      .collection("parts").orderBy("index").get();
+    if (partsSnap.empty) throw new HttpsError("not-found", "No upload parts found.");
+    const partBuffers = partsSnap.docs.map(d => Buffer.from(d.data().data, "base64"));
+    buffer = Buffer.concat(partBuffers);
+    const cleanupBatch = db.batch();
+    partsSnap.docs.forEach(d => cleanupBatch.delete(d.ref));
+    cleanupBatch.delete(db.collection("disk_upload_sessions").doc(uploadSessionId));
+    cleanupBatch.commit().catch(() => { });
+  } else if (fileData) {
+    buffer = Buffer.from(fileData, "base64");
+  } else {
+    throw new HttpsError("invalid-argument", "fileData or uploadSessionId required.");
+  }
+
+  // Chunk the file (reuse existing chunkBuffer logic)
+  const crypto = require("crypto");
+  const sha256Hex = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
+
+  const CHUNK_SIZE = 256 * 1024;
+  const chunks = [];
+  const infos = [];
+  for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+    const chunk = buffer.subarray(i, Math.min(i + CHUNK_SIZE, buffer.length));
+    const hash = sha256Hex(chunk);
+    chunks.push(chunk);
+    infos.push({ hash, size: chunk.length, index: i / CHUNK_SIZE });
+  }
+
+  // Generate CID and merkle root
+  const fullHash = sha256Hex(buffer);
+  const cid = `Qm${fullHash.substring(0, 44)}`;
+  const fileId = `sf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const fileKey = `shared_${folderId}_${fileId}`;
+  const now = new Date().toISOString();
+
+  // Compute merkle root
+  let hashes = infos.map(c => c.hash);
+  while (hashes.length > 1) {
+    const next = [];
+    for (let i = 0; i < hashes.length; i += 2) {
+      if (i + 1 < hashes.length) {
+        next.push(sha256Hex(Buffer.from(hashes[i] + hashes[i + 1])));
+      } else {
+        next.push(hashes[i]);
+      }
+    }
+    hashes = next;
+  }
+  const merkleRoot = hashes[0] || fullHash;
+
+  // Stage chunks in Firestore
+  const batch = db.batch();
+  for (const info of infos) {
+    const stagingRef = db.collection("staging_chunks").doc(info.hash);
+    batch.set(stagingRef, {
+      hash: info.hash,
+      data: chunks[info.index].toString("base64"),
+      size: info.size,
+      fileKey,
+      cid,
+      createdAt: now,
+      staged: true,
+      replicatedNodes: [],
+    }, { merge: true });
+  }
+
+  // Save file metadata in shared folder
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const fileMeta = {
+    id: fileId,
+    name: fileName,
+    size: buffer.length,
+    type: fileType || "application/octet-stream",
+    uploadedBy: email,
+    cid,
+    fileKey,
+    merkleRoot,
+    chunkCount: chunks.length,
+    chunkHashes: infos.map(c => c.hash),
+    createdAt: now,
+    updatedAt: now,
+    extension: ext,
+    storageType: "distributed",
+    replicationStatus: "staging",
+    thumbnail: thumbnail || "",
+  };
+
+  const fileRef = db.collection("disk_shared_folders").doc(folderId).collection("files").doc(fileId);
+  batch.set(fileRef, fileMeta);
+
+  // Update folder stats
+  batch.update(db.collection("disk_shared_folders").doc(folderId), {
+    fileCount: (folder.fileCount || 0) + 1,
+    totalSize: (folder.totalSize || 0) + buffer.length,
+    updatedAt: now,
+  });
+
+  // Register in chunk_registry
+  const chunkRegRef = db.collection("chunk_registry").doc(cid);
+  batch.set(chunkRegRef, {
+    cid,
+    fileKey,
+    merkleRoot,
+    chunkHashes: infos.map(c => c.hash),
+    totalSize: buffer.length,
+    chunkCount: chunks.length,
+    createdAt: now,
+    replicationTarget: 3,
+    status: "pending",
+  }, { merge: true });
+
+  await batch.commit();
+
+  console.log(`[Disk] Shared folder upload: ${fileName} -> ${folderId} by ${email} (${chunks.length} chunks)`);
+  return { success: true, fileId, cid, merkleRoot, chunkCount: chunks.length };
+});
+
+/**
+ * diskDeleteSharedFolderFile - Delete a file from shared folder
+ */
+exports.diskDeleteSharedFolderFile = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { folderId, fileId } = request.data;
+
+  if (!folderId || !fileId) throw new HttpsError("invalid-argument", "folderId and fileId required.");
+
+  const folderDoc = await db.collection("disk_shared_folders").doc(folderId).get();
+  if (!folderDoc.exists) throw new HttpsError("not-found", "Shared folder not found.");
+
+  const folder = folderDoc.data();
+  const member = folder.members.find(m => m.email === email);
+  if (!member) throw new HttpsError("permission-denied", "Not a member.");
+
+  const fileRef = db.collection("disk_shared_folders").doc(folderId).collection("files").doc(fileId);
+  const fileDoc = await fileRef.get();
+  if (!fileDoc.exists) throw new HttpsError("not-found", "File not found.");
+
+  const fileData = fileDoc.data();
+  // Only owner or file uploader can delete
+  if (member.role !== "owner" && fileData.uploadedBy !== email) {
+    throw new HttpsError("permission-denied", "Only folder owner or file uploader can delete.");
+  }
+
+  await fileRef.delete();
+  await db.collection("disk_shared_folders").doc(folderId).update({
+    fileCount: Math.max(0, (folder.fileCount || 1) - 1),
+    totalSize: Math.max(0, (folder.totalSize || fileData.size) - fileData.size),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return { success: true };
+});
+
+/**
+ * diskGetSharedFolderFileChunks - Get shared file data for download (returns file metadata with chunk info)
+ */
+exports.diskGetSharedFolderFileData = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { folderId, fileId } = request.data;
+
+  if (!folderId || !fileId) throw new HttpsError("invalid-argument", "folderId and fileId required.");
+
+  const folderDoc = await db.collection("disk_shared_folders").doc(folderId).get();
+  if (!folderDoc.exists) throw new HttpsError("not-found", "Shared folder not found.");
+
+  if (!folderDoc.data().memberEmails.includes(email)) {
+    throw new HttpsError("permission-denied", "Not a member.");
+  }
+
+  const fileDoc = await db.collection("disk_shared_folders").doc(folderId).collection("files").doc(fileId).get();
+  if (!fileDoc.exists) throw new HttpsError("not-found", "File not found.");
+
+  return { success: true, file: fileDoc.data() };
+});
