@@ -108,7 +108,11 @@ export type NotificationType =
     | 'system_announcement'
     | 'system_notice'
     | 'security_alert'
-    | 'alert';
+    | 'alert'
+    // Disk Sharing
+    | 'disk_shared'
+    | 'disk_shared_folder'
+    | 'disk_shared_folder_upload';
 
 export interface NotificationData {
     // Transaction related
@@ -479,6 +483,14 @@ export function WalletNotifications() {
                 return { icon: ShieldAlert, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Security' };
             case 'alert':
                 return { icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Alert' };
+
+            // Disk Sharing
+            case 'disk_shared':
+                return { icon: ArrowDownLeft, color: 'text-cyan-400', bg: 'bg-cyan-400/10', label: 'Shared' };
+            case 'disk_shared_folder':
+                return { icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-400/10', label: 'Folder' };
+            case 'disk_shared_folder_upload':
+                return { icon: ArrowDownLeft, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Upload' };
 
             default:
                 return { icon: Info, color: 'text-gray-400', bg: 'bg-gray-400/10', label: 'Info' };

@@ -23241,6 +23241,24 @@ exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSecond
   });
 
   console.log(`[Disk] ${ownerEmail} shared ${type} ${resourceId} with ${normalizedTarget}`);
+
+  // Send notification to target user
+  try {
+    await db.collection("users").doc(normalizedTarget).collection("notifications").add({
+      type: type === "file" ? "disk_shared" : "disk_shared",
+      title: type === "file" ? "File Shared with You" : "Folder Shared with You",
+      content: `${ownerEmail.split("@")[0]} shared ${type === "file" ? "" : "folder "}"${resourceName || resourceId}" with you`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      read: false,
+      data: { from: ownerEmail, eventName: resourceName || resourceId },
+      category: "system",
+      priority: "normal",
+      actionable: false,
+    });
+  } catch (notifyErr) {
+    console.warn("[Disk] Share notification failed:", notifyErr);
+  }
+
   return { success: true, shareId: shareRef.id };
 });
 
@@ -23377,6 +23395,25 @@ exports.diskCreateSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutS
   });
 
   console.log(`[Disk] Shared folder created: ${name} by ${ownerEmail} with ${validMembers.length} members`);
+
+  // Notify invited members
+  for (const m of validMembers) {
+    if (m.email === ownerEmail) continue;
+    try {
+      await db.collection("users").doc(m.email).collection("notifications").add({
+        type: "disk_shared_folder",
+        title: "Added to Shared Folder",
+        content: `${ownerEmail.split("@")[0]} added you to "${name.trim()}"`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+        data: { from: ownerEmail, eventName: name.trim() },
+        category: "system",
+        priority: "normal",
+        actionable: false,
+      });
+    } catch (e) { console.warn("[Disk] Folder invite notification failed:", e); }
+  }
+
   return { success: true, folderId: folderRef.id, members: validMembers };
 });
 
@@ -23421,6 +23458,22 @@ exports.diskManageSharedFolderMember = onCall({ cors: true, maxInstances: 10, ti
       memberEmails: [...folder.memberEmails, normalizedTarget],
       updatedAt: now,
     });
+
+    // Notify the added member
+    try {
+      await db.collection("users").doc(normalizedTarget).collection("notifications").add({
+        type: "disk_shared_folder",
+        title: "Added to Shared Folder",
+        content: `${email.split("@")[0]} added you to "${folder.name}"`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+        data: { from: email, eventName: folder.name },
+        category: "system",
+        priority: "normal",
+        actionable: false,
+      });
+    } catch (e) { console.warn("[Disk] Add member notification failed:", e); }
+
     return { success: true, member: newMember };
 
   } else if (action === "remove") {
@@ -23615,6 +23668,27 @@ exports.diskUploadToSharedFolder = onCall({ cors: true, maxInstances: 10, timeou
   await batch.commit();
 
   console.log(`[Disk] Shared folder upload: ${fileName} -> ${folderId} by ${email} (${chunks.length} chunks)`);
+
+  // Notify other members about the upload
+  try {
+    const otherMembers = folder.members.filter(m => m.email !== email);
+    for (const m of otherMembers) {
+      await db.collection("users").doc(m.email).collection("notifications").add({
+        type: "disk_shared_folder_upload",
+        title: "New File in Shared Folder",
+        content: `${email.split("@")[0]} uploaded "${fileName}" to "${folder.name}"`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+        data: { from: email, eventName: fileName },
+        category: "system",
+        priority: "low",
+        actionable: false,
+      });
+    }
+  } catch (notifyErr) {
+    console.warn("[Disk] Upload notification failed:", notifyErr);
+  }
+
   return { success: true, fileId, cid, merkleRoot, chunkCount: chunks.length };
 });
 

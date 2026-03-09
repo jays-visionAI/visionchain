@@ -60,6 +60,7 @@ function getCategoryFromType(type: NotificationType): string {
     if (type.startsWith('bridge') || type === 'challenge_raised') return 'transaction';
     if (type.startsWith('system') || type === 'alert') return 'system';
     if (type === 'security_alert') return 'security';
+    if (type.startsWith('disk_')) return 'system';
     return 'system';
 }
 
@@ -372,6 +373,55 @@ export const BridgeNotifications = {
             content: reason || `A challenge was raised on your ${amount} VCN bridge transfer`,
             data: { amount },
             priority: 'urgent',
+        }),
+};
+
+/**
+ * Disk Sharing Notifications
+ */
+export const DiskNotifications = {
+    fileShared: (userEmail: string, fileName: string, fromEmail: string) =>
+        createNotification({
+            userEmail,
+            type: 'disk_shared',
+            title: 'File Shared with You',
+            content: `${fromEmail.split('@')[0]} shared "${fileName}" with you`,
+            data: { from: fromEmail, eventName: fileName },
+            category: 'system',
+            priority: 'normal',
+        }),
+
+    folderShared: (userEmail: string, folderName: string, fromEmail: string) =>
+        createNotification({
+            userEmail,
+            type: 'disk_shared',
+            title: 'Folder Shared with You',
+            content: `${fromEmail.split('@')[0]} shared folder "${folderName}" with you`,
+            data: { from: fromEmail, eventName: folderName },
+            category: 'system',
+            priority: 'normal',
+        }),
+
+    sharedFolderInvite: (userEmail: string, folderName: string, fromEmail: string) =>
+        createNotification({
+            userEmail,
+            type: 'disk_shared_folder',
+            title: 'Added to Shared Folder',
+            content: `${fromEmail.split('@')[0]} added you to "${folderName}"`,
+            data: { from: fromEmail, eventName: folderName },
+            category: 'system',
+            priority: 'normal',
+        }),
+
+    sharedFolderUpload: (userEmail: string, fileName: string, folderName: string, uploaderEmail: string) =>
+        createNotification({
+            userEmail,
+            type: 'disk_shared_folder_upload',
+            title: 'New File in Shared Folder',
+            content: `${uploaderEmail.split('@')[0]} uploaded "${fileName}" to "${folderName}"`,
+            data: { from: uploaderEmail, eventName: fileName },
+            category: 'system',
+            priority: 'low',
         }),
 };
 
