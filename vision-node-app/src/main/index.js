@@ -26,6 +26,9 @@ let nodeStats = {
     pendingReward: 0,
     totalEarned: 0,
     weight: 0,
+    baseWeight: 0,
+    storageBonus: 0,
+    chunksHeld: 0,
     uptimeSeconds: 0,
     startedAt: null,
     errors: [],
@@ -189,6 +192,9 @@ async function sendHeartbeat() {
 
         if (result.accepted) {
             nodeStats.weight = result.weight || 0;
+            nodeStats.baseWeight = result.base_weight || 0;
+            nodeStats.storageBonus = result.storage_bonus || 0;
+            nodeStats.chunksHeld = result.chunks_held || 0;
             nodeStats.pendingReward = result.pending_reward || nodeStats.pendingReward;
             nodeStats.totalEarned = result.total_earned || nodeStats.totalEarned;
         }
@@ -202,6 +208,9 @@ async function sendHeartbeat() {
             success: true,
             accepted: result.accepted,
             weight: result.weight,
+            base_weight: result.base_weight,
+            storage_bonus: result.storage_bonus,
+            chunks_held: result.chunks_held,
             reward: result.heartbeat_reward,
             pending: result.pending_reward,
         });
@@ -233,6 +242,9 @@ function getNodeStatus() {
         pendingReward: nodeStats.pendingReward,
         totalEarned: nodeStats.totalEarned,
         weight: nodeStats.weight,
+        baseWeight: nodeStats.baseWeight,
+        storageBonus: nodeStats.storageBonus,
+        chunksHeld: nodeStats.chunksHeld,
         uptimeSeconds: uptime,
         errors: nodeStats.errors.slice(-5),
         // Storage stats

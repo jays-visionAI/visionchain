@@ -180,6 +180,11 @@ function updateUI(s) {
     document.getElementById('stat-heartbeats').textContent = (s.heartbeatCount || 0).toLocaleString();
     document.getElementById('stat-storage').textContent = `${s.storageMaxGB || 0} GB`;
     document.getElementById('stat-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
+    // Show weight breakdown tooltip
+    const weightCard = document.getElementById('stat-weight')?.closest('.stat-card');
+    if (weightCard && s.storageBonus > 0) {
+        weightCard.title = `Base: ${(s.baseWeight || 0).toFixed(3)}x + Storage: +${(s.storageBonus || 0).toFixed(3)}x (${s.chunksHeld || 0} chunks)`;
+    }
 
     // Overview storage usage
     const usedBytes = s.storageBytes || 0;
@@ -209,6 +214,17 @@ function updateUI(s) {
     document.getElementById('reward-pending').textContent = parseFloat(s.pendingReward || 0).toFixed(6);
     document.getElementById('reward-earned').textContent = parseFloat(s.totalEarned || 0).toFixed(4);
     document.getElementById('reward-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
+    // Show weight breakdown in rewards tab
+    const weightBreakdownEl = document.getElementById('reward-weight-breakdown');
+    if (weightBreakdownEl) {
+        if (s.storageBonus > 0) {
+            weightBreakdownEl.textContent = `Base ${(s.baseWeight || 0).toFixed(3)}x + ${(s.storageBonus || 0).toFixed(3)}x storage (${s.chunksHeld || 0} chunks)`;
+            weightBreakdownEl.style.display = 'block';
+        } else {
+            weightBreakdownEl.textContent = `Desktop full mode`;
+            weightBreakdownEl.style.display = 'block';
+        }
+    }
 
     // Settings - Node Configuration
     document.getElementById('settings-nodeid').textContent = s.nodeId || '-';

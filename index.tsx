@@ -4,6 +4,7 @@ import { Show, Suspense } from 'solid-js';
 import { AuthProvider, useAuth } from './components/auth/authContext';
 import { I18nProvider } from './i18n/i18nContext';
 import { isProduction } from './services/envConfig';
+import { RPToastContainer } from './components/ui/RPToast';
 
 // Core layout components
 import Navbar from './components/Navbar';
@@ -52,6 +53,8 @@ function Layout(props: { children?: any }) {
       </div>
       {/* Environment indicator badge (only shows in staging/dev) */}
       <EnvironmentBadge />
+      {/* RP reward toast notifications */}
+      <RPToastContainer />
     </div>
   );
 }

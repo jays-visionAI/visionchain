@@ -1331,6 +1331,61 @@ export const trackUserLogin = async (email: string): Promise<void> => {
         getRPConfig().then(rpCfg => {
             addRewardPoints(email, rpCfg.daily_login, 'daily_login', 'Daily login').catch(() => { });
         }).catch(() => { });
+
+        // ── Streak Tracking (fire-and-forget) ──
+        (async () => {
+            try {
+                const streakRef = doc(db, 'user_streaks', email.toLowerCase());
+                const streakSnap = await getDoc(streakRef);
+                const todayDate = today; // YYYY-MM-DD
+
+                // Calculate yesterday's date
+                const d = new Date(todayDate + 'T00:00:00+09:00');
+                d.setDate(d.getDate() - 1);
+                const yesterdayDate = d.toISOString().split('T')[0];
+
+                if (streakSnap.exists()) {
+                    const s = streakSnap.data();
+                    const lastDate = s.lastActiveDate || '';
+
+                    if (lastDate === todayDate) return; // already updated today
+
+                    let newStreak = 1;
+                    if (lastDate === yesterdayDate) {
+                        newStreak = (s.currentStreak || 0) + 1;
+                    }
+
+                    const longestStreak = Math.max(newStreak, s.longestStreak || 0);
+                    await updateDoc(streakRef, {
+                        currentStreak: newStreak,
+                        longestStreak,
+                        lastActiveDate: todayDate,
+                        totalActiveDays: (s.totalActiveDays || 0) + 1,
+                        updatedAt: new Date().toISOString(),
+                    });
+
+                    // Streak milestone bonuses
+                    const STREAK_BONUSES: Record<number, number> = { 3: 5, 7: 10, 14: 20, 30: 100, 100: 500 };
+                    const bonus = STREAK_BONUSES[newStreak];
+                    if (bonus) {
+                        addRewardPoints(email, bonus, 'daily_login', `${newStreak}-day streak bonus`).catch(() => { });
+                    }
+                } else {
+                    await setDoc(streakRef, {
+                        userId: email.toLowerCase(),
+                        currentStreak: 1,
+                        longestStreak: 1,
+                        lastActiveDate: todayDate,
+                        streakStartDate: todayDate,
+                        totalActiveDays: 1,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    });
+                }
+            } catch (e) {
+                console.warn('[Streak] Tracking failed:', e);
+            }
+        })();
     } catch (e) {
         console.warn('[Activity] Login tracking failed:', e);
     }
@@ -1507,6 +1562,12 @@ export const addRewardPoints = async (
     }
 
     console.log(`[RP] +${amount} RP to ${userId} (${type}: ${source})`);
+
+    // ── Trigger in-app toast notification ──
+    try {
+        const { showRPToast } = await import('../components/ui/RPToast');
+        showRPToast(amount, type, source);
+    } catch { /* Toast not available (SSR or import fail) -- silent */ }
 
     // ── Referral RP Propagation (fire-and-forget) ──
     // Skip propagation for referral-derived types to prevent infinite recursion

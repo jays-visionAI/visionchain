@@ -272,7 +272,8 @@
                     <div class="stat-card">
                         <div class="stat-label">Current Weight</div>
                         <div class="stat-value" id="reward-weight">0.00x</div>
-                        <div class="stat-sub">Desktop full mode</div>
+                        <div id="reward-weight-breakdown" class="stat-sub"
+                            style="font-size:10px; color:#94a3b8; margin-top:2px;">Desktop full mode</div>
                     </div>
                 </div>
 
@@ -280,10 +281,12 @@
                     <div class="info-header">How Rewards Work</div>
                     <div class="help-text">
                         <p>Your node earns VCN rewards by maintaining uptime and providing storage to the network.</p>
-                        <p>Rewards are calculated based on your node weight (determined by class and mode) multiplied by
-                            uptime duration.</p>
-                        <p>Desktop nodes running in full WiFi mode receive 0.02x weight, the highest among non-agent
-                            nodes.</p>
+                        <p>Rewards are calculated as: <strong style="color:#06b6d4;">Weight x Uptime x Reward
+                                Rate</strong></p>
+                        <p><strong style="color:#a5b4fc;">Weight Formula:</strong> Base Weight (device/mode) + Storage
+                            Bonus (0.001x per chunk stored). Store more chunks to increase your weight and earnings.</p>
+                        <p style="color:#6b7280; font-size:11px; margin-top:8px;">Example: Desktop WiFi (0.02x base) +
+                            100 chunks (0.1x bonus) = 0.12x total weight</p>
                     </div>
                 </div>
             </div>

@@ -6283,7 +6283,7 @@ const EMAIL_PREFERENCE_DEFAULTS = {
   weeklyReport: true, // Weekly activity digest
   lifecycle: true, // Onboarding drip emails (welcome, guides)
   announcements: true, // Admin broadcasts and announcements
-
+  dailyDigest: true, // Daily RP digest email
 };
 
 /**
@@ -13447,8 +13447,8 @@ exports.agentGateway = onRequest({
           return res.status(400).json({ error: "mode must be 'wifi_full' or 'cellular_min'" });
         }
 
-        // Weight based on mode and device type
-        const weightMap = {
+        // Weight based on mode and device type (base weight)
+        const baseWeightMap = {
           android_wifi_full: 0.01,
           android_cellular_min: 0.005,
           pwa_wifi_full: 0.002,
@@ -13457,7 +13457,27 @@ exports.agentGateway = onRequest({
           desktop_cellular_min: 0.01,
         };
         const weightKey = `${mnData.device_type}_${mode}`;
-        const weight = weightMap[weightKey] || 0;
+        const baseWeight = baseWeightMap[weightKey] || 0;
+
+        // Storage bonus: more chunks stored = higher weight
+        // Each chunk adds 0.001 to weight (e.g., 50 chunks = +0.05, 200 chunks = +0.2)
+        let chunksHeld = 0;
+        try {
+          const nodeId = mnData.node_id || mnDoc.id;
+          const chunkHoldersSnap = await db.collectionGroup("holders")
+            .where("node_id", "==", nodeId)
+            .where("status", "==", "active")
+            .limit(1000)
+            .get();
+          chunksHeld = chunkHoldersSnap.size;
+        } catch (e) {
+          // collectionGroup index may not exist yet - fall back to 0
+          console.warn("[Mobile Node] Could not query chunk holders:", e.message);
+        }
+
+        const CHUNK_WEIGHT_BONUS = 0.001; // per chunk
+        const storageBonus = chunksHeld * CHUNK_WEIGHT_BONUS;
+        const weight = Math.min(1.0, Math.round((baseWeight + storageBonus) * 100000) / 100000); // cap at 1.0x
 
         if (weight === 0) {
           return res.status(200).json({
@@ -13553,11 +13573,15 @@ exports.agentGateway = onRequest({
           accepted: true,
           mode,
           weight,
+          base_weight: baseWeight,
+          storage_bonus: Math.round(storageBonus * 100000) / 100000,
+          chunks_held: chunksHeld,
           uptime_delta_sec: uptimeDelta,
           epoch: currentEpoch,
           uptime_today_sec: prevTodayUptime + uptimeDelta,
           pending_reward: newPending.toFixed(6),
           heartbeat_reward: heartbeatReward.toFixed(6),
+          total_earned: mnData.claimed_reward || "0",
           next_heartbeat_sec: mode === "wifi_full" ? 300 : 1800,
         });
       } catch (e) {
@@ -23874,4 +23898,266 @@ exports.diskGetSharedFolderFileData = onCall({ cors: true, maxInstances: 10, tim
   if (!fileDoc.exists) throw new HttpsError("not-found", "File not found.");
 
   return { success: true, file: fileDoc.data() };
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ═══ DAILY RP DIGEST EMAIL ════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+
+const RP_ACTION_LABELS = {
+  daily_login: 'Daily Login',
+  disk_upload: 'Disk Upload',
+  disk_download: 'Disk Download',
+  transfer_send: 'Transfer',
+  staking_deposit: 'Staking',
+  profile_update: 'Profile Update',
+  ai_chat: 'AI Chat',
+  cex_connect: 'CEX Connect',
+  quant_strategy_setup: 'Quant Strategy',
+  market_publish: 'Market Publish',
+  market_purchase: 'Market Purchase',
+  agent_create: 'Agent Create',
+  referral_tier1_rp: 'Referral T1',
+  referral_tier2_rp: 'Referral T2',
+  mobile_node_daily: 'Node Reward',
+  referral: 'Referral',
+  levelup: 'Level Up',
+};
+
+const RP_ACTION_COLORS = {
+  daily_login: '#22c55e',
+  staking_deposit: '#a855f7',
+  transfer_send: '#f59e0b',
+  cex_connect: '#f97316',
+  quant_strategy_setup: '#6366f1',
+  disk_upload: '#3b82f6',
+  disk_download: '#60a5fa',
+  ai_chat: '#06b6d4',
+  referral_tier1_rp: '#34d399',
+  referral_tier2_rp: '#6ee7b7',
+  mobile_node_daily: '#8b5cf6',
+  market_publish: '#ec4899',
+  market_purchase: '#f43f5e',
+  agent_create: '#14b8a6',
+  profile_update: '#9ca3af',
+  referral: '#10b981',
+  levelup: '#eab308',
+};
+
+function buildDailyDigestEmail(userEmail, events, streak, rank, totalUsers) {
+  const totalRP = events.reduce((s, e) => s + (e.amount || 0), 0);
+  const username = userEmail.split('@')[0];
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  // Group by action type
+  const breakdown = {};
+  events.forEach(e => {
+    if (!breakdown[e.type]) breakdown[e.type] = { count: 0, rp: 0 };
+    breakdown[e.type].count++;
+    breakdown[e.type].rp += e.amount || 0;
+  });
+  const sortedActions = Object.entries(breakdown).sort((a, b) => b[1].rp - a[1].rp);
+
+  // All possible actions for "missed" section
+  const allActions = ['daily_login', 'staking_deposit', 'transfer_send', 'disk_upload', 'ai_chat', 'cex_connect', 'quant_strategy_setup'];
+  const missedActions = allActions.filter(a => !breakdown[a]);
+
+  const hasActivity = events.length > 0;
+
+  // Build breakdown rows
+  let breakdownRows = '';
+  if (hasActivity) {
+    sortedActions.forEach(([type, data]) => {
+      const label = RP_ACTION_LABELS[type] || type;
+      const color = RP_ACTION_COLORS[type] || '#9ca3af';
+      breakdownRows += `
+        <tr>
+          <td style="padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${color}; margin-right:8px;"></span>
+            <span style="color:#e5e7eb; font-size:13px;">${label}</span>
+            <span style="color:#6b7280; font-size:11px; margin-left:4px;">x${data.count}</span>
+          </td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: right;">
+            <span style="color:${color}; font-weight:800; font-size:14px;">+${data.rp}</span>
+          </td>
+        </tr>`;
+    });
+  }
+
+  // Build missed actions
+  let missedSection = '';
+  if (missedActions.length > 0 && missedActions.length < allActions.length) {
+    const missedItems = missedActions.slice(0, 3).map(a => {
+      const label = RP_ACTION_LABELS[a] || a;
+      return `<span style="display:inline-block; margin:2px 4px; padding:4px 10px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.15); border-radius:8px; color:#67e8f9; font-size:11px; font-weight:600;">${label}</span>`;
+    }).join('');
+    missedSection = `
+      <div style="margin-top:20px; padding:16px; background:rgba(6,182,212,0.04); border:1px solid rgba(6,182,212,0.1); border-radius:12px;">
+        <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Earn More Tomorrow</div>
+        <div>${missedItems}</div>
+      </div>`;
+  }
+
+  // Streak section
+  let streakHtml = '';
+  if (streak && streak.currentStreak > 0) {
+    const streakDays = streak.currentStreak;
+    const streakColor = streakDays >= 7 ? '#f59e0b' : '#22c55e';
+    streakHtml = `
+      <div style="margin-top:16px; padding:14px 16px; background:rgba(245,158,11,0.05); border:1px solid rgba(245,158,11,0.12); border-radius:12px; display:flex; align-items:center;">
+        <div style="font-size:28px; font-weight:900; color:${streakColor}; margin-right:12px;">${streakDays}</div>
+        <div>
+          <div style="font-size:11px; font-weight:800; color:#d1d5db; text-transform:uppercase; letter-spacing:1px;">Day Streak</div>
+          <div style="font-size:10px; color:#6b7280; margin-top:2px;">Longest: ${streak.longestStreak || streakDays} days</div>
+        </div>
+      </div>`;
+  }
+
+  // Ranking
+  let rankHtml = '';
+  if (rank > 0 && totalUsers > 0) {
+    const pct = Math.round((rank / totalUsers) * 100);
+    rankHtml = `
+      <div style="margin-top:12px; text-align:center;">
+        <span style="font-size:10px; color:#6b7280;">Your Rank: </span>
+        <span style="font-size:13px; font-weight:800; color:#e5e7eb;">#${rank}</span>
+        <span style="font-size:10px; color:#6b7280;"> / ${totalUsers} (Top ${pct}%)</span>
+      </div>`;
+  }
+
+  const body = `
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:10px; font-weight:800; color:#6b7280; text-transform:uppercase; letter-spacing:2px; margin-bottom:8px;">${today}</div>
+      <div style="font-size:22px; font-weight:900; color:#ffffff; margin-bottom:4px;">Daily RP Report</div>
+      <div style="font-size:12px; color:#9ca3af;">Hello, ${username}</div>
+    </div>
+
+    <div style="text-align:center; padding:24px; background:rgba(6,182,212,0.05); border:1px solid rgba(6,182,212,0.1); border-radius:16px; margin-bottom:20px;">
+      <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Today's Earnings</div>
+      <div style="font-size:42px; font-weight:900; color:${hasActivity ? '#06b6d4' : '#4b5563'}; letter-spacing:-1px;">+${totalRP}</div>
+      <div style="font-size:11px; color:#6b7280; margin-top:4px;">${events.length} action${events.length !== 1 ? 's' : ''} today</div>
+      ${streakHtml}
+      ${rankHtml}
+    </div>
+
+    ${hasActivity ? `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px;">Activity Breakdown</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${breakdownRows}
+          <tr>
+            <td style="padding:10px 12px; font-size:12px; font-weight:800; color:#d1d5db;">Total</td>
+            <td style="padding:10px 12px; text-align:right; font-size:16px; font-weight:900; color:#06b6d4;">+${totalRP} RP</td>
+          </tr>
+        </table>
+      </div>
+    ` : `
+      <div style="text-align:center; padding:20px; margin-bottom:20px;">
+        <div style="font-size:13px; color:#9ca3af; margin-bottom:8px;">No activity today</div>
+        <div style="font-size:11px; color:#6b7280;">Log in to earn +5 RP instantly!</div>
+      </div>
+    `}
+
+    ${missedSection}
+
+    ${emailComponents.button('Open Vision Chain', 'https://visionchain.co/wallet')}
+  `;
+
+  return emailBaseLayout(body, `Your daily RP report: +${totalRP} RP earned`);
+}
+
+exports.dailyRPDigest = onSchedule({
+  schedule: "0 12 * * *", // UTC 12:00 = KST 21:00
+  timeZone: "UTC",
+  secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async (_event) => {
+  console.log("[DailyDigest] Starting daily RP digest...");
+
+  try {
+    // 1. Get today's date range
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayISO = todayStart.toISOString();
+
+    // 2. Fetch ALL today's rp_history
+    const rpSnap = await db.collection("rp_history")
+      .where("timestamp", ">=", todayISO)
+      .orderBy("timestamp", "desc")
+      .get();
+
+    // Group by user
+    const userEvents = {};
+    rpSnap.forEach(d => {
+      const e = d.data();
+      const uid = e.userId;
+      if (!userEvents[uid]) userEvents[uid] = [];
+      userEvents[uid].push(e);
+    });
+
+    console.log(`[DailyDigest] ${rpSnap.size} events across ${Object.keys(userEvents).length} active users`);
+
+    // 3. Get all users with walletAddress (registered users)
+    const usersSnap = await db.collection("users")
+      .where("walletAddress", "!=", null)
+      .get();
+
+    // 4. Calculate RP rankings for today
+    const userTotals = Object.entries(userEvents).map(([uid, events]) => ({
+      uid,
+      total: events.reduce((s, e) => s + (e.amount || 0), 0),
+    })).sort((a, b) => b.total - a.total);
+    const rankMap = {};
+    userTotals.forEach((u, i) => { rankMap[u.uid] = i + 1; });
+    const totalActiveUsers = userTotals.length;
+
+    // 5. Send emails in batches
+    let sentCount = 0;
+    let skippedCount = 0;
+    const batchSize = 20;
+    const allUsers = usersSnap.docs;
+
+    for (let i = 0; i < allUsers.length; i += batchSize) {
+      const batch = allUsers.slice(i, i + batchSize);
+
+      const promises = batch.map(async (userDoc) => {
+        const email = userDoc.id;
+        try {
+          // Check opt-in
+          const optedIn = await checkEmailOptIn(email, "dailyDigest");
+          if (!optedIn) {
+            skippedCount++;
+            return;
+          }
+
+          // Get user's streak
+          let streak = null;
+          try {
+            const streakDoc = await db.collection("user_streaks").doc(email).get();
+            if (streakDoc.exists) streak = streakDoc.data();
+          } catch { /* no streak */ }
+
+          const events = userEvents[email] || [];
+          const rank = rankMap[email] || 0;
+
+          const html = buildDailyDigestEmail(email, events, streak, rank, totalActiveUsers || usersSnap.size);
+          await sendSecurityEmail(email, "Vision Chain - Daily RP Report", html);
+          sentCount++;
+        } catch (e) {
+          console.warn(`[DailyDigest] Failed for ${email}:`, e.message);
+          skippedCount++;
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Small delay between batches to avoid rate limits
+      if (i + batchSize < allUsers.length) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    console.log(`[DailyDigest] Complete: ${sentCount} sent, ${skippedCount} skipped out of ${allUsers.length} users`);
+  } catch (err) {
+    console.error("[DailyDigest] Failed:", err);
+  }
 });
