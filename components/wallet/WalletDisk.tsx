@@ -150,6 +150,7 @@ export const WalletDisk = (props: {
     const [sharedFolderFiles, setSharedFolderFiles] = createSignal<DiskFile[]>([]);
     const [sharedFolderMeta, setSharedFolderMeta] = createSignal<any>(null);
     const [contacts, setContacts] = createSignal<any[]>([]);
+    const [showMemberPanel, setShowMemberPanel] = createSignal(false);
     const [previewFile, setPreviewFile] = createSignal<DiskFile | null>(null);
     const [previewURL, setPreviewURL] = createSignal<string>('');
     const [previewLoading, setPreviewLoading] = createSignal(false);
@@ -2196,19 +2197,143 @@ export const WalletDisk = (props: {
 
                     {/* Active Shared Folder View */}
                     <Show when={activeSharedFolder()}>
-                        <div class="flex items-center gap-2 mb-4">
-                            <button
-                                onClick={() => { setActiveSharedFolder(null); setSharedFolderFiles([]); setSharedFolderMeta(null); }}
-                                class="p-2 text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
-                            >
-                                <ArrowLeft class="w-4 h-4" />
-                            </button>
-                            <Users class="w-4 h-4 text-cyan-400" />
-                            <span class="text-sm font-bold text-white">{sharedFolderMeta()?.name || 'Shared Folder'}</span>
-                            <Show when={sharedFolderMeta()?.members}>
-                                <span class="text-[10px] text-gray-500 ml-2">{sharedFolderMeta()?.members?.length} members</span>
-                            </Show>
+                        {/* Folder Header */}
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2">
+                                <button
+                                    onClick={() => { setActiveSharedFolder(null); setSharedFolderFiles([]); setSharedFolderMeta(null); setShowMemberPanel(false); }}
+                                    class="p-2 text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                                >
+                                    <ArrowLeft class="w-4 h-4" />
+                                </button>
+                                <Users class="w-4 h-4 text-cyan-400" />
+                                <span class="text-sm font-bold text-white">{sharedFolderMeta()?.name || 'Shared Folder'}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                {/* Member Management Toggle */}
+                                <button
+                                    onClick={() => setShowMemberPanel(!showMemberPanel())}
+                                    class={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${showMemberPanel() ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.03] text-gray-400 hover:text-white border-white/[0.06]'}`}
+                                >
+                                    <Users class="w-3.5 h-3.5" />
+                                    {sharedFolderMeta()?.members?.length || 0}
+                                </button>
+                                {/* Upload Button */}
+                                <label class="flex items-center gap-1.5 px-3 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border border-cyan-500/20 cursor-pointer">
+                                    <UploadCloud class="w-3.5 h-3.5" />
+                                    Upload
+                                    <input
+                                        type="file"
+                                        multiple
+                                        class="hidden"
+                                        onChange={async (e) => {
+                                            const fileList = e.currentTarget.files;
+                                            if (!fileList || fileList.length === 0) return;
+                                            const fId = activeSharedFolder();
+                                            if (!fId) return;
+                                            for (let i = 0; i < fileList.length; i++) {
+                                                const f = fileList[i];
+                                                try {
+                                                    setSharedLoading(true);
+                                                    await uploadToSharedFolder(fId, f);
+                                                } catch (err: any) {
+                                                    console.error('[Disk] Shared folder upload error:', err);
+                                                    alert(`Failed to upload ${f.name}: ${err.message || 'Unknown error'}`);
+                                                }
+                                            }
+                                            // Reload files
+                                            await openSharedFolder(fId);
+                                        }}
+                                    />
+                                </label>
+                            </div>
                         </div>
+
+                        {/* Member Management Panel */}
+                        <Show when={showMemberPanel()}>
+                            <div class="mb-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Members</div>
+                                    <Show when={sharedFolderMeta()?.ownerEmail === email()}>
+                                        <div class="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={shareSearchQuery()}
+                                                onInput={(e) => setShareSearchQuery(e.currentTarget.value)}
+                                                placeholder="Add member..."
+                                                autocomplete="off"
+                                                class="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 w-40"
+                                            />
+                                        </div>
+                                    </Show>
+                                </div>
+
+                                {/* Add member search results */}
+                                <Show when={shareSearchQuery().length >= 2 && sharedFolderMeta()?.ownerEmail === email()}>
+                                    <div class="mb-3 space-y-1">
+                                        <For each={contacts().filter((c: any) => {
+                                            const q = shareSearchQuery().toLowerCase();
+                                            const memberEmails = sharedFolderMeta()?.members?.map((m: any) => m.email) || [];
+                                            return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid && !memberEmails.includes(c.vchainUserUid);
+                                        }).slice(0, 5)}>
+                                            {(contact: any) => (
+                                                <button
+                                                    onClick={async () => {
+                                                        const fId = activeSharedFolder();
+                                                        if (!fId) return;
+                                                        try {
+                                                            await manageSharedFolderMember(fId, 'add', contact.vchainUserUid, 'editor');
+                                                            setShareSearchQuery('');
+                                                            await openSharedFolder(fId);
+                                                        } catch (err: any) { alert(err.message || 'Failed to add member'); }
+                                                    }}
+                                                    class="w-full flex items-center gap-2 p-2 bg-cyan-500/5 hover:bg-cyan-500/10 rounded-lg transition-all text-left text-xs border border-cyan-500/10"
+                                                >
+                                                    <UserPlus class="w-3.5 h-3.5 text-cyan-400" />
+                                                    <span class="text-white font-bold truncate">{contact.internalName}</span>
+                                                    <span class="text-gray-500 ml-auto text-[10px]">{contact.vchainUserUid}</span>
+                                                </button>
+                                            )}
+                                        </For>
+                                    </div>
+                                </Show>
+
+                                {/* Member list */}
+                                <div class="space-y-2">
+                                    <For each={sharedFolderMeta()?.members || []}>
+                                        {(member: any) => (
+                                            <div class="flex items-center justify-between p-2 bg-white/[0.02] rounded-xl">
+                                                <div class="flex items-center gap-2">
+                                                    <div class={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black border ${member.role === 'owner' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : member.role === 'editor' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+                                                        {member.email.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-xs font-bold text-white">{(() => { const c = contacts().find((c: any) => c.vchainUserUid === member.email); return c?.internalName || member.email.split('@')[0]; })()}</div>
+                                                        <div class="text-[10px] text-gray-500">{member.role}</div>
+                                                    </div>
+                                                </div>
+                                                <Show when={member.role !== 'owner' && sharedFolderMeta()?.ownerEmail === email()}>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!confirm(`Remove ${member.email}?`)) return;
+                                                            const fId = activeSharedFolder();
+                                                            if (!fId) return;
+                                                            try {
+                                                                await manageSharedFolderMember(fId, 'remove', member.email);
+                                                                await openSharedFolder(fId);
+                                                            } catch (err: any) { alert(err.message || 'Failed'); }
+                                                        }}
+                                                        class="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    >
+                                                        <UserMinus class="w-3.5 h-3.5" />
+                                                    </button>
+                                                </Show>
+                                            </div>
+                                        )}
+                                    </For>
+                                </div>
+                            </div>
+                        </Show>
 
                         <Show when={sharedLoading()}>
                             <div class="flex items-center justify-center py-12">
@@ -2221,22 +2346,49 @@ export const WalletDisk = (props: {
                                 <div class="space-y-2">
                                     <For each={sharedFolderFiles()}>
                                         {(file) => (
-                                            <div class="flex items-center gap-3 p-3 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.05] transition-all">
-                                                <div class="w-9 h-9 rounded-lg bg-white/[0.05] flex items-center justify-center">
-                                                    <FileIcon class="w-4 h-4 text-blue-400" />
+                                            <div class="flex items-center gap-3 p-3 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.05] transition-all group">
+                                                <div class={`w-9 h-9 rounded-lg bg-white/[0.05] flex items-center justify-center ${fileTypeColor(file.type)}`}>
+                                                    <FileTypeIcon type={file.type} name={file.name} class="w-4 h-4" />
                                                 </div>
                                                 <div class="flex-1 min-w-0">
                                                     <div class="text-sm font-bold text-white truncate">{file.name}</div>
                                                     <div class="text-[10px] text-gray-500">
-                                                        {formatFileSize(file.size)} | by {(file as any).uploadedBy?.split('@')[0] || 'unknown'}
+                                                        {formatFileSize(file.size)} | by {(file as any).uploadedBy?.split('@')[0] || 'unknown'} | {new Date(file.createdAt).toLocaleDateString()}
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => setPreviewFile(file)}
-                                                    class="p-2 text-gray-500 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
-                                                >
-                                                    <Eye class="w-4 h-4" />
-                                                </button>
+                                                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => setPreviewFile(file)}
+                                                        class="p-2 text-gray-500 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                                                        title="Preview"
+                                                    >
+                                                        <Eye class="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDownload(file)}
+                                                        class="p-2 text-gray-500 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                                                        title="Download"
+                                                    >
+                                                        <Download class="w-4 h-4" />
+                                                    </button>
+                                                    <Show when={sharedFolderMeta()?.ownerEmail === email() || (file as any).uploadedBy === email()}>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!confirm(`Delete ${file.name}?`)) return;
+                                                                const fId = activeSharedFolder();
+                                                                if (!fId) return;
+                                                                try {
+                                                                    await deleteSharedFolderFile(fId, file.id);
+                                                                    await openSharedFolder(fId);
+                                                                } catch (err: any) { alert(err.message || 'Failed'); }
+                                                            }}
+                                                            class="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 class="w-4 h-4" />
+                                                        </button>
+                                                    </Show>
+                                                </div>
                                             </div>
                                         )}
                                     </For>
@@ -2244,9 +2396,34 @@ export const WalletDisk = (props: {
                             </Show>
                             <Show when={sharedFolderFiles().length === 0}>
                                 <div class="flex flex-col items-center justify-center py-16 text-center">
-                                    <Folder class="w-12 h-12 text-gray-700 mb-4" />
-                                    <div class="text-sm font-bold text-gray-500">No files yet</div>
-                                    <div class="text-xs text-gray-600 mt-1">Upload files to this shared folder</div>
+                                    <div class="w-16 h-16 rounded-2xl bg-cyan-500/5 border border-cyan-500/10 flex items-center justify-center mb-4">
+                                        <UploadCloud class="w-8 h-8 text-cyan-400/40" />
+                                    </div>
+                                    <div class="text-sm font-bold text-gray-500 mb-1">No files yet</div>
+                                    <div class="text-xs text-gray-600 mb-4">Upload files to start collaborating</div>
+                                    <label class="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all cursor-pointer">
+                                        <UploadCloud class="w-4 h-4" /> Upload Files
+                                        <input
+                                            type="file"
+                                            multiple
+                                            class="hidden"
+                                            onChange={async (e) => {
+                                                const fileList = e.currentTarget.files;
+                                                if (!fileList || fileList.length === 0) return;
+                                                const fId = activeSharedFolder();
+                                                if (!fId) return;
+                                                for (let i = 0; i < fileList.length; i++) {
+                                                    try {
+                                                        setSharedLoading(true);
+                                                        await uploadToSharedFolder(fId, fileList[i]);
+                                                    } catch (err: any) {
+                                                        alert(`Failed: ${err.message || 'Unknown error'}`);
+                                                    }
+                                                }
+                                                await openSharedFolder(fId);
+                                            }}
+                                        />
+                                    </label>
                                 </div>
                             </Show>
                         </Show>
