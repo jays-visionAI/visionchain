@@ -185,6 +185,12 @@ export const WalletDisk = (props: {
     const [showVNetTooltip, setShowVNetTooltip] = createSignal(false);
     const [showPrivateTooltip, setShowPrivateTooltip] = createSignal(false);
 
+    // PPTX Preview State
+    const [pptxSlides, setPptxSlides] = createSignal<{ html: string; images: Record<string, string> }[]>([]);
+    const [pptxCurrentSlide, setPptxCurrentSlide] = createSignal(1);
+    const [pptxTotalSlides, setPptxTotalSlides] = createSignal(0);
+    const [pptxRendering, setPptxRendering] = createSignal(false);
+
     // Move Modal State
     const [showMoveModal, setShowMoveModal] = createSignal(false);
     const [moveTargetFolder, setMoveTargetFolder] = createSignal<string | null>(null);
@@ -255,6 +261,146 @@ export const WalletDisk = (props: {
             setPdfCurrentPage(1);
         } catch (err) {
             console.error('[Disk] PDF render error:', err);
+        }
+    };
+
+    // ─── PPTX Renderer ───
+    const renderPptxFromBlob = async (blob: Blob) => {
+        try {
+            // Load JSZip from CDN
+            if (!(window as any).JSZip) {
+                await new Promise<void>((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+                    script.onload = () => resolve();
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+
+            const JSZip = (window as any).JSZip;
+            if (!JSZip) throw new Error('JSZip failed to load');
+
+            const arrayBuffer = await blob.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+
+            // Extract media images as data URLs
+            const mediaImages: Record<string, string> = {};
+            const mediaFiles = Object.keys(zip.files).filter(f => f.startsWith('ppt/media/'));
+            for (const mediaPath of mediaFiles) {
+                const data = await zip.file(mediaPath)?.async('base64');
+                if (data) {
+                    const ext = mediaPath.split('.').pop()?.toLowerCase() || 'png';
+                    const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'svg' ? 'image/svg+xml' : 'image/png';
+                    mediaImages[mediaPath.replace('ppt/', '')] = `data:${mime};base64,${data}`;
+                }
+            }
+
+            // Find all slides
+            const slideFiles = Object.keys(zip.files)
+                .filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f))
+                .sort((a, b) => {
+                    const na = parseInt(a.match(/slide(\d+)/)?.[1] || '0');
+                    const nb = parseInt(b.match(/slide(\d+)/)?.[1] || '0');
+                    return na - nb;
+                });
+
+            setPptxTotalSlides(slideFiles.length);
+            const slides: { html: string; images: Record<string, string> }[] = [];
+
+            for (const slideFile of slideFiles) {
+                const slideXml = await zip.file(slideFile)?.async('text');
+                if (!slideXml) continue;
+
+                // Parse slide relationships for image references
+                const slideNum = slideFile.match(/slide(\d+)/)?.[1] || '1';
+                const relsPath = `ppt/slides/_rels/slide${slideNum}.xml.rels`;
+                const relsXml = await zip.file(relsPath)?.async('text');
+                const imageRels: Record<string, string> = {};
+                if (relsXml) {
+                    const relMatches = relsXml.matchAll(/Id="(rId\d+)"[^>]*Target="([^"]+)"/g);
+                    for (const m of relMatches) {
+                        const target = m[2].replace('../', '');
+                        if (mediaImages[target]) {
+                            imageRels[m[1]] = mediaImages[target];
+                        }
+                    }
+                }
+
+                // Parse text content from slide XML
+                const textParts: string[] = [];
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(slideXml, 'text/xml');
+
+                // Extract all text runs
+                const textNodes = doc.querySelectorAll('*');
+                let currentParagraph = '';
+                textNodes.forEach(node => {
+                    if (node.localName === 'p' && node.namespaceURI?.includes('drawingml')) {
+                        if (currentParagraph.trim()) textParts.push(currentParagraph.trim());
+                        currentParagraph = '';
+                    }
+                    if (node.localName === 't' && node.textContent) {
+                        currentParagraph += node.textContent;
+                    }
+                });
+                if (currentParagraph.trim()) textParts.push(currentParagraph.trim());
+
+                // Extract image references from slide
+                const slideImages: string[] = [];
+                const blipNodes = doc.querySelectorAll('*');
+                blipNodes.forEach(node => {
+                    if (node.localName === 'blip') {
+                        const embed = node.getAttribute('r:embed') || node.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed');
+                        if (embed && imageRels[embed]) {
+                            slideImages.push(imageRels[embed]);
+                        }
+                    }
+                });
+
+                // Build HTML for this slide
+                let html = '<div style="width:100%;height:100%;padding:32px;display:flex;flex-direction:column;justify-content:center;background:#1e1e2e;color:white;font-family:Inter,system-ui,sans-serif;position:relative;overflow:hidden;">';
+
+                // Slide number badge
+                html += `<div style="position:absolute;top:12px;right:16px;font-size:11px;color:rgba(255,255,255,0.3);font-weight:600;">SLIDE ${slides.length + 1}</div>`;
+
+                // Images
+                if (slideImages.length > 0) {
+                    html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">';
+                    for (const img of slideImages) {
+                        html += `<img src="${img}" style="max-width:80%;max-height:240px;border-radius:8px;object-fit:contain;" />`;
+                    }
+                    html += '</div>';
+                }
+
+                // Text content
+                if (textParts.length > 0) {
+                    const title = textParts[0];
+                    html += `<div style="font-size:22px;font-weight:800;margin-bottom:16px;line-height:1.3;">${title.replace(/</g, '&lt;')}</div>`;
+                    if (textParts.length > 1) {
+                        html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+                        for (let i = 1; i < textParts.length; i++) {
+                            html += `<div style="font-size:14px;color:rgba(255,255,255,0.75);line-height:1.5;">${textParts[i].replace(/</g, '&lt;')}</div>`;
+                        }
+                        html += '</div>';
+                    }
+                } else if (slideImages.length === 0) {
+                    html += '<div style="font-size:16px;color:rgba(255,255,255,0.4);text-align:center;">(Empty slide)</div>';
+                }
+
+                html += '</div>';
+                slides.push({ html, images: imageRels });
+
+                // Progressive update
+                if (slides.length === 1 || slides.length % 3 === 0) {
+                    setPptxSlides([...slides]);
+                }
+            }
+
+            setPptxSlides(slides);
+            setPptxCurrentSlide(1);
+        } catch (err) {
+            console.error('[Disk] PPTX render error:', err);
         }
     };
 
@@ -858,6 +1004,10 @@ export const WalletDisk = (props: {
         setPdfCurrentPage(1);
         setPdfTotalPages(0);
         setPdfRendering(false);
+        setPptxSlides([]);
+        setPptxCurrentSlide(1);
+        setPptxTotalSlides(0);
+        setPptxRendering(false);
 
         if (!file) return;
 
@@ -902,6 +1052,51 @@ export const WalletDisk = (props: {
             } finally {
                 setPreviewLoading(false);
                 setPdfRendering(false);
+                setPreviewProgress(null);
+            }
+            return;
+        }
+
+        // PPTX files: download and render via JSZip
+        const pptxTypes = ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'];
+        const isPptx = pptxTypes.includes(file.type) || file.name.toLowerCase().endsWith('.pptx') || file.name.toLowerCase().endsWith('.ppt');
+        if (isPptx) {
+            console.log('[Disk] PPTX preview for:', file.name);
+            setPreviewLoading(true);
+            setPreviewProgress(null);
+            try {
+                let blob: Blob;
+                if (file.storageType === 'distributed' || file.isEncrypted) {
+                    if (file.storageType === 'distributed') {
+                        blob = await downloadDiskFileGranular(file, (current, total) => {
+                            setPreviewProgress({ current, total });
+                        }, 8);
+                    } else {
+                        const resp = await fetch(file.downloadURL);
+                        blob = await resp.blob();
+                    }
+                    if (file.isEncrypted) {
+                        if (!encryptionPassword()) {
+                            setPendingPreviewFile(file);
+                            setShowPasswordModal(true);
+                            setPreviewFile(null);
+                            return;
+                        }
+                        const buffer = await blob.arrayBuffer();
+                        blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                    }
+                } else {
+                    const resp = await fetch(file.downloadURL);
+                    blob = await resp.blob();
+                }
+                setPreviewLoading(false);
+                setPptxRendering(true);
+                await renderPptxFromBlob(blob);
+            } catch (err) {
+                console.error('[Disk] PPTX preview failed:', err);
+            } finally {
+                setPreviewLoading(false);
+                setPptxRendering(false);
                 setPreviewProgress(null);
             }
             return;
@@ -2051,7 +2246,79 @@ export const WalletDisk = (props: {
                                                     </Show>
                                                 </div>
                                             </Show>
-                                            <Show when={!file().type.startsWith('image/') && !file().type.startsWith('video/') && !file().type.startsWith('audio/') && !file().type.includes('pdf')}>
+                                            {/* PPTX Preview */}
+                                            <Show when={(() => { const f = file(); const types = ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint']; return types.includes(f.type) || f.name.toLowerCase().endsWith('.pptx') || f.name.toLowerCase().endsWith('.ppt'); })()}>
+                                                <div class="w-full flex flex-col gap-3">
+                                                    <Show when={pptxRendering()}>
+                                                        <div class="text-center py-8">
+                                                            <div class="w-10 h-10 border-3 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mx-auto mb-3" />
+                                                            <div class="text-sm text-gray-400">슬라이드 렌더링 중...</div>
+                                                        </div>
+                                                    </Show>
+                                                    <Show when={pptxSlides().length > 0}>
+                                                        {/* PPTX Toolbar */}
+                                                        <div class="w-full flex items-center justify-between bg-[#0e0e16] border border-white/10 rounded-xl px-4 py-2">
+                                                            <div class="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => setPptxCurrentSlide(Math.max(1, pptxCurrentSlide() - 1))}
+                                                                    disabled={pptxCurrentSlide() <= 1}
+                                                                    class="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                                                >
+                                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
+                                                                </button>
+                                                                <span class="text-sm text-gray-300 font-medium min-w-[100px] text-center">
+                                                                    Slide {pptxCurrentSlide()} / {pptxTotalSlides()}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => setPptxCurrentSlide(Math.min(pptxTotalSlides(), pptxCurrentSlide() + 1))}
+                                                                    disabled={pptxCurrentSlide() >= pptxTotalSlides()}
+                                                                    class="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                                                >
+                                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
+                                                                </button>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleDownload(file())}
+                                                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-gray-300 hover:text-white rounded-lg text-xs font-bold transition-all border border-white/10"
+                                                            >
+                                                                <Download class="w-3.5 h-3.5" /> Download
+                                                            </button>
+                                                        </div>
+                                                        {/* PPTX Slide */}
+                                                        <div
+                                                            class="w-full rounded-lg border border-white/10 overflow-hidden"
+                                                            style={{ 'aspect-ratio': '16/9', 'max-height': '65vh' }}
+                                                            innerHTML={pptxSlides()[pptxCurrentSlide() - 1]?.html || ''}
+                                                        />
+                                                        {/* Slide thumbnails */}
+                                                        <div class="flex gap-2 overflow-x-auto py-2 px-1 custom-scrollbar">
+                                                            {pptxSlides().map((slide, i) => (
+                                                                <button
+                                                                    onClick={() => setPptxCurrentSlide(i + 1)}
+                                                                    class={`flex-shrink-0 w-20 h-12 rounded-lg border-2 overflow-hidden transition-all ${pptxCurrentSlide() === i + 1 ? 'border-cyan-500 ring-1 ring-cyan-500/30' : 'border-white/10 hover:border-white/30'}`}
+                                                                >
+                                                                    <div class="w-full h-full bg-[#1e1e2e] flex items-center justify-center text-[8px] text-gray-500 font-bold">
+                                                                        {i + 1}
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </Show>
+                                                    <Show when={!pptxRendering() && pptxSlides().length === 0 && !previewLoading()}>
+                                                        <div class="text-center py-12">
+                                                            <svg class="w-16 h-16 text-orange-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>
+                                                            <div class="text-sm text-gray-400 mb-4">슬라이드를 불러올 수 없습니다.</div>
+                                                            <button
+                                                                onClick={() => handleDownload(file())}
+                                                                class="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all"
+                                                            >
+                                                                <Download class="w-4 h-4" /> 다운로드
+                                                            </button>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                            </Show>
+                                            <Show when={(() => { const f = file(); const pptxTypes = ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint']; const isPptx = pptxTypes.includes(f.type) || f.name.toLowerCase().endsWith('.pptx') || f.name.toLowerCase().endsWith('.ppt'); return !f.type.startsWith('image/') && !f.type.startsWith('video/') && !f.type.startsWith('audio/') && !f.type.includes('pdf') && !isPptx; })()}>
                                                 <div class="text-center">
                                                     <div class={`${fileTypeColor(file().type)} mx-auto mb-3`}>
                                                         <FileTypeIcon type={file().type} name={file().name} class="w-16 h-16" />

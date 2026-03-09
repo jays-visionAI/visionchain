@@ -30,6 +30,12 @@ const RP_ACTION_DEFS: { key: keyof RPConfig; label: string; category: string; de
     { key: 'agent_nft_mint', label: 'Agent NFT Mint', category: 'Agent API', description: 'Agent API nft.mint' },
     { key: 'agent_referral_inviter', label: 'Agent Ref Inviter', category: 'Agent API', description: 'Agent API referral inviter bonus' },
     { key: 'agent_referral_invitee', label: 'Agent Ref Invitee', category: 'Agent API', description: 'Agent API referral invitee bonus' },
+    // CEX & Quant
+    { key: 'cex_connect', label: 'CEX Connect', category: 'CEX & Quant', description: 'Connect a CEX exchange' },
+    { key: 'quant_strategy_setup', label: 'Quant Strategy', category: 'CEX & Quant', description: 'Setup a Quant Engine strategy' },
+    // Referral RP Propagation (rates, not fixed amounts -- stored as decimals)
+    { key: 'referral_rp_tier1_rate', label: 'Tier 1 RP Rate', category: 'Referral RP Propagation', description: 'Direct referrer gets this % of earned RP (0.10 = 10%)' },
+    { key: 'referral_rp_tier2_rate', label: 'Tier 2 RP Rate', category: 'Referral RP Propagation', description: 'Grand referrer gets this % of earned RP (0.02 = 2%)' },
 ];
 
 export default function AdminRPConfig() {
