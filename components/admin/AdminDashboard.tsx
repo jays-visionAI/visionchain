@@ -1,4 +1,4 @@
-import { Component, createSignal, onCleanup, For, Show, onMount } from 'solid-js';
+import { Component, createSignal, onCleanup, For, Show, onMount, createMemo } from 'solid-js';
 import { ethers } from 'ethers';
 import { getAllUsers, getDefiConfig, getFirebaseDb } from '../../services/firebaseService';
 import { collection, query, where, getDocs, orderBy, limit, getCountFromServer } from 'firebase/firestore';
@@ -17,7 +17,11 @@ import {
     Bot,
     Users,
     Smartphone,
-    HardDrive
+    HardDrive,
+    Award,
+    TrendingUp,
+    Gift,
+    ArrowUpRight
 } from 'lucide-solid';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { MetricCard } from './dashboard/MetricCard';
@@ -85,6 +89,13 @@ export const AdminDashboard: Component = () => {
     const [totalStorageGB, setTotalStorageGB] = createSignal(0);
     const [activeStorageGB, setActiveStorageGB] = createSignal(0);
     const [nodeClassBreakdown, setNodeClassBreakdown] = createSignal({ lite: 0, standard: 0, full: 0 });
+
+    // RP Activity
+    const [rpTodayTotal, setRpTodayTotal] = createSignal(0);
+    const [rpTodayUsers, setRpTodayUsers] = createSignal(0);
+    const [rpTodayEvents, setRpTodayEvents] = createSignal(0);
+    const [rpTopAction, setRpTopAction] = createSignal<[string, number]>(['--', 0]);
+    const [rpRecentFeed, setRpRecentFeed] = createSignal<any[]>([]);
 
 
     const fetchRecentTransactions = async () => {
@@ -323,6 +334,68 @@ export const AdminDashboard: Component = () => {
     };
 
     // Fetch real data on mount & Simulate TPS
+    const fetchRPActivity = async () => {
+        try {
+            const db = getFirebaseDb();
+            const rpRef = collection(db, 'rp_history');
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const todayISO = todayStart.toISOString();
+
+            // Fetch today's events
+            const todayQuery = query(rpRef, where('timestamp', '>=', todayISO), orderBy('timestamp', 'desc'));
+            const todaySnap = await getDocs(todayQuery);
+            const events = todaySnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+            const totalRP = events.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+            const uniqueUsers = new Set(events.map((e: any) => e.userId)).size;
+            setRpTodayTotal(totalRP);
+            setRpTodayUsers(uniqueUsers);
+            setRpTodayEvents(events.length);
+
+            // Top action
+            const counts: Record<string, number> = {};
+            events.forEach((e: any) => { counts[e.type] = (counts[e.type] || 0) + 1; });
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            setRpTopAction(sorted.length > 0 ? sorted[0] as [string, number] : ['--', 0]);
+
+            // Recent feed (latest 8)
+            const recentQuery = query(rpRef, orderBy('timestamp', 'desc'), limit(8));
+            const recentSnap = await getDocs(recentQuery);
+            setRpRecentFeed(recentSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+            console.error('[Dashboard] RP Activity fetch failed:', e);
+        }
+    };
+
+    const rpActionLabel = (type: string) => {
+        const map: Record<string, string> = {
+            daily_login: 'Login', disk_upload: 'Upload', disk_download: 'Download',
+            transfer_send: 'Transfer', staking_deposit: 'Staking', profile_update: 'Profile',
+            ai_chat: 'AI Chat', cex_connect: 'CEX', quant_strategy_setup: 'Quant',
+            market_publish: 'Publish', market_purchase: 'Purchase', agent_create: 'Agent',
+            referral_tier1_rp: 'Ref T1', referral_tier2_rp: 'Ref T2',
+            referral: 'Referral', levelup: 'Level Up', mobile_node_daily: 'Node',
+        };
+        return map[type] || type;
+    };
+
+    const rpActionColor = (type: string) => {
+        const map: Record<string, string> = {
+            daily_login: 'text-green-400', staking_deposit: 'text-purple-400',
+            transfer_send: 'text-amber-400', cex_connect: 'text-orange-400',
+            quant_strategy_setup: 'text-indigo-400', disk_upload: 'text-blue-400',
+            ai_chat: 'text-cyan-400', referral_tier1_rp: 'text-emerald-400',
+            referral_tier2_rp: 'text-emerald-300', mobile_node_daily: 'text-violet-400',
+        };
+        return map[type] || 'text-gray-400';
+    };
+
+    const rpAvgPerUser = createMemo(() => {
+        const users = rpTodayUsers();
+        return users > 0 ? Math.round(rpTodayTotal() / users) : 0;
+    });
+
     onMount(() => {
         // Fetch all data on mount
         fetchRecentTransactions();
@@ -331,6 +404,7 @@ export const AdminDashboard: Component = () => {
         fetchTVLData();
         fetchDAUData();
         fetchNodeStats();
+        fetchRPActivity();
 
         // Refresh only fast-changing data every 30s (was 5s - too aggressive)
         // User stats and TVL change infrequently, no need to poll
@@ -632,6 +706,91 @@ export const AdminDashboard: Component = () => {
 
                     {/* Max Performance Section */}
                     <MaxTPSSection />
+                </div>
+            </div>
+
+            {/* RP Activity Section */}
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Today's RP Activity</h3>
+                        <div class="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 border border-green-500/20 rounded-full">
+                            <div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                            <span class="text-[8px] font-black text-green-400 uppercase tracking-widest">Live</span>
+                        </div>
+                    </div>
+                    <a href="/adminsystem/activity" class="text-xs text-blue-400 hover:text-white transition-colors flex items-center gap-1">
+                        Full Feed <ArrowRight class="w-3 h-3" />
+                    </a>
+                </div>
+
+                {/* KPI Row */}
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-[#13161F] border border-white/5 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <Zap class="w-3.5 h-3.5 text-cyan-400" />
+                            <span class="text-[9px] font-black text-gray-600 uppercase tracking-widest">RP Issued</span>
+                        </div>
+                        <div class="text-xl font-black text-white">{rpTodayTotal().toLocaleString()}</div>
+                        <div class="text-[9px] text-gray-600 mt-0.5">{rpTodayEvents()} events</div>
+                    </div>
+                    <div class="bg-[#13161F] border border-white/5 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <Users class="w-3.5 h-3.5 text-green-400" />
+                            <span class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Active Users</span>
+                        </div>
+                        <div class="text-xl font-black text-white">{rpTodayUsers()}</div>
+                        <div class="text-[9px] text-gray-600 mt-0.5">earned RP today</div>
+                    </div>
+                    <div class="bg-[#13161F] border border-white/5 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <TrendingUp class="w-3.5 h-3.5 text-purple-400" />
+                            <span class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Avg / User</span>
+                        </div>
+                        <div class="text-xl font-black text-white">{rpAvgPerUser()}</div>
+                        <div class="text-[9px] text-gray-600 mt-0.5">RP per user</div>
+                    </div>
+                    <div class="bg-[#13161F] border border-white/5 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <Award class="w-3.5 h-3.5 text-amber-400" />
+                            <span class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Top Action</span>
+                        </div>
+                        <div class="text-lg font-black text-white">{rpActionLabel(rpTopAction()[0])}</div>
+                        <div class="text-[9px] text-gray-600 mt-0.5">{rpTopAction()[1]} events</div>
+                    </div>
+                </div>
+
+                {/* Mini Feed */}
+                <div class="bg-[#13161F] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="divide-y divide-white/[0.03]">
+                        <For each={rpRecentFeed()}>
+                            {(event: any) => (
+                                <div class="px-4 py-2.5 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
+                                    <div class="w-6 h-6 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                                        <ArrowUpRight class={`w-3 h-3 ${rpActionColor(event.type)}`} />
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <span class="text-xs font-bold text-white">{event.userId?.split('@')[0] || '?'}</span>
+                                        <span class={`ml-2 text-[9px] font-black uppercase tracking-wider ${rpActionColor(event.type)}`}>{rpActionLabel(event.type)}</span>
+                                    </div>
+                                    <span class="text-xs font-black text-cyan-400">+{event.amount}</span>
+                                    <span class="text-[9px] text-gray-600 w-14 text-right">
+                                        {(() => {
+                                            try {
+                                                const diff = Math.floor((Date.now() - new Date(event.timestamp).getTime()) / 60000);
+                                                if (diff < 1) return 'now';
+                                                if (diff < 60) return `${diff}m`;
+                                                return `${Math.floor(diff / 60)}h`;
+                                            } catch { return ''; }
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+                        </For>
+                    </div>
+                    <Show when={rpRecentFeed().length === 0}>
+                        <div class="px-4 py-6 text-center text-gray-600 text-xs">No recent RP activity</div>
+                    </Show>
                 </div>
             </div>
 

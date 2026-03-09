@@ -169,7 +169,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
     {
         id: 'system-activity',
         path: '/adminsystem/activity',
-        label: 'Activity Log',
+        label: 'Activity Feed',
         icon: 'Activity',
         category: 'core',
         order: 8

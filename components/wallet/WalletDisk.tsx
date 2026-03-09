@@ -4,7 +4,7 @@ import {
     HardDrive, UploadCloud, Folder, FolderPlus,
     File as FileIcon, FileText, FileImage, FileVideo, FileAudio,
     MoreVertical, Search, Grid, List, ChevronRight,
-    Download, Trash2, Eye, X, ArrowLeft, Plus, Check, AlertTriangle, Copy
+    Download, Trash2, Eye, EyeOff, X, ArrowLeft, Plus, Check, AlertTriangle, Copy
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
@@ -1278,10 +1278,68 @@ export const WalletDisk = (props: {
         }
     });
 
-    // Close context menu on outside click
-    const handleGlobalClick = () => setContextMenu(null);
-    onMount(() => document.addEventListener('click', handleGlobalClick));
-    onCleanup(() => document.removeEventListener('click', handleGlobalClick));
+    // Close context menu on outside click (using mousedown/touchstart to avoid race)
+    let contextMenuRef: HTMLElement | null = null;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+        if (!contextMenu()) return;
+        const target = e.target as Node;
+        if (contextMenuRef && contextMenuRef.contains(target)) return;
+        // Check if clicking a 3-dot button (they set the menu)
+        if ((target as HTMLElement).closest?.('[data-ctx-trigger]')) return;
+        setContextMenu(null);
+    };
+    onMount(() => {
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick, { passive: true });
+    });
+    onCleanup(() => {
+        document.removeEventListener('mousedown', handleOutsideClick);
+        document.removeEventListener('touchstart', handleOutsideClick);
+    });
+
+    // Long-press handler for mobile
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleTouchStart = (item: DiskFile | DiskFolder, type: 'file' | 'folder', e: TouchEvent) => {
+        if (isSelectMode()) return;
+        const touch = e.touches[0];
+        const startX = touch.clientX;
+        const startY = touch.clientY;
+        longPressTimer = setTimeout(() => {
+            e.preventDefault();
+            // Use center of screen for bottom-sheet style on mobile
+            const isMobile = window.innerWidth < 768;
+            if (isMobile) {
+                setContextMenu({ item, type, x: window.innerWidth / 2, y: window.innerHeight });
+            } else {
+                setContextMenu({ item, type, x: startX, y: startY });
+            }
+        }, 500);
+    };
+    const handleTouchEnd = () => {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    };
+    const handleTouchMove = () => {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    };
+
+    // Universal open context menu
+    const openContextMenu = (item: DiskFile | DiskFolder, type: 'file' | 'folder', e: MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const isMobile = window.innerWidth < 768;
+        if (isMobile) {
+            setContextMenu({ item, type, x: window.innerWidth / 2, y: window.innerHeight });
+        } else {
+            setContextMenu({ item, type, x: rect.right, y: rect.bottom + 4 });
+        }
+    };
+
+    // Handle hide/unhide
+    const handleToggleHidden = async (item: DiskFile | DiskFolder, type: 'file' | 'folder') => {
+        // TODO: implement hide/unhide via Firestore flag
+        setContextMenu(null);
+    };
 
     // ─── Render ───
 
@@ -1717,6 +1775,9 @@ export const WalletDisk = (props: {
                                         <div
                                             class={`relative group bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 transition-all ${selectedItems().has(folder.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
                                                 }`}
+                                            onTouchStart={(e) => handleTouchStart(folder, 'folder', e)}
+                                            onTouchEnd={handleTouchEnd}
+                                            onTouchMove={handleTouchMove}
                                         >
                                             {/* Selection Checkbox */}
                                             <div
@@ -1741,12 +1802,9 @@ export const WalletDisk = (props: {
                                                 <span class="text-xs font-semibold text-gray-300 truncate w-full">{folder.name}</span>
                                             </button>
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                    setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
-                                                }}
-                                                class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
+                                                data-ctx-trigger
+                                                onClick={(e) => openContextMenu(folder, 'folder', e)}
+                                                class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white transition-all"
                                             >
                                                 <MoreVertical class="w-3.5 h-3.5" />
                                             </button>
@@ -1760,6 +1818,9 @@ export const WalletDisk = (props: {
                                             class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
                                                 } ${deletingId() === file.id ? 'opacity-40' : ''}`}
                                             onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                            onTouchStart={(e) => handleTouchStart(file, 'file', e)}
+                                            onTouchEnd={handleTouchEnd}
+                                            onTouchMove={handleTouchMove}
                                         >
                                             {/* Selection Checkbox */}
                                             <div
@@ -1855,12 +1916,9 @@ export const WalletDisk = (props: {
                                                     </div>
                                                 </Show>
                                                 <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                        setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
-                                                    }}
-                                                    class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
+                                                    data-ctx-trigger
+                                                    onClick={(e) => openContextMenu(file, 'file', e)}
+                                                    class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white transition-all"
                                                 >
                                                     <MoreVertical class="w-3.5 h-3.5" />
                                                 </button>
@@ -1887,6 +1945,9 @@ export const WalletDisk = (props: {
                                         <div
                                             class="w-full grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] group transition-all items-center text-left cursor-pointer"
                                             onClick={() => navigateToFolder(folder.path)}
+                                            onTouchStart={(e) => handleTouchStart(folder, 'folder', e)}
+                                            onTouchEnd={handleTouchEnd}
+                                            onTouchMove={handleTouchMove}
                                         >
                                             <div class="flex items-center gap-3 min-w-0">
                                                 <Folder class="w-5 h-5 text-cyan-400 shrink-0" />
@@ -1895,12 +1956,9 @@ export const WalletDisk = (props: {
                                             <span class="text-xs text-gray-500">--</span>
                                             <span class="text-xs text-gray-500">{new Date(folder.createdAt).toLocaleDateString()}</span>
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                    setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
-                                                }}
-                                                class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all"
+                                                data-ctx-trigger
+                                                onClick={(e) => openContextMenu(folder, 'folder', e)}
+                                                class="p-1 rounded-md text-gray-500 hover:text-white transition-all active:bg-white/10"
                                             >
                                                 <MoreVertical class="w-4 h-4" />
                                             </button>
@@ -1914,6 +1972,9 @@ export const WalletDisk = (props: {
                                             class={`group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_120px_40px] gap-2 px-3 sm:px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
                                                 } ${deletingId() === file.id ? 'opacity-40' : ''}`}
                                             onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                            onTouchStart={(e) => handleTouchStart(file, 'file', e)}
+                                            onTouchEnd={handleTouchEnd}
+                                            onTouchMove={handleTouchMove}
                                         >
                                             <div class="flex items-center gap-3 min-w-0">
                                                 {/* List Selection Check */}
@@ -1949,12 +2010,9 @@ export const WalletDisk = (props: {
                                             <span class="text-xs text-gray-500 hidden sm:block">{formatFileSize(file.size)}</span>
                                             <span class="text-xs text-gray-500 hidden sm:block">{new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                    setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
-                                                }}
-                                                class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all active:bg-white/10"
+                                                data-ctx-trigger
+                                                onClick={(e) => openContextMenu(file, 'file', e)}
+                                                class="p-1 rounded-md text-gray-500 hover:text-white transition-all active:bg-white/10"
                                             >
                                                 <MoreVertical class="w-4 h-4" />
                                             </button>
@@ -1966,133 +2024,206 @@ export const WalletDisk = (props: {
                     </Show>
                 </div>
 
-                {/* ── Context Menu ── */}
+                {/* ── Context Menu (Universal: Bottom Sheet on mobile, Dropdown on desktop) ── */}
                 <Presence>
                     <Show when={contextMenu()}>
-                        {(ctx) => (
-                            <Motion.div
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.9 }}
-                                class="fixed z-[100] bg-[#1a1a20] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[160px]"
-                                style={{
-                                    left: `${Math.min(ctx().x, window.innerWidth - 180)}px`,
-                                    top: `${Math.min(ctx().y, window.innerHeight - 320)}px`,
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <Show when={renamingId() === ctx().item.id} fallback={
-                                    <>
-                                        <Show when={ctx().type === 'file'}>
-                                            <button
-                                                onClick={() => { setPreviewFile(ctx().item as DiskFile); setContextMenu(null); }}
-                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                            >
-                                                <Eye class="w-4 h-4" /> Preview
-                                            </button>
-                                            <button
-                                                onClick={() => { handleDownload(ctx().item as DiskFile); setContextMenu(null); }}
-                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                            >
-                                                <Download class="w-4 h-4" /> Download
-                                            </button>
-                                            <button
-                                                onClick={() => handleShare(ctx().item as DiskFile, 'file')}
-                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                            >
-                                                <Share2 class="w-4 h-4" /> Share
-                                            </button>
-                                        </Show>
-                                        <Show when={ctx().type === 'folder'}>
-                                            <button
-                                                onClick={() => { navigateToFolder((ctx().item as DiskFolder).path); setContextMenu(null); }}
-                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                            >
-                                                <Folder class="w-4 h-4" /> Open
-                                            </button>
-                                            <button
-                                                onClick={() => handleShare(ctx().item as DiskFolder, 'folder')}
-                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                            >
-                                                <Share2 class="w-4 h-4" /> Share
-                                            </button>
-                                        </Show>
-
-                                        <button
-                                            onClick={() => {
-                                                setRenamingId(ctx().item.id);
-                                                setRenameValue(ctx().item.name);
-                                            }}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                        >
-                                            <FileText class="w-4 h-4" /> Rename
-                                        </button>
-
-                                        <Show when={ctx().type === 'file'}>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const file = ctx().item as DiskFile;
-                                                    setPublishingFile(file);
-                                                    if (file.isPublished) {
-                                                        handleUnpublish();
-                                                    } else {
-                                                        setShowPublishModal(true);
-                                                        setContextMenu(null);
-                                                    }
-                                                }}
-                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cyan-400 hover:bg-cyan-500/10 transition-all font-bold"
-                                            >
-                                                <Globe class="w-4 h-4" /> {(ctx().item as DiskFile).isPublished ? 'Unpublish' : 'Publish to Market'}
-                                            </button>
-                                        </Show>
-
-                                        <div class="h-px bg-white/[0.06] my-1" />
-                                        <button
-                                            onClick={() => {
-                                                if (ctx().type === 'file') {
-                                                    handleDeleteFile(ctx().item as DiskFile);
-                                                } else {
-                                                    handleDeleteFolder(ctx().item as DiskFolder);
-                                                }
-                                            }}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all"
-                                        >
-                                            <Trash2 class="w-4 h-4" /> Delete
-                                        </button>
-                                    </>
-                                }>
-                                    {/* Inline Rename UI */}
-                                    <div class="px-3 py-2">
-                                        <input
-                                            type="text"
-                                            value={renameValue()}
-                                            onInput={(e) => setRenameValue(e.currentTarget.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleRename();
-                                                if (e.key === 'Escape') setRenamingId('');
-                                            }}
-                                            autofocus
-                                            class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-cyan-500/50"
+                        {(ctx) => {
+                            const isMobile = () => window.innerWidth < 768;
+                            return (
+                                <>
+                                    {/* Mobile: backdrop overlay */}
+                                    <Show when={isMobile()}>
+                                        <Motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            class="fixed inset-0 z-[99] bg-black/60 backdrop-blur-sm"
+                                            onClick={() => setContextMenu(null)}
                                         />
-                                        <div class="flex gap-2 mt-2">
-                                            <button
-                                                onClick={handleRename}
-                                                class="flex-1 py-1 bg-cyan-500 text-black text-[10px] font-bold rounded-md"
-                                            >
-                                                Save
-                                            </button>
-                                            <button
-                                                onClick={() => setRenamingId('')}
-                                                class="flex-1 py-1 bg-white/5 text-gray-400 text-[10px] font-bold rounded-md"
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </div>
-                                </Show>
-                            </Motion.div>
-                        )}
+                                    </Show>
+
+                                    <Motion.div
+                                        ref={(el) => contextMenuRef = el}
+                                        initial={isMobile()
+                                            ? { opacity: 1, y: 300 }
+                                            : { opacity: 0, scale: 0.9 }
+                                        }
+                                        animate={isMobile()
+                                            ? { opacity: 1, y: 0 }
+                                            : { opacity: 1, scale: 1 }
+                                        }
+                                        exit={isMobile()
+                                            ? { opacity: 1, y: 300 }
+                                            : { opacity: 0, scale: 0.9 }
+                                        }
+                                        class={isMobile()
+                                            ? "fixed z-[100] left-0 right-0 bottom-0 bg-[#1a1a24] border-t border-white/10 rounded-t-3xl shadow-2xl pb-[env(safe-area-inset-bottom,16px)] max-h-[70vh] overflow-y-auto"
+                                            : "fixed z-[100] bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[180px]"
+                                        }
+                                        style={isMobile()
+                                            ? {}
+                                            : {
+                                                left: `${Math.min(ctx().x, window.innerWidth - 200)}px`,
+                                                top: `${Math.min(ctx().y, window.innerHeight - 380)}px`,
+                                            }
+                                        }
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {/* Mobile: drag handle + item info header */}
+                                        <Show when={isMobile()}>
+                                            <div class="flex justify-center pt-3 pb-1">
+                                                <div class="w-10 h-1 rounded-full bg-white/20" />
+                                            </div>
+                                            <div class="px-5 py-3 border-b border-white/[0.06] flex items-center gap-3">
+                                                <div class="w-10 h-10 rounded-xl bg-white/[0.05] flex items-center justify-center border border-white/10">
+                                                    <Show when={ctx().type === 'file'} fallback={<Folder class="w-5 h-5 text-cyan-400" />}>
+                                                        <FileTypeIcon type={(ctx().item as DiskFile).type || ''} name={ctx().item.name} class="w-5 h-5" />
+                                                    </Show>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-sm font-bold text-white truncate">{ctx().item.name}</div>
+                                                    <div class="text-[10px] text-gray-500">
+                                                        <Show when={ctx().type === 'file'}>
+                                                            {formatFileSize((ctx().item as DiskFile).size)} &bull; {(ctx().item as DiskFile).type}
+                                                        </Show>
+                                                        <Show when={ctx().type === 'folder'}>Folder</Show>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </Show>
+
+                                        <Show when={renamingId() === ctx().item.id} fallback={
+                                            <div class={isMobile() ? 'px-2 py-2' : ''}>
+                                                {/* ── 1. Share ── */}
+                                                <button
+                                                    onClick={() => {
+                                                        if (ctx().type === 'file') handleShare(ctx().item as DiskFile, 'file');
+                                                        else handleShare(ctx().item as DiskFolder, 'folder');
+                                                    }}
+                                                    class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-white/[0.06]' : 'px-4 py-2.5 hover:bg-white/[0.06]'} text-sm text-gray-300 hover:text-white transition-all`}
+                                                >
+                                                    <Share2 class="w-4.5 h-4.5" /> Share
+                                                </button>
+
+                                                {/* ── 2. Publish (file only) ── */}
+                                                <Show when={ctx().type === 'file'}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const file = ctx().item as DiskFile;
+                                                            setPublishingFile(file);
+                                                            if (file.isPublished) {
+                                                                handleUnpublish();
+                                                            } else {
+                                                                setShowPublishModal(true);
+                                                                setContextMenu(null);
+                                                            }
+                                                        }}
+                                                        class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-cyan-500/10' : 'px-4 py-2.5 hover:bg-cyan-500/10'} text-sm text-cyan-400 font-bold transition-all`}
+                                                    >
+                                                        <Globe class="w-4.5 h-4.5" /> {(ctx().item as DiskFile).isPublished ? 'Unpublish' : 'Publish to Market'}
+                                                    </button>
+                                                </Show>
+
+                                                <div class={`h-px bg-white/[0.06] ${isMobile() ? 'mx-4 my-1' : 'my-1'}`} />
+
+                                                {/* ── 3. Preview / Open ── */}
+                                                <Show when={ctx().type === 'file'}>
+                                                    <button
+                                                        onClick={() => { setPreviewFile(ctx().item as DiskFile); setContextMenu(null); }}
+                                                        class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-white/[0.06]' : 'px-4 py-2.5 hover:bg-white/[0.06]'} text-sm text-gray-300 hover:text-white transition-all`}
+                                                    >
+                                                        <Eye class="w-4.5 h-4.5" /> Preview
+                                                    </button>
+                                                </Show>
+                                                <Show when={ctx().type === 'folder'}>
+                                                    <button
+                                                        onClick={() => { navigateToFolder((ctx().item as DiskFolder).path); setContextMenu(null); }}
+                                                        class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-white/[0.06]' : 'px-4 py-2.5 hover:bg-white/[0.06]'} text-sm text-gray-300 hover:text-white transition-all`}
+                                                    >
+                                                        <Folder class="w-4.5 h-4.5" /> Open
+                                                    </button>
+                                                </Show>
+
+                                                {/* ── 4. Download (file only) ── */}
+                                                <Show when={ctx().type === 'file'}>
+                                                    <button
+                                                        onClick={() => { handleDownload(ctx().item as DiskFile); setContextMenu(null); }}
+                                                        class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-white/[0.06]' : 'px-4 py-2.5 hover:bg-white/[0.06]'} text-sm text-gray-300 hover:text-white transition-all`}
+                                                    >
+                                                        <Download class="w-4.5 h-4.5" /> Download
+                                                    </button>
+                                                </Show>
+
+                                                {/* ── 5. Rename ── */}
+                                                <button
+                                                    onClick={() => {
+                                                        setRenamingId(ctx().item.id);
+                                                        setRenameValue(ctx().item.name);
+                                                    }}
+                                                    class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-white/[0.06]' : 'px-4 py-2.5 hover:bg-white/[0.06]'} text-sm text-gray-300 hover:text-white transition-all`}
+                                                >
+                                                    <FileText class="w-4.5 h-4.5" /> Rename
+                                                </button>
+
+                                                <div class={`h-px bg-white/[0.06] ${isMobile() ? 'mx-4 my-1' : 'my-1'}`} />
+
+                                                {/* ── 6. Hide ── */}
+                                                <button
+                                                    onClick={() => handleToggleHidden(ctx().item, ctx().type)}
+                                                    class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-white/[0.06]' : 'px-4 py-2.5 hover:bg-white/[0.06]'} text-sm text-gray-400 hover:text-white transition-all`}
+                                                >
+                                                    <EyeOff class="w-4.5 h-4.5" /> Hide
+                                                </button>
+
+                                                {/* ── 7. Delete ── */}
+                                                <button
+                                                    onClick={() => {
+                                                        if (ctx().type === 'file') {
+                                                            handleDeleteFile(ctx().item as DiskFile);
+                                                        } else {
+                                                            handleDeleteFolder(ctx().item as DiskFolder);
+                                                        }
+                                                    }}
+                                                    class={`w-full flex items-center gap-3 ${isMobile() ? 'px-5 py-3.5 rounded-xl active:bg-red-500/10' : 'px-4 py-2.5 hover:bg-red-500/10'} text-sm text-red-400 transition-all`}
+                                                >
+                                                    <Trash2 class="w-4.5 h-4.5" /> Delete
+                                                </button>
+                                            </div>
+                                        }>
+                                            {/* Inline Rename UI */}
+                                            <div class={isMobile() ? 'px-5 py-4' : 'px-3 py-2'}>
+                                                <input
+                                                    type="text"
+                                                    value={renameValue()}
+                                                    onInput={(e) => setRenameValue(e.currentTarget.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleRename();
+                                                        if (e.key === 'Escape') setRenamingId('');
+                                                    }}
+                                                    autofocus
+                                                    class={`w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 ${isMobile() ? 'text-sm' : 'text-xs'} text-white outline-none focus:border-cyan-500/50`}
+                                                />
+                                                <div class="flex gap-2 mt-2">
+                                                    <button
+                                                        onClick={handleRename}
+                                                        class={`flex-1 ${isMobile() ? 'py-2.5 text-sm' : 'py-1 text-[10px]'} bg-cyan-500 text-black font-bold rounded-md`}
+                                                    >
+                                                        Save
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setRenamingId('')}
+                                                        class={`flex-1 ${isMobile() ? 'py-2.5 text-sm' : 'py-1 text-[10px]'} bg-white/5 text-gray-400 font-bold rounded-md`}
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </Show>
+                                    </Motion.div>
+                                </>
+                            );
+                        }}
                     </Show>
                 </Presence>
 
