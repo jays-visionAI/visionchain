@@ -2184,6 +2184,10 @@ const Wallet = (): JSX.Element => {
                     createdAt: freshData.createdAt || ''
                 });
             }
+            // Award profile_update RP (fire-and-forget, once per update)
+            getRPConfig().then(rpCfg => {
+                addRewardPoints(userProfile().email, rpCfg.profile_update, 'profile_update', 'Updated phone number').catch(() => { });
+            }).catch(() => { });
         } catch (e) {
             console.error("Failed to update phone:", e);
         } finally {

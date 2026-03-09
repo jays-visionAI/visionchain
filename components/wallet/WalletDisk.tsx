@@ -8,7 +8,7 @@ import {
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
-import { addRewardPoints, getRPConfig } from '../../services/firebaseService';
+import { addRewardPoints, getRPConfig, getUserContacts } from '../../services/firebaseService';
 import {
     uploadDiskFile, downloadDiskFile, downloadDiskFileGranular, listDiskFiles, deleteDiskFile, renameDiskFile,
     createDiskFolder, listDiskFolders, deleteDiskFolder, renameDiskFolder,
@@ -18,11 +18,15 @@ import {
     moveDiskFile, moveDiskFolder,
     generateImageThumbnail, generateVideoThumbnail,
     optimizeImage, streamVideoChunks, backfillThumbnail,
-    type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
+    shareResource, revokeShare, getSharedWithMe, getMyShares,
+    createSharedFolder, manageSharedFolderMember, getSharedFolderFiles,
+    uploadToSharedFolder, deleteSharedFolderFile,
+    type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress,
+    type ShareInfo, type SharedFolder
 } from '../../services/diskService';
 import { ethers } from 'ethers';
 import VCNTokenABI from '../../services/abi/VCNToken.json';
-import { Globe, Share2, ShieldCheck, ShieldAlert, Lock, Unlock, RotateCw } from 'lucide-solid';
+import { Globe, Share2, ShieldCheck, ShieldAlert, Lock, Unlock, RotateCw, Users, UserPlus, UserMinus } from 'lucide-solid';
 import NodeRewardPanel from './NodeRewardPanel';
 
 // ─── Gasless Permit Constants (must match transferService / contractService) ───
@@ -130,6 +134,22 @@ export const WalletDisk = (props: {
     const [isDragOver, setIsDragOver] = createSignal(false);
     const [uploadQueue, setUploadQueue] = createSignal<UploadProgress[]>([]);
     const [showUploadPanel, setShowUploadPanel] = createSignal(false);
+    const [diskTab, setDiskTab] = createSignal<'myDisk' | 'shared'>('myDisk');
+    // Sharing state
+    const [showShareModal, setShowShareModal] = createSignal(false);
+    const [shareTarget, setShareTarget] = createSignal<{ type: 'file' | 'folder'; item: DiskFile | DiskFolder } | null>(null);
+    const [shareSearchQuery, setShareSearchQuery] = createSignal('');
+    const [sharingInProgress, setSharingInProgress] = createSignal(false);
+    const [sharedWithMe, setSharedWithMe] = createSignal<ShareInfo[]>([]);
+    const [sharedFolders, setSharedFolders] = createSignal<SharedFolder[]>([]);
+    const [sharedLoading, setSharedLoading] = createSignal(false);
+    const [showCreateSharedFolder, setShowCreateSharedFolder] = createSignal(false);
+    const [newSharedFolderName, setNewSharedFolderName] = createSignal('');
+    const [newSharedFolderMembers, setNewSharedFolderMembers] = createSignal<string[]>([]);
+    const [activeSharedFolder, setActiveSharedFolder] = createSignal<string | null>(null);
+    const [sharedFolderFiles, setSharedFolderFiles] = createSignal<DiskFile[]>([]);
+    const [sharedFolderMeta, setSharedFolderMeta] = createSignal<any>(null);
+    const [contacts, setContacts] = createSignal<any[]>([]);
     const [previewFile, setPreviewFile] = createSignal<DiskFile | null>(null);
     const [previewURL, setPreviewURL] = createSignal<string>('');
     const [previewLoading, setPreviewLoading] = createSignal(false);
@@ -918,10 +938,77 @@ export const WalletDisk = (props: {
         setIsSelectMode(false);
     };
 
-    const handleShare = (file: DiskFile) => {
-        navigator.clipboard.writeText(file.downloadURL);
-        alert('Download link copied to clipboard!');
+    const loadContacts = async () => {
+        if (contacts().length > 0 || !email()) return;
+        try {
+            const c = await getUserContacts(email());
+            setContacts(c);
+        } catch (e) { console.error('[Disk] Failed to load contacts:', e); }
+    };
+
+    const handleShare = (item: DiskFile | DiskFolder, type: 'file' | 'folder' = 'file') => {
+        setShareTarget({ type, item });
+        setShareSearchQuery('');
+        setShowShareModal(true);
         setContextMenu(null);
+        loadContacts();
+    };
+
+    const executeShare = async (targetEmail: string) => {
+        const target = shareTarget();
+        if (!target) return;
+        setSharingInProgress(true);
+        try {
+            await shareResource(targetEmail, target.type, target.item.id, target.item.name);
+            setShowShareModal(false);
+            setShareTarget(null);
+        } catch (err: any) {
+            console.error('[Disk] Share failed:', err);
+            alert(err.message || 'Failed to share');
+        } finally {
+            setSharingInProgress(false);
+        }
+    };
+
+    const loadSharedItems = async () => {
+        setSharedLoading(true);
+        loadContacts();
+        try {
+            const data = await getSharedWithMe();
+            setSharedWithMe(data.shares);
+            setSharedFolders(data.sharedFolders);
+        } catch (err) {
+            console.error('[Disk] Failed to load shared items:', err);
+        } finally {
+            setSharedLoading(false);
+        }
+    };
+
+    const handleCreateSharedFolder = async () => {
+        if (!newSharedFolderName().trim()) return;
+        try {
+            await createSharedFolder(newSharedFolderName(), newSharedFolderMembers());
+            setShowCreateSharedFolder(false);
+            setNewSharedFolderName('');
+            setNewSharedFolderMembers([]);
+            await loadSharedItems();
+        } catch (err: any) {
+            alert(err.message || 'Failed to create shared folder');
+        }
+    };
+
+    const openSharedFolder = async (folderId: string) => {
+        setActiveSharedFolder(folderId);
+        setSharedLoading(true);
+        try {
+            const data = await getSharedFolderFiles(folderId);
+            setSharedFolderFiles(data.files);
+            setSharedFolderMeta(data.folder);
+        } catch (err) {
+            console.error('[Disk] Failed to load shared folder:', err);
+        } finally {
+            setSharedLoading(false);
+        }
     };
 
     const handleBatchMove = () => {
@@ -1443,545 +1530,729 @@ export const WalletDisk = (props: {
                 </div>
             </Show>
 
-            {/* ── Breadcrumbs ── */}
-            <div class="flex items-center gap-1 mb-4 text-sm shrink-0">
-                <For each={breadcrumbs()}>
-                    {(crumb, i) => (
-                        <>
-                            <Show when={i() > 0}>
-                                <ChevronRight class="w-3 h-3 text-gray-600" />
-                            </Show>
-                            <button
-                                onClick={() => navigateToFolder(crumb.path)}
-                                class={`px-1.5 py-0.5 rounded-md transition-all ${i() === breadcrumbs().length - 1
-                                    ? 'text-white font-bold'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/[0.05]'
-                                    }`}
-                            >
-                                {crumb.name}
-                            </button>
-                        </>
-                    )}
-                </For>
+            {/* ── Tab Switcher ── */}
+            <div class="flex items-center gap-1 mb-4 shrink-0 bg-white/[0.03] border border-white/[0.06] rounded-xl p-1">
+                <button
+                    onClick={() => { setDiskTab('myDisk'); setActiveSharedFolder(null); }}
+                    class={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${diskTab() === 'myDisk' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    <HardDrive class="w-3.5 h-3.5" /> My Disk
+                </button>
+                <button
+                    onClick={() => { setDiskTab('shared'); loadSharedItems(); }}
+                    class={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${diskTab() === 'shared' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    <Share2 class="w-3.5 h-3.5" /> Shared
+                </button>
             </div>
 
-            {/* ── New Folder Modal ── */}
-            <Presence>
-                <Show when={showNewFolder()}>
-                    <Motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        class="mb-4 bg-white/[0.03] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3"
-                    >
-                        <Folder class="w-5 h-5 text-cyan-400 shrink-0" />
-                        <input
-                            type="text"
-                            placeholder="New folder name..."
-                            value={newFolderName()}
-                            onInput={(e) => setNewFolderName(e.currentTarget.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
-                            autofocus
-                            class="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-500"
-                        />
-                        <button
-                            onClick={handleCreateFolder}
-                            class="h-8 px-3 bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold rounded-lg transition-all"
-                        >
-                            Create
-                        </button>
-                        <button
-                            onClick={() => { setShowNewFolder(false); setNewFolderName(''); }}
-                            class="p-1.5 text-gray-500 hover:text-white"
-                        >
-                            <X class="w-4 h-4" />
-                        </button>
-                    </Motion.div>
-                </Show>
-            </Presence>
+            {/* ── My Disk Content ── */}
+            <Show when={diskTab() === 'myDisk'}>
 
-            {/* ── File Content Area ── */}
-            <div class="flex-1 min-h-0 relative">
-                <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'}>
-                    <div class="absolute inset-0 z-10 bg-[#12121a] rounded-2xl border border-white/5 flex flex-col items-center justify-center p-8 text-center min-h-[400px]">
-                        <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6">
-                            <HardDrive class="w-8 h-8 text-cyan-400" />
-                        </div>
-                        <h2 class="text-2xl font-black text-white mb-3 tracking-tight">Activate Vision Disk</h2>
-                        <p class="text-sm text-gray-400 max-w-md mb-8 leading-relaxed">
-                            Store your files securely on the decentralized Vision Network. Pay smoothly with VCN tokens.
-                        </p>
-
-                        <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md mb-6">
-                            <div class="flex justify-between items-center mb-4">
-                                <div class="text-sm font-bold text-gray-300">Storage Plan</div>
-                                <div class="flex items-center gap-2">
-                                    <button onClick={() => setSelectedGb(Math.max(10, selectedGb() - 10))} class="p-1 text-gray-400 hover:text-white bg-white/[0.05] rounded-md transition-all">-</button>
-                                    <span class="text-sm font-bold text-white w-12 text-center">{selectedGb()} GB</span>
-                                    <button onClick={() => setSelectedGb(Math.min(50, selectedGb() + 10))} class="p-1 text-gray-400 hover:text-white bg-white/[0.05] rounded-md transition-all">+</button>
-                                </div>
-                            </div>
-                            <div class="flex justify-between items-end">
-                                <div class="text-xs text-gray-500">Monthly Price</div>
-                                <div class="text-xl font-black text-cyan-400">
-                                    {selectedGb() <= 10 ? 5 : 5 + Math.ceil((selectedGb() - 10) / 10) * 3} <span class="text-sm">VCN</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <Show when={subsError()}>
-                            <div class="w-full max-w-md bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-6 text-xs text-red-400 text-left">
-                                {subsError()}
-                            </div>
-                        </Show>
-
-                        <button
-                            onClick={handleSubscribe}
-                            disabled={isSubscribing() || isLoading()}
-                            class="w-full max-w-md h-12 flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 text-black font-black rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSubscribing() ? (
-                                <div class="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                            ) : 'Subscribe Now'}
-                        </button>
-                        <div class="text-[10px] text-gray-500 mt-4 max-w-md">By subscribing, you approve Vision Network to deduct VCN automatically purely for storage usage. You can cancel anytime.</div>
-                        {/* Mobile NavBar clearance */}
-                        <div class="h-14 lg:hidden" />
-                    </div>
-
-                </Show>
-
-                <Show
-                    when={!isLoading() && (filteredFolders().length > 0 || filteredFiles().length > 0)}
-                    fallback={
-                        <Show when={!isLoading() && usage().status !== 'none' && usage().status !== 'canceled' && usage().status !== 'expired'} fallback={
-                            <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'} fallback={
-                                <div class="flex-1 flex items-center justify-center py-20">
-                                    <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-                                </div>
-                            }>
-                                {/* Covered by the overlay above */}
-                                <div />
-                            </Show>
-                        }>
-                            {/* Empty State */}
-                            <div class="flex-1 bg-white/[0.02] border border-dashed border-white/[0.08] rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-[320px] cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all"
-                                onClick={() => usage().status !== 'overdue' && fileInputRef?.click()}
-                            >
-                                <div class="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center mb-5 border border-white/10 shadow-2xl">
-                                    <UploadCloud class="w-8 h-8 text-gray-400" />
-                                </div>
-                                <h3 class="text-lg font-bold text-white tracking-tight mb-2">
-                                    {searchQuery() ? 'No results found' : 'Drop files here or click to upload'}
-                                </h3>
-                                <p class="text-sm text-gray-400 max-w-sm">
-                                    {searchQuery()
-                                        ? `No files matching "${searchQuery()}"`
-                                        : 'Upload photos, videos, documents, or any files. All data is stored securely on the decentralized network.'}
-                                </p>
-                                <Show when={!searchQuery() && usage().status !== 'overdue'}>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); fileInputRef?.click(); }}
-                                        class="mt-6 px-6 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold rounded-xl transition-all border border-white/10 text-sm active:scale-95"
-                                    >
-                                        Select Files
-                                    </button>
+                {/* ── Breadcrumbs ── */}
+                <div class="flex items-center gap-1 mb-4 text-sm shrink-0">
+                    <For each={breadcrumbs()}>
+                        {(crumb, i) => (
+                            <>
+                                <Show when={i() > 0}>
+                                    <ChevronRight class="w-3 h-3 text-gray-600" />
                                 </Show>
+                                <button
+                                    onClick={() => navigateToFolder(crumb.path)}
+                                    class={`px-1.5 py-0.5 rounded-md transition-all ${i() === breadcrumbs().length - 1
+                                        ? 'text-white font-bold'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/[0.05]'
+                                        }`}
+                                >
+                                    {crumb.name}
+                                </button>
+                            </>
+                        )}
+                    </For>
+                </div>
+
+                {/* ── New Folder Modal ── */}
+                <Presence>
+                    <Show when={showNewFolder()}>
+                        <Motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            class="mb-4 bg-white/[0.03] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3"
+                        >
+                            <Folder class="w-5 h-5 text-cyan-400 shrink-0" />
+                            <input
+                                type="text"
+                                placeholder="New folder name..."
+                                value={newFolderName()}
+                                onInput={(e) => setNewFolderName(e.currentTarget.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                                autofocus
+                                class="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-500"
+                            />
+                            <button
+                                onClick={handleCreateFolder}
+                                class="h-8 px-3 bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold rounded-lg transition-all"
+                            >
+                                Create
+                            </button>
+                            <button
+                                onClick={() => { setShowNewFolder(false); setNewFolderName(''); }}
+                                class="p-1.5 text-gray-500 hover:text-white"
+                            >
+                                <X class="w-4 h-4" />
+                            </button>
+                        </Motion.div>
+                    </Show>
+                </Presence>
+
+                {/* ── File Content Area ── */}
+                <div class="flex-1 min-h-0 relative">
+                    <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'}>
+                        <div class="absolute inset-0 z-10 bg-[#12121a] rounded-2xl border border-white/5 flex flex-col items-center justify-center p-8 text-center min-h-[400px]">
+                            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6">
+                                <HardDrive class="w-8 h-8 text-cyan-400" />
                             </div>
-                        </Show>
-                    }
-                >
-                    <Show when={usage().status === 'overdue'}>
-                        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-start gap-3 text-left">
-                            <AlertTriangle class="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                            <div>
-                                <div class="text-sm font-bold text-red-400 mb-1">Subscription Payment Overdue</div>
-                                <div class="text-xs text-red-400/80">Uploads are disabled. Please assure your VCN balance is sufficient for auto-renewal to avoid losing your files next week.</div>
+                            <h2 class="text-2xl font-black text-white mb-3 tracking-tight">Activate Vision Disk</h2>
+                            <p class="text-sm text-gray-400 max-w-md mb-8 leading-relaxed">
+                                Store your files securely on the decentralized Vision Network. Pay smoothly with VCN tokens.
+                            </p>
+
+                            <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md mb-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <div class="text-sm font-bold text-gray-300">Storage Plan</div>
+                                    <div class="flex items-center gap-2">
+                                        <button onClick={() => setSelectedGb(Math.max(10, selectedGb() - 10))} class="p-1 text-gray-400 hover:text-white bg-white/[0.05] rounded-md transition-all">-</button>
+                                        <span class="text-sm font-bold text-white w-12 text-center">{selectedGb()} GB</span>
+                                        <button onClick={() => setSelectedGb(Math.min(50, selectedGb() + 10))} class="p-1 text-gray-400 hover:text-white bg-white/[0.05] rounded-md transition-all">+</button>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-end">
+                                    <div class="text-xs text-gray-500">Monthly Price</div>
+                                    <div class="text-xl font-black text-cyan-400">
+                                        {selectedGb() <= 10 ? 5 : 5 + Math.ceil((selectedGb() - 10) / 10) * 3} <span class="text-sm">VCN</span>
+                                    </div>
+                                </div>
                             </div>
+
+                            <Show when={subsError()}>
+                                <div class="w-full max-w-md bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-6 text-xs text-red-400 text-left">
+                                    {subsError()}
+                                </div>
+                            </Show>
+
+                            <button
+                                onClick={handleSubscribe}
+                                disabled={isSubscribing() || isLoading()}
+                                class="w-full max-w-md h-12 flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 text-black font-black rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSubscribing() ? (
+                                    <div class="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                                ) : 'Subscribe Now'}
+                            </button>
+                            <div class="text-[10px] text-gray-500 mt-4 max-w-md">By subscribing, you approve Vision Network to deduct VCN automatically purely for storage usage. You can cancel anytime.</div>
+                            {/* Mobile NavBar clearance */}
+                            <div class="h-14 lg:hidden" />
                         </div>
+
                     </Show>
 
-                    {/* ── Grid View ── */}
-                    <Show when={viewMode() === 'grid'}>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                            {/* Folders */}
-                            <For each={filteredFolders()}>
-                                {(folder) => (
-                                    <div
-                                        class={`relative group bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 transition-all ${selectedItems().has(folder.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
-                                            }`}
-                                    >
-                                        {/* Selection Checkbox */}
-                                        <div
-                                            class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(folder.id)
-                                                ? 'bg-cyan-500 border-cyan-500 text-black'
-                                                : 'bg-black/40 border-white/20 text-transparent'
-                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsSelectMode(true);
-                                                toggleSelection(folder.id);
-                                            }}
-                                        >
-                                            <Check class="w-3.5 h-3.5" />
-                                        </div>
-
-                                        <button
-                                            onClick={() => isSelectMode() ? toggleSelection(folder.id) : navigateToFolder(folder.path)}
-                                            class="w-full flex flex-col items-center gap-2 text-center"
-                                        >
-                                            <Folder class="w-10 h-10 text-cyan-400/80 group-hover:text-cyan-400 transition-colors" />
-                                            <span class="text-xs font-semibold text-gray-300 truncate w-full">{folder.name}</span>
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
-                                            }}
-                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
-                                        >
-                                            <MoreVertical class="w-3.5 h-3.5" />
-                                        </button>
+                    <Show
+                        when={!isLoading() && (filteredFolders().length > 0 || filteredFiles().length > 0)}
+                        fallback={
+                            <Show when={!isLoading() && usage().status !== 'none' && usage().status !== 'canceled' && usage().status !== 'expired'} fallback={
+                                <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'} fallback={
+                                    <div class="flex-1 flex items-center justify-center py-20">
+                                        <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
                                     </div>
-                                )}
-                            </For>
-                            {/* Files */}
-                            <For each={filteredFiles()}>
-                                {(file) => (
-                                    <div
-                                        class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
-                                            } ${deletingId() === file.id ? 'opacity-40' : ''}`}
-                                        onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
-                                    >
-                                        {/* Selection Checkbox */}
-                                        <div
-                                            class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(file.id)
-                                                ? 'bg-cyan-500 border-cyan-500 text-black'
-                                                : 'bg-black/40 border-white/20 text-transparent'
-                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsSelectMode(true);
-                                                toggleSelection(file.id);
-                                            }}
+                                }>
+                                    {/* Covered by the overlay above */}
+                                    <div />
+                                </Show>
+                            }>
+                                {/* Empty State */}
+                                <div class="flex-1 bg-white/[0.02] border border-dashed border-white/[0.08] rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-[320px] cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all"
+                                    onClick={() => usage().status !== 'overdue' && fileInputRef?.click()}
+                                >
+                                    <div class="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center mb-5 border border-white/10 shadow-2xl">
+                                        <UploadCloud class="w-8 h-8 text-gray-400" />
+                                    </div>
+                                    <h3 class="text-lg font-bold text-white tracking-tight mb-2">
+                                        {searchQuery() ? 'No results found' : 'Drop files here or click to upload'}
+                                    </h3>
+                                    <p class="text-sm text-gray-400 max-w-sm">
+                                        {searchQuery()
+                                            ? `No files matching "${searchQuery()}"`
+                                            : 'Upload photos, videos, documents, or any files. All data is stored securely on the decentralized network.'}
+                                    </p>
+                                    <Show when={!searchQuery() && usage().status !== 'overdue'}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); fileInputRef?.click(); }}
+                                            class="mt-6 px-6 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold rounded-xl transition-all border border-white/10 text-sm active:scale-95"
                                         >
-                                            <Check class="w-3.5 h-3.5" />
-                                        </div>
+                                            Select Files
+                                        </button>
+                                    </Show>
+                                </div>
+                            </Show>
+                        }
+                    >
+                        <Show when={usage().status === 'overdue'}>
+                            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-start gap-3 text-left">
+                                <AlertTriangle class="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <div class="text-sm font-bold text-red-400 mb-1">Subscription Payment Overdue</div>
+                                    <div class="text-xs text-red-400/80">Uploads are disabled. Please assure your VCN balance is sufficient for auto-renewal to avoid losing your files next week.</div>
+                                </div>
+                            </div>
+                        </Show>
 
-                                        {/* Thumbnail or Icon */}
-                                        <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
-                                            <Show
-                                                when={file.thumbnailURL || file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
-                                                fallback={
-                                                    <Show
-                                                        when={file.type.startsWith('video/')}
-                                                        fallback={
-                                                            <div class={fileTypeColor(file.type)}>
+                        {/* ── Grid View ── */}
+                        <Show when={viewMode() === 'grid'}>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                {/* Folders */}
+                                <For each={filteredFolders()}>
+                                    {(folder) => (
+                                        <div
+                                            class={`relative group bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 transition-all ${selectedItems().has(folder.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
+                                                }`}
+                                        >
+                                            {/* Selection Checkbox */}
+                                            <div
+                                                class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(folder.id)
+                                                    ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                    : 'bg-black/40 border-white/20 text-transparent'
+                                                    } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsSelectMode(true);
+                                                    toggleSelection(folder.id);
+                                                }}
+                                            >
+                                                <Check class="w-3.5 h-3.5" />
+                                            </div>
+
+                                            <button
+                                                onClick={() => isSelectMode() ? toggleSelection(folder.id) : navigateToFolder(folder.path)}
+                                                class="w-full flex flex-col items-center gap-2 text-center"
+                                            >
+                                                <Folder class="w-10 h-10 text-cyan-400/80 group-hover:text-cyan-400 transition-colors" />
+                                                <span class="text-xs font-semibold text-gray-300 truncate w-full">{folder.name}</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                    setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
+                                                }}
+                                                class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
+                                            >
+                                                <MoreVertical class="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </For>
+                                {/* Files */}
+                                <For each={filteredFiles()}>
+                                    {(file) => (
+                                        <div
+                                            class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
+                                                } ${deletingId() === file.id ? 'opacity-40' : ''}`}
+                                            onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                        >
+                                            {/* Selection Checkbox */}
+                                            <div
+                                                class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(file.id)
+                                                    ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                    : 'bg-black/40 border-white/20 text-transparent'
+                                                    } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsSelectMode(true);
+                                                    toggleSelection(file.id);
+                                                }}
+                                            >
+                                                <Check class="w-3.5 h-3.5" />
+                                            </div>
+
+                                            {/* Thumbnail or Icon */}
+                                            <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
+                                                <Show
+                                                    when={file.thumbnailURL || file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
+                                                    fallback={
+                                                        <Show
+                                                            when={file.type.startsWith('video/')}
+                                                            fallback={
+                                                                <div class={fileTypeColor(file.type)}>
+                                                                    <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
+                                                                </div>
+                                                            }
+                                                        >
+                                                            <div class={`${fileTypeColor(file.type)} relative`}>
                                                                 <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
+                                                                <div class="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5">
+                                                                    <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                                </div>
                                                             </div>
-                                                        }
-                                                    >
-                                                        <div class={`${fileTypeColor(file.type)} relative`}>
-                                                            <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
-                                                            <div class="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5">
-                                                                <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                        </Show>
+                                                    }
+                                                >
+                                                    <img
+                                                        src={file.thumbnailURL || file.thumbnail || file.downloadURL}
+                                                        alt={file.name}
+                                                        class="w-full h-full object-cover"
+                                                        loading="lazy"
+                                                    />
+                                                    <Show when={file.type.startsWith('video/')}>
+                                                        <div class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                            <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+                                                                <svg class="w-3.5 h-3.5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                                                             </div>
                                                         </div>
                                                     </Show>
-                                                }
-                                            >
-                                                <img
-                                                    src={file.thumbnailURL || file.thumbnail || file.downloadURL}
-                                                    alt={file.name}
-                                                    class="w-full h-full object-cover"
-                                                    loading="lazy"
-                                                />
-                                                <Show when={file.type.startsWith('video/')}>
-                                                    <div class="absolute inset-0 flex items-center justify-center bg-black/30">
-                                                        <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
-                                                            <svg class="w-3.5 h-3.5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                </Show>
+
+                                                {/* Security & Storage Badges Overlay */}
+                                                <div class="absolute bottom-1.5 right-1.5 flex gap-1">
+                                                    <Show when={file.isEncrypted}>
+                                                        <div class="p-1 rounded bg-black/60 backdrop-blur-md border border-white/10" title="Client-side Encrypted">
+                                                            <ShieldCheck class="w-3 h-3 text-cyan-400" />
                                                         </div>
-                                                    </div>
-                                                </Show>
-                                            </Show>
-
-                                            {/* Security & Storage Badges Overlay */}
-                                            <div class="absolute bottom-1.5 right-1.5 flex gap-1">
-                                                <Show when={file.isEncrypted}>
-                                                    <div class="p-1 rounded bg-black/60 backdrop-blur-md border border-white/10" title="Client-side Encrypted">
-                                                        <ShieldCheck class="w-3 h-3 text-cyan-400" />
-                                                    </div>
-                                                </Show>
-                                                <Show when={file.storageType === 'distributed'}>
-                                                    <div class="px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-black uppercase tracking-tighter" title="Stored on Distributed Node Network">
-                                                        VNet
-                                                    </div>
-                                                </Show>
-                                            </div>
-                                        </div>
-
-                                        <div class="w-full text-left">
-                                            <div class="flex items-center gap-1.5 min-w-0">
-                                                <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
-                                                <Show when={file.isPublished}>
-                                                    <div class="shrink-0 w-3.5 h-3.5 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/20" title="Published to Market">
-                                                        <Globe class="w-2 h-2 text-black" />
-                                                    </div>
-                                                </Show>
-                                            </div>
-                                            <Show when={file.abstract}>
-                                                <div class="text-[9px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{file.abstract}</div>
-                                            </Show>
-                                            <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
-                                                {formatFileSize(file.size)} &bull; {new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                                {file.optimized && <span class="px-1 py-0.5 rounded bg-green-500/10 text-green-400 text-[8px] font-bold">MP4</span>}
-                                                {file.preserveOriginal && <span class="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[8px] font-bold">RAW</span>}
-                                            </div>
-                                        </div>
-
-                                        {/* Context button */}
-                                        <div class="absolute top-2 right-2 flex gap-1">
-                                            <Show when={decryptingFileId() === file.id}>
-                                                <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 animate-spin">
-                                                    <RotateCw class="w-3.5 h-3.5" />
+                                                    </Show>
+                                                    <Show when={file.storageType === 'distributed'}>
+                                                        <div class="px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-black uppercase tracking-tighter" title="Stored on Distributed Node Network">
+                                                            VNet
+                                                        </div>
+                                                    </Show>
                                                 </div>
-                                            </Show>
+                                            </div>
+
+                                            <div class="w-full text-left">
+                                                <div class="flex items-center gap-1.5 min-w-0">
+                                                    <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
+                                                    <Show when={file.isPublished}>
+                                                        <div class="shrink-0 w-3.5 h-3.5 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/20" title="Published to Market">
+                                                            <Globe class="w-2 h-2 text-black" />
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                                <Show when={file.abstract}>
+                                                    <div class="text-[9px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{file.abstract}</div>
+                                                </Show>
+                                                <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
+                                                    {formatFileSize(file.size)} &bull; {new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                    {file.optimized && <span class="px-1 py-0.5 rounded bg-green-500/10 text-green-400 text-[8px] font-bold">MP4</span>}
+                                                    {file.preserveOriginal && <span class="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[8px] font-bold">RAW</span>}
+                                                </div>
+                                            </div>
+
+                                            {/* Context button */}
+                                            <div class="absolute top-2 right-2 flex gap-1">
+                                                <Show when={decryptingFileId() === file.id}>
+                                                    <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 animate-spin">
+                                                        <RotateCw class="w-3.5 h-3.5" />
+                                                    </div>
+                                                </Show>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                        setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
+                                                    }}
+                                                    class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
+                                                >
+                                                    <MoreVertical class="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                        </Show>
+
+                        {/* ── List View ── */}
+                        <Show when={viewMode() === 'list'}>
+                            <div class="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
+                                {/* Table Header */}
+                                <div class="grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-2.5 border-b border-white/[0.06] text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                    <span>Name</span>
+                                    <span>Size</span>
+                                    <span>Modified</span>
+                                    <span></span>
+                                </div>
+                                {/* Folders */}
+                                <For each={filteredFolders()}>
+                                    {(folder) => (
+                                        <div
+                                            class="w-full grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] group transition-all items-center text-left cursor-pointer"
+                                            onClick={() => navigateToFolder(folder.path)}
+                                        >
+                                            <div class="flex items-center gap-3 min-w-0">
+                                                <Folder class="w-5 h-5 text-cyan-400 shrink-0" />
+                                                <span class="text-sm text-gray-200 truncate font-medium">{folder.name}</span>
+                                            </div>
+                                            <span class="text-xs text-gray-500">--</span>
+                                            <span class="text-xs text-gray-500">{new Date(folder.createdAt).toLocaleDateString()}</span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                    setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
+                                                }}
+                                                class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all"
+                                            >
+                                                <MoreVertical class="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </For>
+                                {/* Files */}
+                                <For each={filteredFiles()}>
+                                    {(file) => (
+                                        <div
+                                            class={`group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_120px_40px] gap-2 px-3 sm:px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
+                                                } ${deletingId() === file.id ? 'opacity-40' : ''}`}
+                                            onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                        >
+                                            <div class="flex items-center gap-3 min-w-0">
+                                                {/* List Selection Check */}
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setIsSelectMode(true);
+                                                        toggleSelection(file.id);
+                                                    }}
+                                                    class={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${selectedItems().has(file.id)
+                                                        ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                        : 'bg-white/5 border-white/10 text-transparent group-hover:border-white/30'
+                                                        }`}
+                                                >
+                                                    <Check class="w-3.5 h-3.5" />
+                                                </div>
+                                                <div class={`shrink-0 ${fileTypeColor(file.type)}`}>
+                                                    <FileTypeIcon type={file.type} name={file.name} />
+                                                </div>
+                                                <span class="text-sm text-gray-200 truncate">{file.name}</span>
+                                                <div class="flex gap-1 shrink-0">
+                                                    <Show when={file.isPublished}>
+                                                        <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Market</span>
+                                                    </Show>
+                                                    <Show when={file.isEncrypted}>
+                                                        <span class="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[9px] font-black text-purple-400 uppercase tracking-tighter">Private</span>
+                                                    </Show>
+                                                    <Show when={file.storageType === 'distributed'}>
+                                                        <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[9px] font-black text-amber-500 uppercase tracking-tighter">VNet</span>
+                                                    </Show>
+                                                </div>
+                                            </div>
+                                            <span class="text-xs text-gray-500 hidden sm:block">{formatFileSize(file.size)}</span>
+                                            <span class="text-xs text-gray-500 hidden sm:block">{new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                                     setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
                                                 }}
-                                                class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
+                                                class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all active:bg-white/10"
                                             >
-                                                <MoreVertical class="w-3.5 h-3.5" />
+                                                <MoreVertical class="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                        </Show>
+                    </Show>
+                </div>
+
+                {/* ── Context Menu ── */}
+                <Presence>
+                    <Show when={contextMenu()}>
+                        {(ctx) => (
+                            <Motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                class="fixed z-[100] bg-[#1a1a20] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[160px]"
+                                style={{
+                                    left: `${Math.min(ctx().x, window.innerWidth - 180)}px`,
+                                    top: `${Math.min(ctx().y, window.innerHeight - 320)}px`,
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <Show when={renamingId() === ctx().item.id} fallback={
+                                    <>
+                                        <Show when={ctx().type === 'file'}>
+                                            <button
+                                                onClick={() => { setPreviewFile(ctx().item as DiskFile); setContextMenu(null); }}
+                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                            >
+                                                <Eye class="w-4 h-4" /> Preview
+                                            </button>
+                                            <button
+                                                onClick={() => { handleDownload(ctx().item as DiskFile); setContextMenu(null); }}
+                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                            >
+                                                <Download class="w-4 h-4" /> Download
+                                            </button>
+                                            <button
+                                                onClick={() => handleShare(ctx().item as DiskFile, 'file')}
+                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                            >
+                                                <Share2 class="w-4 h-4" /> Share
+                                            </button>
+                                        </Show>
+                                        <Show when={ctx().type === 'folder'}>
+                                            <button
+                                                onClick={() => { navigateToFolder((ctx().item as DiskFolder).path); setContextMenu(null); }}
+                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                            >
+                                                <Folder class="w-4 h-4" /> Open
+                                            </button>
+                                            <button
+                                                onClick={() => handleShare(ctx().item as DiskFolder, 'folder')}
+                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                            >
+                                                <Share2 class="w-4 h-4" /> Share
+                                            </button>
+                                        </Show>
+
+                                        <button
+                                            onClick={() => {
+                                                setRenamingId(ctx().item.id);
+                                                setRenameValue(ctx().item.name);
+                                            }}
+                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                        >
+                                            <FileText class="w-4 h-4" /> Rename
+                                        </button>
+
+                                        <Show when={ctx().type === 'file'}>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const file = ctx().item as DiskFile;
+                                                    setPublishingFile(file);
+                                                    if (file.isPublished) {
+                                                        handleUnpublish();
+                                                    } else {
+                                                        setShowPublishModal(true);
+                                                        setContextMenu(null);
+                                                    }
+                                                }}
+                                                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cyan-400 hover:bg-cyan-500/10 transition-all font-bold"
+                                            >
+                                                <Globe class="w-4 h-4" /> {(ctx().item as DiskFile).isPublished ? 'Unpublish' : 'Publish to Market'}
+                                            </button>
+                                        </Show>
+
+                                        <div class="h-px bg-white/[0.06] my-1" />
+                                        <button
+                                            onClick={() => {
+                                                if (ctx().type === 'file') {
+                                                    handleDeleteFile(ctx().item as DiskFile);
+                                                } else {
+                                                    handleDeleteFolder(ctx().item as DiskFolder);
+                                                }
+                                            }}
+                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all"
+                                        >
+                                            <Trash2 class="w-4 h-4" /> Delete
+                                        </button>
+                                    </>
+                                }>
+                                    {/* Inline Rename UI */}
+                                    <div class="px-3 py-2">
+                                        <input
+                                            type="text"
+                                            value={renameValue()}
+                                            onInput={(e) => setRenameValue(e.currentTarget.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleRename();
+                                                if (e.key === 'Escape') setRenamingId('');
+                                            }}
+                                            autofocus
+                                            class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-cyan-500/50"
+                                        />
+                                        <div class="flex gap-2 mt-2">
+                                            <button
+                                                onClick={handleRename}
+                                                class="flex-1 py-1 bg-cyan-500 text-black text-[10px] font-bold rounded-md"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                onClick={() => setRenamingId('')}
+                                                class="flex-1 py-1 bg-white/5 text-gray-400 text-[10px] font-bold rounded-md"
+                                            >
+                                                Cancel
                                             </button>
                                         </div>
                                     </div>
-                                )}
-                            </For>
-                        </div>
+                                </Show>
+                            </Motion.div>
+                        )}
                     </Show>
+                </Presence>
 
-                    {/* ── List View ── */}
-                    <Show when={viewMode() === 'list'}>
-                        <div class="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
-                            {/* Table Header */}
-                            <div class="grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-2.5 border-b border-white/[0.06] text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                <span>Name</span>
-                                <span>Size</span>
-                                <span>Modified</span>
-                                <span></span>
+            </Show>{/* End My Disk */}
+
+            {/* ── Shared Tab Content ── */}
+            <Show when={diskTab() === 'shared'}>
+                <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                    <Show when={!activeSharedFolder()}>
+                        {/* Shared Header */}
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-black text-white uppercase tracking-widest">Shared with me</h3>
+                            <button
+                                onClick={() => setShowCreateSharedFolder(true)}
+                                class="flex items-center gap-2 px-3 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-black uppercase tracking-widest transition-all border border-cyan-500/20"
+                            >
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" /></svg>
+                                New Shared Folder
+                            </button>
+                        </div>
+
+                        <Show when={sharedLoading()}>
+                            <div class="flex items-center justify-center py-12">
+                                <div class="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
                             </div>
-                            {/* Folders */}
-                            <For each={filteredFolders()}>
-                                {(folder) => (
-                                    <div
-                                        class="w-full grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] group transition-all items-center text-left cursor-pointer"
-                                        onClick={() => navigateToFolder(folder.path)}
-                                    >
-                                        <div class="flex items-center gap-3 min-w-0">
-                                            <Folder class="w-5 h-5 text-cyan-400 shrink-0" />
-                                            <span class="text-sm text-gray-200 truncate font-medium">{folder.name}</span>
-                                        </div>
-                                        <span class="text-xs text-gray-500">--</span>
-                                        <span class="text-xs text-gray-500">{new Date(folder.createdAt).toLocaleDateString()}</span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
-                                            }}
-                                            class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all"
-                                        >
-                                            <MoreVertical class="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                )}
-                            </For>
-                            {/* Files */}
-                            <For each={filteredFiles()}>
-                                {(file) => (
-                                    <div
-                                        class={`group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_120px_40px] gap-2 px-3 sm:px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
-                                            } ${deletingId() === file.id ? 'opacity-40' : ''}`}
-                                        onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
-                                    >
-                                        <div class="flex items-center gap-3 min-w-0">
-                                            {/* List Selection Check */}
-                                            <div
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsSelectMode(true);
-                                                    toggleSelection(file.id);
-                                                }}
-                                                class={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${selectedItems().has(file.id)
-                                                    ? 'bg-cyan-500 border-cyan-500 text-black'
-                                                    : 'bg-white/5 border-white/10 text-transparent group-hover:border-white/30'
-                                                    }`}
-                                            >
-                                                <Check class="w-3.5 h-3.5" />
-                                            </div>
-                                            <div class={`shrink-0 ${fileTypeColor(file.type)}`}>
-                                                <FileTypeIcon type={file.type} name={file.name} />
-                                            </div>
-                                            <span class="text-sm text-gray-200 truncate">{file.name}</span>
-                                            <div class="flex gap-1 shrink-0">
-                                                <Show when={file.isPublished}>
-                                                    <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Market</span>
-                                                </Show>
-                                                <Show when={file.isEncrypted}>
-                                                    <span class="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[9px] font-black text-purple-400 uppercase tracking-tighter">Private</span>
-                                                </Show>
-                                                <Show when={file.storageType === 'distributed'}>
-                                                    <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[9px] font-black text-amber-500 uppercase tracking-tighter">VNet</span>
-                                                </Show>
-                                            </div>
-                                        </div>
-                                        <span class="text-xs text-gray-500 hidden sm:block">{formatFileSize(file.size)}</span>
-                                        <span class="text-xs text-gray-500 hidden sm:block">{new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
-                                            }}
-                                            class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all active:bg-white/10"
-                                        >
-                                            <MoreVertical class="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                )}
-                            </For>
-                        </div>
-                    </Show>
-                </Show>
-            </div>
+                        </Show>
 
-            {/* ── Context Menu ── */}
-            <Presence>
-                <Show when={contextMenu()}>
-                    {(ctx) => (
-                        <Motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            class="fixed z-[100] bg-[#1a1a20] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[160px]"
-                            style={{
-                                left: `${Math.min(ctx().x, window.innerWidth - 180)}px`,
-                                top: `${Math.min(ctx().y, window.innerHeight - 320)}px`,
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <Show when={renamingId() === ctx().item.id} fallback={
-                                <>
-                                    <Show when={ctx().type === 'file'}>
-                                        <button
-                                            onClick={() => { setPreviewFile(ctx().item as DiskFile); setContextMenu(null); }}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                        >
-                                            <Eye class="w-4 h-4" /> Preview
-                                        </button>
-                                        <button
-                                            onClick={() => { handleDownload(ctx().item as DiskFile); setContextMenu(null); }}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                        >
-                                            <Download class="w-4 h-4" /> Download
-                                        </button>
-                                        <button
-                                            onClick={() => handleShare(ctx().item as DiskFile)}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                        >
-                                            <Copy class="w-4 h-4" /> Copy Link
-                                        </button>
-                                    </Show>
-                                    <Show when={ctx().type === 'folder'}>
-                                        <button
-                                            onClick={() => { navigateToFolder((ctx().item as DiskFolder).path); setContextMenu(null); }}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                        >
-                                            <Folder class="w-4 h-4" /> Open
-                                        </button>
-                                    </Show>
-
-                                    <button
-                                        onClick={() => {
-                                            setRenamingId(ctx().item.id);
-                                            setRenameValue(ctx().item.name);
-                                        }}
-                                        class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                    >
-                                        <FileText class="w-4 h-4" /> Rename
-                                    </button>
-
-                                    <Show when={ctx().type === 'file'}>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const file = ctx().item as DiskFile;
-                                                setPublishingFile(file);
-                                                if (file.isPublished) {
-                                                    handleUnpublish();
-                                                } else {
-                                                    setShowPublishModal(true);
-                                                    setContextMenu(null);
-                                                }
-                                            }}
-                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cyan-400 hover:bg-cyan-500/10 transition-all font-bold"
-                                        >
-                                            <Globe class="w-4 h-4" /> {(ctx().item as DiskFile).isPublished ? 'Unpublish' : 'Publish to Market'}
-                                        </button>
-                                    </Show>
-
-                                    <div class="h-px bg-white/[0.06] my-1" />
-                                    <button
-                                        onClick={() => {
-                                            if (ctx().type === 'file') {
-                                                handleDeleteFile(ctx().item as DiskFile);
-                                            } else {
-                                                handleDeleteFolder(ctx().item as DiskFolder);
-                                            }
-                                        }}
-                                        class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all"
-                                    >
-                                        <Trash2 class="w-4 h-4" /> Delete
-                                    </button>
-                                </>
-                            }>
-                                {/* Inline Rename UI */}
-                                <div class="px-3 py-2">
-                                    <input
-                                        type="text"
-                                        value={renameValue()}
-                                        onInput={(e) => setRenameValue(e.currentTarget.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleRename();
-                                            if (e.key === 'Escape') setRenamingId('');
-                                        }}
-                                        autofocus
-                                        class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-cyan-500/50"
-                                    />
-                                    <div class="flex gap-2 mt-2">
-                                        <button
-                                            onClick={handleRename}
-                                            class="flex-1 py-1 bg-cyan-500 text-black text-[10px] font-bold rounded-md"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            onClick={() => setRenamingId('')}
-                                            class="flex-1 py-1 bg-white/5 text-gray-400 text-[10px] font-bold rounded-md"
-                                        >
-                                            Cancel
-                                        </button>
+                        <Show when={!sharedLoading()}>
+                            {/* Shared Folders */}
+                            <Show when={sharedFolders().length > 0}>
+                                <div class="mb-6">
+                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Shared Folders</div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <For each={sharedFolders()}>
+                                            {(folder) => (
+                                                <button
+                                                    onClick={() => openSharedFolder(folder.id)}
+                                                    class="flex items-center gap-3 p-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl hover:bg-white/[0.06] hover:border-cyan-500/20 transition-all text-left group"
+                                                >
+                                                    <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 group-hover:bg-cyan-500/20 transition-all">
+                                                        <Users class="w-5 h-5 text-cyan-400" />
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="text-sm font-bold text-white truncate">{folder.name}</div>
+                                                        <div class="text-[10px] text-gray-500">{folder.members.length} members | {folder.fileCount} files</div>
+                                                    </div>
+                                                    <ChevronRight class="w-4 h-4 text-gray-600 group-hover:text-cyan-400 transition-colors" />
+                                                </button>
+                                            )}
+                                        </For>
                                     </div>
                                 </div>
                             </Show>
-                        </Motion.div>
-                    )}
-                </Show>
-            </Presence>
+
+                            {/* Shared Files */}
+                            <Show when={sharedWithMe().length > 0}>
+                                <div class="mb-6">
+                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Shared Files</div>
+                                    <div class="space-y-2">
+                                        <For each={sharedWithMe()}>
+                                            {(share) => (
+                                                <div class="flex items-center gap-3 p-3 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.05] transition-all">
+                                                    <div class="w-9 h-9 rounded-lg bg-white/[0.05] flex items-center justify-center">
+                                                        <Show when={share.type === 'file'} fallback={<Folder class="w-4 h-4 text-yellow-400" />}>
+                                                            <FileIcon class="w-4 h-4 text-blue-400" />
+                                                        </Show>
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="text-sm font-bold text-white truncate">{share.resourceName || share.resourceId}</div>
+                                                        <div class="text-[10px] text-gray-500">
+                                                            from {share.ownerEmail.split('@')[0]} | {new Date(share.createdAt).toLocaleDateString()}
+                                                        </div>
+                                                    </div>
+                                                    <Show when={share.resource && share.type === 'file'}>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (share.resource) {
+                                                                    setPreviewFile(share.resource as DiskFile);
+                                                                }
+                                                            }}
+                                                            class="p-2 text-gray-500 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                                                        >
+                                                            <Eye class="w-4 h-4" />
+                                                        </button>
+                                                    </Show>
+                                                </div>
+                                            )}
+                                        </For>
+                                    </div>
+                                </div>
+                            </Show>
+
+                            <Show when={sharedWithMe().length === 0 && sharedFolders().length === 0}>
+                                <div class="flex flex-col items-center justify-center py-16 text-center">
+                                    <Share2 class="w-12 h-12 text-gray-700 mb-4" />
+                                    <div class="text-sm font-bold text-gray-500 mb-1">No shared items</div>
+                                    <div class="text-xs text-gray-600">Files and folders shared with you will appear here</div>
+                                </div>
+                            </Show>
+                        </Show>
+                    </Show>
+
+                    {/* Active Shared Folder View */}
+                    <Show when={activeSharedFolder()}>
+                        <div class="flex items-center gap-2 mb-4">
+                            <button
+                                onClick={() => { setActiveSharedFolder(null); setSharedFolderFiles([]); setSharedFolderMeta(null); }}
+                                class="p-2 text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                            >
+                                <ArrowLeft class="w-4 h-4" />
+                            </button>
+                            <Users class="w-4 h-4 text-cyan-400" />
+                            <span class="text-sm font-bold text-white">{sharedFolderMeta()?.name || 'Shared Folder'}</span>
+                            <Show when={sharedFolderMeta()?.members}>
+                                <span class="text-[10px] text-gray-500 ml-2">{sharedFolderMeta()?.members?.length} members</span>
+                            </Show>
+                        </div>
+
+                        <Show when={sharedLoading()}>
+                            <div class="flex items-center justify-center py-12">
+                                <div class="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
+                            </div>
+                        </Show>
+
+                        <Show when={!sharedLoading()}>
+                            <Show when={sharedFolderFiles().length > 0}>
+                                <div class="space-y-2">
+                                    <For each={sharedFolderFiles()}>
+                                        {(file) => (
+                                            <div class="flex items-center gap-3 p-3 bg-white/[0.03] border border-white/[0.08] rounded-xl hover:bg-white/[0.05] transition-all">
+                                                <div class="w-9 h-9 rounded-lg bg-white/[0.05] flex items-center justify-center">
+                                                    <FileIcon class="w-4 h-4 text-blue-400" />
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-sm font-bold text-white truncate">{file.name}</div>
+                                                    <div class="text-[10px] text-gray-500">
+                                                        {formatFileSize(file.size)} | by {(file as any).uploadedBy?.split('@')[0] || 'unknown'}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setPreviewFile(file)}
+                                                    class="p-2 text-gray-500 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                                                >
+                                                    <Eye class="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </For>
+                                </div>
+                            </Show>
+                            <Show when={sharedFolderFiles().length === 0}>
+                                <div class="flex flex-col items-center justify-center py-16 text-center">
+                                    <Folder class="w-12 h-12 text-gray-700 mb-4" />
+                                    <div class="text-sm font-bold text-gray-500">No files yet</div>
+                                    <div class="text-xs text-gray-600 mt-1">Upload files to this shared folder</div>
+                                </div>
+                            </Show>
+                        </Show>
+                    </Show>
+                </div>
+            </Show>
 
             {/* ── File Preview Modal ── */}
             <Presence>
@@ -2486,6 +2757,200 @@ export const WalletDisk = (props: {
                                     {publishLoading() ? (
                                         <div class="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
                                     ) : 'Publish Now'}
+                                </button>
+                            </div>
+                        </Motion.div>
+                    </Motion.div>
+                </Show>
+            </Presence>
+
+            {/* ── Share Modal ── */}
+            <Presence>
+                <Show when={showShareModal() && shareTarget()}>
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        class="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    >
+                        <Motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            class="bg-[#1a1a24] border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl"
+                        >
+                            <div class="flex flex-col items-center text-center mb-6">
+                                <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+                                    <Share2 class="w-8 h-8 text-blue-400" />
+                                </div>
+                                <h1 class="text-xl font-black text-white mb-1 uppercase tracking-tight">Share {shareTarget()!.type}</h1>
+                                <p class="text-xs text-gray-500 truncate max-w-[250px]">{shareTarget()!.item.name}</p>
+                            </div>
+
+                            <div class="space-y-3 mb-6">
+                                <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Search contacts by name</div>
+                                    <input
+                                        type="text"
+                                        value={shareSearchQuery()}
+                                        onInput={(e) => setShareSearchQuery(e.currentTarget.value)}
+                                        placeholder="Enter name or email..."
+                                        autocomplete="off"
+                                        class="bg-transparent border-none text-white text-sm font-bold placeholder-gray-700 focus:outline-none w-full"
+                                    />
+                                </div>
+
+                                {/* Found contacts */}
+                                <Show when={shareSearchQuery().length >= 2}>
+                                    <div class="max-h-[200px] overflow-y-auto space-y-1 custom-scrollbar">
+                                        <For each={contacts().filter((c: any) => {
+                                            const q = shareSearchQuery().toLowerCase();
+                                            return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid;
+                                        }).slice(0, 10)}>
+                                            {(contact: any) => (
+                                                <button
+                                                    onClick={() => executeShare(contact.vchainUserUid)}
+                                                    disabled={sharingInProgress()}
+                                                    class="w-full flex items-center gap-3 p-3 bg-white/[0.02] hover:bg-white/[0.06] rounded-xl transition-all text-left"
+                                                >
+                                                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 font-black text-xs border border-blue-500/20">
+                                                        {contact.internalName?.charAt(0)?.toUpperCase() || '?'}
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="text-sm font-bold text-white truncate">{contact.internalName}</div>
+                                                        <div class="text-[10px] text-gray-500 truncate">{contact.vchainUserUid}</div>
+                                                    </div>
+                                                    <Share2 class="w-4 h-4 text-gray-500" />
+                                                </button>
+                                            )}
+                                        </For>
+                                        <Show when={contacts().filter((c: any) => {
+                                            const q = shareSearchQuery().toLowerCase();
+                                            return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid;
+                                        }).length === 0}>
+                                            <div class="text-center py-4 text-xs text-gray-600">No contacts found</div>
+                                        </Show>
+                                    </div>
+                                </Show>
+                            </div>
+
+                            <Show when={sharingInProgress()}>
+                                <div class="flex items-center justify-center gap-2 py-3 text-sm text-blue-400">
+                                    <div class="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                                    Sharing...
+                                </div>
+                            </Show>
+
+                            <button
+                                onClick={() => { setShowShareModal(false); setShareTarget(null); }}
+                                class="w-full h-12 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-black uppercase tracking-tight transition-all"
+                            >
+                                Cancel
+                            </button>
+                        </Motion.div>
+                    </Motion.div>
+                </Show>
+            </Presence>
+
+            {/* ── Create Shared Folder Modal ── */}
+            <Presence>
+                <Show when={showCreateSharedFolder()}>
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        class="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    >
+                        <Motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            class="bg-[#1a1a24] border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl"
+                        >
+                            <div class="flex flex-col items-center text-center mb-6">
+                                <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-4 border border-cyan-500/20">
+                                    <Users class="w-8 h-8 text-cyan-400" />
+                                </div>
+                                <h1 class="text-xl font-black text-white mb-1 uppercase tracking-tight">New Shared Folder</h1>
+                                <p class="text-xs text-gray-500">Create a collaborative folder with team members</p>
+                            </div>
+
+                            <div class="space-y-4 mb-6">
+                                <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all">
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Folder Name</div>
+                                    <input
+                                        type="text"
+                                        value={newSharedFolderName()}
+                                        onInput={(e) => setNewSharedFolderName(e.currentTarget.value)}
+                                        placeholder="e.g. Team Documents"
+                                        class="bg-transparent border-none text-white text-sm font-bold placeholder-gray-700 focus:outline-none w-full"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase mb-2">Add Members</div>
+                                    <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3">
+                                        <input
+                                            type="text"
+                                            value={shareSearchQuery()}
+                                            onInput={(e) => setShareSearchQuery(e.currentTarget.value)}
+                                            placeholder="Search contacts..."
+                                            autocomplete="off"
+                                            class="bg-transparent border-none text-white text-sm font-bold placeholder-gray-700 focus:outline-none w-full"
+                                        />
+                                    </div>
+                                    <Show when={shareSearchQuery().length >= 2}>
+                                        <div class="mt-2 max-h-[120px] overflow-y-auto space-y-1 custom-scrollbar">
+                                            <For each={contacts().filter((c: any) => {
+                                                const q = shareSearchQuery().toLowerCase();
+                                                return (c.internalName?.toLowerCase().includes(q) || c.vchainUserUid?.toLowerCase().includes(q)) && c.vchainUserUid && !newSharedFolderMembers().includes(c.vchainUserUid);
+                                            }).slice(0, 5)}>
+                                                {(contact: any) => (
+                                                    <button
+                                                        onClick={() => { setNewSharedFolderMembers(p => [...p, contact.vchainUserUid]); setShareSearchQuery(''); }}
+                                                        class="w-full flex items-center gap-2 p-2 bg-white/[0.02] hover:bg-white/[0.06] rounded-lg transition-all text-left text-xs"
+                                                    >
+                                                        <div class="w-6 h-6 rounded bg-cyan-500/10 flex items-center justify-center text-cyan-400 font-black text-[10px]">
+                                                            {contact.internalName?.charAt(0)?.toUpperCase() || '?'}
+                                                        </div>
+                                                        <span class="text-white font-bold truncate">{contact.internalName}</span>
+                                                        <span class="text-gray-500 truncate ml-auto">{contact.vchainUserUid}</span>
+                                                    </button>
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                    {/* Selected members */}
+                                    <Show when={newSharedFolderMembers().length > 0}>
+                                        <div class="flex flex-wrap gap-2 mt-3">
+                                            <For each={newSharedFolderMembers()}>
+                                                {(memberEmail) => (
+                                                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 text-cyan-400 rounded-full text-[10px] font-bold border border-cyan-500/20">
+                                                        {(() => { const c = contacts().find((c: any) => c.vchainUserUid === memberEmail); return c?.internalName || memberEmail.split('@')[0]; })()}
+                                                        <button onClick={() => setNewSharedFolderMembers(p => p.filter(e => e !== memberEmail))} class="hover:text-white transition-colors">
+                                                            <X class="w-3 h-3" />
+                                                        </button>
+                                                    </span>
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    onClick={() => { setShowCreateSharedFolder(false); setNewSharedFolderName(''); setNewSharedFolderMembers([]); setShareSearchQuery(''); }}
+                                    class="flex-1 h-12 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-black uppercase tracking-tight transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateSharedFolder}
+                                    disabled={!newSharedFolderName().trim()}
+                                    class="flex-1 h-12 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-black uppercase tracking-tight shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-30"
+                                >
+                                    Create
                                 </button>
                             </div>
                         </Motion.div>

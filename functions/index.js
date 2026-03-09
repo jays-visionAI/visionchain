@@ -9213,6 +9213,9 @@ const RP_DEFAULTS = {
   agent_staking_claim: 10, agent_staking_withdraw: 10,
   agent_staking_compound: 25, agent_bridge_initiate: 15,
   agent_nft_mint: 30, agent_referral_inviter: 50, agent_referral_invitee: 25,
+  mobile_node_daily: 5,
+  referral_rp_tier1_rate: 0.10,
+  referral_rp_tier2_rate: 0.02,
 };
 let _rpCfg = null;
 let _rpCfgAt = 0;
@@ -9228,6 +9231,120 @@ async function getRPConfig() {
     return { ...RP_DEFAULTS };
   }
 }
+
+/**
+ * Server-side RP award with referral propagation (mirrors client addRewardPoints).
+ * Awards RP to a user and propagates to Tier 1 & Tier 2 referrers.
+ * @param {string} email - User email
+ * @param {number} amount - RP amount
+ * @param {string} type - RP action type
+ * @param {string} source - Description
+ * @param {object} rpCfg - RP config (from getRPConfig)
+ */
+async function serverAddRewardPoints(email, amount, type, source, rpCfg) {
+  if (!email || amount <= 0) return;
+  const db2 = admin.firestore();
+  const now = new Date().toISOString();
+  try {
+    // 1. Award RP to user
+    const rpRef = db2.collection("user_reward_points").doc(email);
+    const rpSnap = await rpRef.get();
+    if (rpSnap.exists) {
+      await rpRef.update({
+        totalRP: admin.firestore.FieldValue.increment(amount),
+        availableRP: admin.firestore.FieldValue.increment(amount),
+        updatedAt: now,
+      });
+    } else {
+      await rpRef.set({
+        userId: email, totalRP: amount, claimedRP: 0, availableRP: amount,
+        createdAt: now, updatedAt: now,
+      });
+    }
+    // Log history
+    await db2.collection("rp_history").add({
+      userId: email, type, amount, source, timestamp: now,
+    });
+
+    // 2. Referral propagation (skip for referral-derived types to prevent loops)
+    const SKIP_TYPES = ["referral_tier1_rp", "referral_tier2_rp", "referral", "levelup"];
+    if (SKIP_TYPES.includes(type)) return;
+
+    const tier1Rate = rpCfg.referral_rp_tier1_rate || 0.10;
+    const tier2Rate = rpCfg.referral_rp_tier2_rate || 0.02;
+
+    // Find user's referrer
+    const usersSnap = await db2.collection("users")
+      .where("email", "==", email.toLowerCase())
+      .limit(1)
+      .get();
+    if (usersSnap.empty) return;
+    const userData = usersSnap.docs[0].data();
+    const referredBy = userData.referredBy;
+    if (!referredBy) return;
+
+    // Tier 1: direct referrer
+    const tier1Amount = Math.floor(amount * tier1Rate);
+    if (tier1Amount > 0) {
+      const t1Ref = db2.collection("user_reward_points").doc(referredBy);
+      const t1Snap = await t1Ref.get();
+      if (t1Snap.exists) {
+        await t1Ref.update({
+          totalRP: admin.firestore.FieldValue.increment(tier1Amount),
+          availableRP: admin.firestore.FieldValue.increment(tier1Amount),
+          updatedAt: now,
+        });
+      } else {
+        await t1Ref.set({
+          userId: referredBy, totalRP: tier1Amount, claimedRP: 0, availableRP: tier1Amount,
+          createdAt: now, updatedAt: now,
+        });
+      }
+      await db2.collection("rp_history").add({
+        userId: referredBy, type: "referral_tier1_rp", amount: tier1Amount,
+        source: `Tier1 ${Math.round(tier1Rate * 100)}% from ${email}: ${source}`,
+        timestamp: now,
+      });
+
+      // Tier 2: grand referrer
+      const t1UserSnap = await db2.collection("users")
+        .where("email", "==", referredBy.toLowerCase())
+        .limit(1)
+        .get();
+      if (!t1UserSnap.empty) {
+        const t1UserData = t1UserSnap.docs[0].data();
+        const grandReferrer = t1UserData.referredBy;
+        if (grandReferrer && grandReferrer !== email) {
+          const tier2Amount = Math.floor(amount * tier2Rate);
+          if (tier2Amount > 0) {
+            const t2Ref = db2.collection("user_reward_points").doc(grandReferrer);
+            const t2Snap = await t2Ref.get();
+            if (t2Snap.exists) {
+              await t2Ref.update({
+                totalRP: admin.firestore.FieldValue.increment(tier2Amount),
+                availableRP: admin.firestore.FieldValue.increment(tier2Amount),
+                updatedAt: now,
+              });
+            } else {
+              await t2Ref.set({
+                userId: grandReferrer, totalRP: tier2Amount, claimedRP: 0, availableRP: tier2Amount,
+                createdAt: now, updatedAt: now,
+              });
+            }
+            await db2.collection("rp_history").add({
+              userId: grandReferrer, type: "referral_tier2_rp", amount: tier2Amount,
+              source: `Tier2 ${Math.round(tier2Rate * 100)}% from ${email}: ${source}`,
+              timestamp: now,
+            });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[RP] serverAddRewardPoints failed:", e.message);
+  }
+}
+
 
 exports.agentGateway = onRequest({
   cors: true,
@@ -13411,6 +13528,14 @@ exports.agentGateway = onRequest({
         if (hbChunkEndpoint) updateData.chunk_endpoint = hbChunkEndpoint;
 
         await mnDoc.ref.update(updateData);
+
+        // Award mobile_node_daily RP on new epoch (once per day)
+        if (isNewEpoch && mnData.email) {
+          serverAddRewardPoints(
+            mnData.email, rpCfg.mobile_node_daily || 5,
+            "mobile_node_daily", "Daily mobile node uptime reward", rpCfg
+          ).catch((e) => console.warn("[Mobile Node] RP award failed:", e.message));
+        }
 
         // Log heartbeat to subcollection for analytics
         await mnDoc.ref.collection("heartbeats").add({
