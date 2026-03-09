@@ -23179,10 +23179,81 @@ Output ONLY valid JSON array, no markdown, no explanation.`;
 // ═══ DISK SHARING ════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
 
+// --- Disk Sharing Email Templates ---
+
+async function sendDiskShareEmail(targetEmail, ownerEmail, resourceType, resourceName) {
+  if (!(await checkEmailOptIn(targetEmail, "system"))) {
+    console.log(`[Email] Disk share email skipped for ${targetEmail} (opted out)`);
+    return;
+  }
+  const ownerName = ownerEmail.split("@")[0];
+  const dashboardUrl = "https://visionchain.co/wallet";
+  const typeLabel = resourceType === "file" ? "File" : "Folder";
+
+  const body = `
+    ${emailComponents.sectionTitle(`${typeLabel} Shared with You`)}
+    ${emailComponents.subtitle(`${ownerName} shared a ${resourceType} with you on Vision Disk.`)}
+    ${emailComponents.alertBox(`You can now access "${resourceName}" in your Shared tab.`, "success")}
+    ${emailComponents.infoCard([
+    ["Shared by", ownerName, false],
+    ["Type", typeLabel, false],
+    ["Name", resourceName, true],
+  ])}
+    ${emailComponents.button("Open Vision Disk", dashboardUrl)}
+  `;
+
+  await sendSecurityEmail(targetEmail, `Vision Chain - ${typeLabel} Shared with You`, emailBaseLayout(body, `${ownerName} shared "${resourceName}" with you`));
+}
+
+async function sendDiskFolderInviteEmail(targetEmail, ownerEmail, folderName) {
+  if (!(await checkEmailOptIn(targetEmail, "system"))) {
+    console.log(`[Email] Disk folder invite email skipped for ${targetEmail} (opted out)`);
+    return;
+  }
+  const ownerName = ownerEmail.split("@")[0];
+  const dashboardUrl = "https://visionchain.co/wallet";
+
+  const body = `
+    ${emailComponents.sectionTitle("Added to Shared Folder")}
+    ${emailComponents.subtitle(`${ownerName} added you to a collaborative folder on Vision Disk.`)}
+    ${emailComponents.alertBox(`You are now a member of "${folderName}". You can upload and access files in this folder.`, "success")}
+    ${emailComponents.infoCard([
+    ["Added by", ownerName, false],
+    ["Folder", folderName, true],
+    ["Your Role", "Editor", false],
+  ])}
+    ${emailComponents.button("Open Vision Disk", dashboardUrl)}
+  `;
+
+  await sendSecurityEmail(targetEmail, `Vision Chain - Added to Shared Folder "${folderName}"`, emailBaseLayout(body, `${ownerName} added you to "${folderName}"`));
+}
+
+async function sendDiskUploadEmail(memberEmail, uploaderEmail, fileName, folderName) {
+  if (!(await checkEmailOptIn(memberEmail, "system"))) {
+    console.log(`[Email] Disk upload email skipped for ${memberEmail} (opted out)`);
+    return;
+  }
+  const uploaderName = uploaderEmail.split("@")[0];
+  const dashboardUrl = "https://visionchain.co/wallet";
+
+  const body = `
+    ${emailComponents.sectionTitle("New File in Shared Folder")}
+    ${emailComponents.subtitle(`${uploaderName} uploaded a new file to "${folderName}".`)}
+    ${emailComponents.infoCard([
+    ["Uploaded by", uploaderName, false],
+    ["File", fileName, true],
+    ["Folder", folderName, false],
+  ])}
+    ${emailComponents.button("View File", dashboardUrl)}
+  `;
+
+  await sendSecurityEmail(memberEmail, `Vision Chain - New file in "${folderName}"`, emailBaseLayout(body, `${uploaderName} uploaded "${fileName}" to "${folderName}"`));
+}
+
 /**
  * diskShareResource - Share a file or folder with another user
  */
-exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30, secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const ownerEmail = request.auth.token.email.toLowerCase();
   const { targetEmail, type, resourceId, resourceName } = request.data;
@@ -23258,6 +23329,10 @@ exports.diskShareResource = onCall({ cors: true, maxInstances: 10, timeoutSecond
   } catch (notifyErr) {
     console.warn("[Disk] Share notification failed:", notifyErr);
   }
+
+  // Send email notification (fire-and-forget)
+  sendDiskShareEmail(normalizedTarget, ownerEmail, type, resourceName || resourceId)
+    .catch(e => console.warn("[Disk] Share email failed:", e));
 
   return { success: true, shareId: shareRef.id };
 });
@@ -23356,7 +23431,7 @@ exports.diskGetMyShares = onCall({ cors: true, maxInstances: 10, timeoutSeconds:
 /**
  * diskCreateSharedFolder - Create a collaborative folder
  */
-exports.diskCreateSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+exports.diskCreateSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30, secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const ownerEmail = request.auth.token.email.toLowerCase();
   const { name, memberEmails } = request.data;
@@ -23414,13 +23489,20 @@ exports.diskCreateSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutS
     } catch (e) { console.warn("[Disk] Folder invite notification failed:", e); }
   }
 
+  // Send email notifications (fire-and-forget)
+  for (const m of validMembers) {
+    if (m.email === ownerEmail) continue;
+    sendDiskFolderInviteEmail(m.email, ownerEmail, name.trim())
+      .catch(e => console.warn("[Disk] Folder invite email failed:", e));
+  }
+
   return { success: true, folderId: folderRef.id, members: validMembers };
 });
 
 /**
  * diskManageSharedFolderMember - Add/remove/update members
  */
-exports.diskManageSharedFolderMember = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30 }, async (request) => {
+exports.diskManageSharedFolderMember = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 30, secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
   const { folderId, action, targetEmail, role } = request.data;
@@ -23473,6 +23555,10 @@ exports.diskManageSharedFolderMember = onCall({ cors: true, maxInstances: 10, ti
         actionable: false,
       });
     } catch (e) { console.warn("[Disk] Add member notification failed:", e); }
+
+    // Send email notification (fire-and-forget)
+    sendDiskFolderInviteEmail(normalizedTarget, email, folder.name)
+      .catch(e => console.warn("[Disk] Add member email failed:", e));
 
     return { success: true, member: newMember };
 
@@ -23532,7 +23618,7 @@ exports.diskGetSharedFolderFiles = onCall({ cors: true, maxInstances: 10, timeou
 /**
  * diskUploadToSharedFolder - Upload file to shared folder (delegates to standard chunking)
  */
-exports.diskUploadToSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540, memory: "2GiB" }, async (request) => {
+exports.diskUploadToSharedFolder = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540, memory: "2GiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
   const { folderId, fileData, uploadSessionId, fileName, fileType, fileSize, thumbnail } = request.data;
@@ -23687,6 +23773,13 @@ exports.diskUploadToSharedFolder = onCall({ cors: true, maxInstances: 10, timeou
     }
   } catch (notifyErr) {
     console.warn("[Disk] Upload notification failed:", notifyErr);
+  }
+
+  // Send email notifications to other members (fire-and-forget)
+  const otherMembersForEmail = folder.members.filter(m => m.email !== email);
+  for (const m of otherMembersForEmail) {
+    sendDiskUploadEmail(m.email, email, fileName, folder.name)
+      .catch(e => console.warn("[Disk] Upload email failed:", e));
   }
 
   return { success: true, fileId, cid, merkleRoot, chunkCount: chunks.length };
