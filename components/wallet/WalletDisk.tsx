@@ -1848,7 +1848,42 @@ export const WalletDisk = (props: {
                                                 </div>
                                             </Show>
                                             <Show when={file().type.includes('pdf')}>
-                                                <iframe src={previewURL()} class="w-full h-full min-h-[400px] rounded-lg border border-white/10" />
+                                                <div class="w-full flex flex-col items-center gap-4">
+                                                    <Show when={previewURL()} fallback={
+                                                        <div class="text-center py-12">
+                                                            <svg class="w-16 h-16 text-red-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                                                            <div class="text-sm text-gray-400 mb-4">Loading PDF...</div>
+                                                        </div>
+                                                    }>
+                                                        <object
+                                                            data={previewURL() + '#toolbar=1&navpanes=0'}
+                                                            type="application/pdf"
+                                                            class="w-full rounded-lg border border-white/10"
+                                                            style={{ height: '70vh', 'min-height': '400px' }}
+                                                        >
+                                                            <div class="w-full flex flex-col items-center justify-center py-12 bg-[#0a0a12] rounded-lg border border-white/10">
+                                                                <svg class="w-16 h-16 text-red-400 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                                                                <div class="text-sm text-gray-400 mb-4">PDF 미리보기를 지원하지 않는 브라우저입니다.</div>
+                                                                <button
+                                                                    onClick={() => handleDownload(file())}
+                                                                    class="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all"
+                                                                >
+                                                                    <Download class="w-4 h-4" /> PDF 다운로드
+                                                                </button>
+                                                            </div>
+                                                        </object>
+                                                        <button
+                                                            onClick={() => {
+                                                                const url = previewURL();
+                                                                if (url) window.open(url, '_blank');
+                                                            }}
+                                                            class="inline-flex items-center gap-2 px-4 py-2 bg-white/[0.05] hover:bg-white/[0.1] text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-all border border-white/10"
+                                                        >
+                                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                                            새 탭에서 열기
+                                                        </button>
+                                                    </Show>
+                                                </div>
                                             </Show>
                                             <Show when={!file().type.startsWith('image/') && !file().type.startsWith('video/') && !file().type.startsWith('audio/') && !file().type.includes('pdf')}>
                                                 <div class="text-center">
