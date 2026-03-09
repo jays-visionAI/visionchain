@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './components/auth/authContext';
 import { I18nProvider } from './i18n/i18nContext';
 import { isProduction } from './services/envConfig';
 import { RPToastContainer } from './components/ui/RPToast';
+import { MilestoneModal } from './components/ui/MilestoneModal';
 
 // Core layout components
 import Navbar from './components/Navbar';
@@ -55,6 +56,8 @@ function Layout(props: { children?: any }) {
       <EnvironmentBadge />
       {/* RP reward toast notifications */}
       <RPToastContainer />
+      {/* Milestone celebration overlay */}
+      <MilestoneModal />
     </div>
   );
 }

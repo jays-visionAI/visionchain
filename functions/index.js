@@ -24161,3 +24161,233 @@ exports.dailyRPDigest = onSchedule({
     console.error("[DailyDigest] Failed:", err);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ═══ WEEKLY RP SUMMARY EMAIL ══════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+
+function buildWeeklyRPSummaryEmail(userEmail, events, streak, rank, totalUsers, weekStart, weekEnd) {
+  const username = userEmail.split('@')[0];
+  const totalRP = events.reduce((s, e) => s + (e.amount || 0), 0);
+
+  // Group by day
+  const dailyMap = {};
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  events.forEach(e => {
+    const d = new Date(e.timestamp);
+    const dayKey = d.toISOString().split('T')[0];
+    if (!dailyMap[dayKey]) dailyMap[dayKey] = 0;
+    dailyMap[dayKey] += e.amount || 0;
+  });
+
+  // Build 7-day bar chart
+  const activeDays = Object.keys(dailyMap).length;
+  const avgRP = activeDays > 0 ? Math.round(totalRP / 7) : 0;
+  const maxDayRP = Math.max(...Object.values(dailyMap), 1);
+  const bestDay = Object.entries(dailyMap).sort((a, b) => b[1] - a[1])[0];
+
+  let barChartRows = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(weekEnd);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const dayRP = dailyMap[key] || 0;
+    const pct = Math.max(2, (dayRP / maxDayRP) * 100);
+    const dayLabel = dayNames[d.getDay()];
+    const color = dayRP > 0 ? '#06b6d4' : '#1f2937';
+    barChartRows += `
+      <tr>
+        <td style="padding:3px 8px; width:40px; font-size:10px; color:#6b7280; font-weight:700;">${dayLabel}</td>
+        <td style="padding:3px 0;">
+          <div style="height:14px; border-radius:4px; background:${color}20; overflow:hidden;">
+            <div style="height:100%; width:${pct}%; background:${color}; border-radius:4px; transition:width 0.3s;"></div>
+          </div>
+        </td>
+        <td style="padding:3px 8px; width:50px; text-align:right; font-size:11px; font-weight:800; color:${dayRP > 0 ? '#e5e7eb' : '#374151'};">${dayRP > 0 ? `+${dayRP}` : '0'}</td>
+      </tr>`;
+  }
+
+  // Group by action type
+  const actionMap = {};
+  events.forEach(e => {
+    if (!actionMap[e.type]) actionMap[e.type] = { count: 0, rp: 0 };
+    actionMap[e.type].count++;
+    actionMap[e.type].rp += e.amount || 0;
+  });
+  const sortedActions = Object.entries(actionMap).sort((a, b) => b[1].rp - a[1].rp);
+  let actionRows = '';
+  sortedActions.slice(0, 5).forEach(([type, data]) => {
+    const label = RP_ACTION_LABELS[type] || type;
+    const color = RP_ACTION_COLORS[type] || '#9ca3af';
+    const pct = totalRP > 0 ? Math.round((data.rp / totalRP) * 100) : 0;
+    actionRows += `
+      <tr>
+        <td style="padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.03);">
+          <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${color}; margin-right:6px;"></span>
+          <span style="font-size:12px; color:#d1d5db;">${label}</span>
+        </td>
+        <td style="padding:6px 8px; text-align:right; font-size:12px; font-weight:700; color:${color}; border-bottom:1px solid rgba(255,255,255,0.03);">+${data.rp} (${pct}%)</td>
+      </tr>`;
+  });
+
+  // Ranking section
+  let rankSection = '';
+  if (rank > 0 && totalUsers > 0) {
+    const pct = Math.round((rank / totalUsers) * 100);
+    rankSection = `
+      <div style="margin-top:16px; padding:12px 16px; background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.12); border-radius:12px; text-align:center;">
+        <span style="font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Weekly Rank</span>
+        <div style="font-size:24px; font-weight:900; color:#e5e7eb; margin:4px 0;">#${rank} <span style="font-size:12px; color:#6b7280;">/ ${totalUsers}</span></div>
+        <span style="font-size:11px; color:#a855f7; font-weight:700;">Top ${pct}%</span>
+      </div>`;
+  }
+
+  // Goal suggestion
+  const suggestedGoal = Math.ceil((totalRP * 1.2) / 10) * 10;
+
+  const body = `
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:10px; font-weight:800; color:#6b7280; text-transform:uppercase; letter-spacing:2px; margin-bottom:8px;">
+        ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+      </div>
+      <div style="font-size:22px; font-weight:900; color:#ffffff; margin-bottom:4px;">Weekly RP Summary</div>
+      <div style="font-size:12px; color:#9ca3af;">Hello, ${username}</div>
+    </div>
+
+    <!-- Hero Stat -->
+    <div style="text-align:center; padding:24px; background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.1); border-radius:16px; margin-bottom:20px;">
+      <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Total Earned This Week</div>
+      <div style="font-size:42px; font-weight:900; color:${totalRP > 0 ? '#a855f7' : '#4b5563'}; letter-spacing:-1px;">+${totalRP}</div>
+      <div style="font-size:11px; color:#6b7280; margin-top:4px;">${activeDays}/7 active days | Avg ${avgRP} RP/day</div>
+      ${streak && streak.currentStreak > 1 ? `
+        <div style="margin-top:12px; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.15); border-radius:10px;">
+          <span style="font-size:16px; font-weight:900; color:#f59e0b;">${streak.currentStreak}</span>
+          <span style="font-size:10px; font-weight:700; color:#d97706; text-transform:uppercase; letter-spacing:1px;">Day Streak</span>
+        </div>
+      ` : ''}
+      ${rankSection}
+    </div>
+
+    <!-- Daily Chart -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px;">Daily Breakdown</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        ${barChartRows}
+      </table>
+      ${bestDay ? `<div style="text-align:right; font-size:10px; color:#6b7280; margin-top:6px;">Best day: ${bestDay[0]} (+${bestDay[1]} RP)</div>` : ''}
+    </div>
+
+    <!-- Action Breakdown -->
+    ${sortedActions.length > 0 ? `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px;">By Action Type</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${actionRows}
+        </table>
+      </div>
+    ` : ''}
+
+    <!-- Goal -->
+    <div style="text-align:center; padding:16px; background:rgba(6,182,212,0.04); border:1px solid rgba(6,182,212,0.1); border-radius:12px; margin-bottom:20px;">
+      <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:6px;">This Week's Goal</div>
+      <div style="font-size:18px; font-weight:900; color:#06b6d4;">${suggestedGoal} RP</div>
+      <div style="font-size:10px; color:#6b7280; margin-top:4px;">${totalRP > 0 ? 'Keep up the momentum!' : 'Start earning by logging in daily!'}</div>
+    </div>
+
+    ${emailComponents.button('Open Vision Chain', 'https://visionchain.co/wallet')}
+  `;
+
+  return emailBaseLayout(body, `Weekly RP Summary: +${totalRP} RP earned`);
+}
+
+exports.weeklyRPSummary = onSchedule({
+  schedule: "30 0 * * 1", // Every Monday at 00:30 UTC = 09:30 KST (after weeklyActivityReport)
+  timeZone: "UTC",
+  secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async (_event) => {
+  console.log("[WeeklyRP] Starting weekly RP summary...");
+
+  try {
+    // 1. Calculate date range (last 7 days)
+    const now = new Date();
+    const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(weekEnd);
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStartISO = weekStart.toISOString();
+
+    // 2. Fetch all rp_history for the week
+    const rpSnap = await db.collection("rp_history")
+      .where("timestamp", ">=", weekStartISO)
+      .orderBy("timestamp", "desc")
+      .get();
+
+    // Group by user
+    const userEvents = {};
+    rpSnap.forEach(d => {
+      const e = d.data();
+      const uid = e.userId;
+      if (!userEvents[uid]) userEvents[uid] = [];
+      userEvents[uid].push(e);
+    });
+
+    console.log(`[WeeklyRP] ${rpSnap.size} events across ${Object.keys(userEvents).length} users in past 7 days`);
+
+    // 3. Get all registered users
+    const usersSnap = await db.collection("users")
+      .where("walletAddress", "!=", null)
+      .get();
+
+    // 4. Calculate weekly rankings
+    const userTotals = Object.entries(userEvents).map(([uid, events]) => ({
+      uid,
+      total: events.reduce((s, e) => s + (e.amount || 0), 0),
+    })).sort((a, b) => b.total - a.total);
+    const rankMap = {};
+    userTotals.forEach((u, i) => { rankMap[u.uid] = i + 1; });
+    const totalActiveUsers = userTotals.length;
+
+    // 5. Send emails
+    let sentCount = 0;
+    let skippedCount = 0;
+    const batchSize = 20;
+    const allUsers = usersSnap.docs;
+
+    for (let i = 0; i < allUsers.length; i += batchSize) {
+      const batch = allUsers.slice(i, i + batchSize);
+
+      const promises = batch.map(async (userDoc) => {
+        const email = userDoc.id;
+        try {
+          const optedIn = await checkEmailOptIn(email, "weeklyReport");
+          if (!optedIn) { skippedCount++; return; }
+
+          let streak = null;
+          try {
+            const streakDoc = await db.collection("user_streaks").doc(email).get();
+            if (streakDoc.exists) streak = streakDoc.data();
+          } catch { /* no streak */ }
+
+          const events = userEvents[email] || [];
+          const rank = rankMap[email] || 0;
+
+          const html = buildWeeklyRPSummaryEmail(email, events, streak, rank, totalActiveUsers || usersSnap.size, weekStart, weekEnd);
+          await sendSecurityEmail(email, "Vision Chain - Weekly RP Summary", html);
+          sentCount++;
+        } catch (e) {
+          console.warn(`[WeeklyRP] Failed for ${email}:`, e.message);
+          skippedCount++;
+        }
+      });
+
+      await Promise.all(promises);
+      if (i + batchSize < allUsers.length) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    console.log(`[WeeklyRP] Complete: ${sentCount} sent, ${skippedCount} skipped out of ${allUsers.length} users`);
+  } catch (err) {
+    console.error("[WeeklyRP] Failed:", err);
+  }
+});
+

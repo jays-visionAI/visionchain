@@ -1569,6 +1569,50 @@ export const addRewardPoints = async (
         showRPToast(amount, type, source);
     } catch { /* Toast not available (SSR or import fail) -- silent */ }
 
+    // ── Milestone Detection (fire-and-forget) ──
+    const RP_MILESTONES = [100, 500, 1000, 5000, 10000];
+    const MILESTONE_BONUSES: Record<number, number> = { 10000: 50 };
+    const prevTotal = userSnap.exists() ? ((userSnap.data().totalRP || 0) - amount) : 0;
+    const newTotal = prevTotal + amount;
+
+    (async () => {
+        try {
+            for (const threshold of RP_MILESTONES) {
+                if (prevTotal < threshold && newTotal >= threshold) {
+                    // Check if already recorded
+                    const milestoneRef = doc(db, 'user_milestones', `${userId.toLowerCase()}_rp_${threshold}`);
+                    const milestoneSnap = await getDoc(milestoneRef);
+                    if (milestoneSnap.exists()) continue;
+
+                    // Record milestone
+                    await setDoc(milestoneRef, {
+                        userId: userId.toLowerCase(),
+                        type: 'rp',
+                        threshold,
+                        reachedAt: new Date().toISOString(),
+                    });
+
+                    // Award bonus if applicable
+                    const bonus = MILESTONE_BONUSES[threshold];
+                    if (bonus) {
+                        addRewardPoints(userId, bonus, 'levelup', `Reached ${threshold.toLocaleString()} RP milestone`).catch(() => { });
+                    }
+
+                    // Trigger celebration modal
+                    try {
+                        const { showMilestone } = await import('../components/ui/MilestoneModal');
+                        showMilestone(threshold, 'rp', `You reached ${threshold.toLocaleString()} RP!`, bonus);
+                    } catch { /* Modal not available */ }
+
+                    console.log(`[RP] Milestone: ${userId} reached ${threshold} RP`);
+                    break; // Only trigger one milestone per RP award
+                }
+            }
+        } catch (e) {
+            console.warn('[RP] Milestone check failed:', e);
+        }
+    })();
+
     // ── Referral RP Propagation (fire-and-forget) ──
     // Skip propagation for referral-derived types to prevent infinite recursion
     const NON_PROPAGATING_TYPES: RPActionType[] = ['referral_tier1_rp', 'referral_tier2_rp', 'referral', 'levelup'];
