@@ -109,6 +109,8 @@ const sections: Section[] = [
             { id: 'disk-upload', title: 'Upload & Download' },
             { id: 'disk-folders', title: 'Folder Management' },
             { id: 'disk-share', title: 'Sharing & Publishing' },
+            { id: 'disk-encryption', title: 'Encryption & Passkey' },
+            { id: 'disk-chatbot', title: 'AI Chat File Sharing' },
             { id: 'disk-plans', title: 'Storage Plans' },
         ]
     },
@@ -1098,7 +1100,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         );
         case 'disk-share': return (
             <div class="space-y-6">
-                <SectionHeader title="Publishing & Sharing Files" desc="Make files publicly accessible or share with specific wallet addresses." />
+                <SectionHeader title="Sharing & Publishing Files" desc="Share files with specific users or make them publicly accessible. Encrypted files can be shared with passwords automatically delivered to recipients." />
                 <h3 class="text-lg font-bold text-white mb-3">Publishing a File (Public Link)</h3>
                 <StepList steps={[
                     { title: 'Right-Click the File', desc: 'Open the context menu on the file you want to share.' },
@@ -1107,7 +1109,107 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Unpublish', desc: 'To revoke access, right-click and select "Unpublish". The public link immediately stops working.' },
                 ]} />
                 <p class="text-sm text-gray-400 mt-4">Published files are indicated by a green globe icon and "Public" badge. The public link format is: <code class="text-cyan-400 text-xs">https://api.visionchain.co/disk/public/[fileId]</code></p>
-                <Warning><>Published files are accessible to anyone with the link. The file content is decrypted server-side for public access. Only publish files you intend to share publicly.</></Warning>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Sharing with Specific Users</h3>
+                <StepList steps={[
+                    { title: 'Open Share Modal', desc: 'Right-click a file and select "Share", or click the share icon. The share modal opens showing your contacts.' },
+                    { title: 'Search for Recipient', desc: 'Type a name or email to filter contacts. The list shows matching users registered on Vision Chain.' },
+                    { title: 'Confirm Sharing', desc: 'Select a contact. A confirmation screen appears showing the file name, recipient name, and email. For encrypted files, a notice warns that the encryption password will be shared with the recipient.' },
+                    { title: 'Share Executed', desc: 'Click "Share" to confirm. A success screen shows "sharing complete" with auto-close after 2 seconds. The recipient receives an email and in-app notification.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Encrypted File Sharing</h3>
+                <p class="text-sm text-gray-400 mb-3">When sharing an encrypted file, the encryption password is automatically included with the share. The recipient can open the file without needing to know the password separately.</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Password Auto-Delivery', d: 'The encryption password is securely stored in the share record and delivered to the recipient automatically' },
+                        { n: 'Auto-Decrypt on Open', d: 'When the recipient opens your shared file from their "Shared with me" tab, the password is applied automatically for decryption' },
+                        { n: 'Passkey Integration', d: 'Recipients can save the shared password with biometric authentication (fingerprint/Face ID) for future quick access' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Viewing Shared Files</h3>
+                <p class="text-sm text-gray-400 mb-3">Files shared with you appear in the "Shared" tab of Vision Disk.</p>
+                <StepList steps={[
+                    { title: 'Open Shared Tab', desc: 'In Vision Disk, switch to the "Shared" tab to see files others have shared with you.' },
+                    { title: 'View File Details', desc: 'Each shared file shows the sender\'s name, share date, and file type. Click the eye icon to preview.' },
+                    { title: 'Auto-Decryption', desc: 'If the shared file is encrypted and the sender included the password, it automatically decrypts when you open it.' },
+                ]} />
+                <Warning><>Published files are accessible to anyone with the link. Only publish files you intend to share publicly. For private sharing, use the contact-based sharing method instead.</></Warning>
+            </div>
+        );
+        case 'disk-encryption': return (
+            <div class="space-y-6">
+                <SectionHeader title="Encryption & Passkey (Biometric)" desc="Vision Disk uses AES-GCM encryption to protect your files. Passkey integration allows you to unlock encrypted files with fingerprint or Face ID instead of typing passwords." />
+
+                <h3 class="text-lg font-bold text-white mb-3">How Encryption Works</h3>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Algorithm', d: 'AES-256-GCM (Advanced Encryption Standard, Galois/Counter Mode)' },
+                        { n: 'Key Derivation', d: 'PBKDF2 from your passphrase with random salt (stored in metadata)' },
+                        { n: 'Encryption Location', d: 'Client-side only. Files are encrypted in your browser before upload' },
+                        { n: 'Password Storage', d: 'Vision Chain does NOT store your encryption password. Only you know it' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Passkey (Biometric Authentication)</h3>
+                <p class="text-sm text-gray-400 mb-3">On devices with fingerprint or Face ID, you can save your encryption password with biometric authentication for quick unlock.</p>
+                <StepList steps={[
+                    { title: 'Enter Password', desc: 'The first time you access an encrypted file, you enter your encryption password manually in the password modal.' },
+                    { title: 'Save with Biometrics', desc: 'After entering the password, a prompt asks: "Save this password with biometrics (fingerprint/Face ID) for quick unlock next time?" Tap "OK" to register.' },
+                    { title: 'Biometric Registration', desc: 'Your device prompts for fingerprint or Face ID. Once verified, the password is securely stored on your device using WebAuthn.' },
+                    { title: 'Quick Unlock', desc: 'Next time the password modal appears, an "Unlock with Biometrics" button is shown at the top. Tap it and verify with fingerprint/Face ID to instantly unlock.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Devices Without Biometrics</h3>
+                <p class="text-sm text-gray-400">Older smartphones without fingerprint or Face ID sensors will not see the biometric option. On these devices, you must enter the encryption password manually each time you access encrypted files. The "Unlock with Biometrics" button only appears on devices that support WebAuthn platform authentication.</p>
+
+                <Tip><>Your passkey is stored locally on your device only. If you switch devices, you will need to enter the password manually once and register a new passkey on the new device.</></Tip>
+                <Warning><>If you forget your encryption password and don't have a passkey saved, your encrypted files cannot be recovered. Vision Chain does not have access to your password.</></Warning>
+            </div>
+        );
+        case 'disk-chatbot': return (
+            <div class="space-y-6">
+                <SectionHeader title="AI Chat File Sharing" desc="Use the AI chatbot to search your Disk files and share them with other users through natural language commands." />
+
+                <h3 class="text-lg font-bold text-white mb-3">Searching Files via Chat</h3>
+                <p class="text-sm text-gray-400 mb-3">You can ask the AI chatbot to find files in your Vision Disk using natural language:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
+                        <div>Command Example</div><div>What Happens</div>
+                    </div>
+                    {[
+                        { cmd: '"Show my disk files"', act: 'Lists all files in your Disk with names, sizes, and types' },
+                        { cmd: '"Find the contract file in Documents folder"', act: 'Searches the Documents folder for files matching "contract"' },
+                        { cmd: '"What files do I have?"', act: 'Shows a numbered list of your files for selection' },
+                    ].map(r => (
+                        <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
+                            <code class="text-cyan-400 text-xs">{r.cmd}</code>
+                            <span class="text-gray-400 text-xs">{r.act}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Sharing Files via Chat</h3>
+                <p class="text-sm text-gray-400 mb-3">After finding a file, you can share it with another user through the chatbot:</p>
+                <StepList steps={[
+                    { title: 'Request File Sharing', desc: 'Say something like "Share the proposal document with jihyun@email.com" or "Send the contract file to Park Jihyun".' },
+                    { title: 'File Search', desc: 'The chatbot searches your Disk for matching files and presents a numbered list if multiple matches are found.' },
+                    { title: 'Select File', desc: 'Choose the correct file by number or confirm the single match.' },
+                    { title: 'Recipient Confirmation', desc: 'The chatbot confirms the recipient and file, then shows a contact list if the name is ambiguous.' },
+                    { title: 'Share Executed', desc: 'The file is shared with the recipient. They receive an in-app notification and email. For encrypted files, the password is included automatically.' },
+                ]} />
+                <Tip><>The chatbot understands both Korean and English commands. You can mix languages freely, e.g., "Documents 폴더의 계약서 파일을 jihyun에게 공유해줘".</></Tip>
             </div>
         );
         case 'disk-plans': return (
