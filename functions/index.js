@@ -26864,35 +26864,147 @@ exports.getPaperReport = onCall({
   const avgLoss = loseTrades.length > 0 ? grossLoss / loseTrades.length : 0;
   const winRate = sellTrades.length > 0 ? (winTrades.length / sellTrades.length) * 100 : 0;
 
+  // ── Consecutive Win/Loss Streaks ──
+  let maxConsecutiveWins = 0, maxConsecutiveLosses = 0;
+  let curWins = 0, curLosses = 0;
+  const sortedSells = [...sellTrades].sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+  for (const t of sortedSells) {
+    if (t.pnl > 0) { curWins++; curLosses = 0; }
+    else { curLosses++; curWins = 0; }
+    if (curWins > maxConsecutiveWins) maxConsecutiveWins = curWins;
+    if (curLosses > maxConsecutiveLosses) maxConsecutiveLosses = curLosses;
+  }
+
+  // ── Monthly Returns Heatmap ──
+  const monthlyMap = {};
+  for (const d of dailyPnl) {
+    const [y, m] = d.date.split("-");
+    const key = `${y}-${m}`;
+    if (!monthlyMap[key]) monthlyMap[key] = { year: Number(y), month: Number(m), pnlSum: 0, trades: 0 };
+    monthlyMap[key].pnlSum += d.pnlPercent;
+  }
+  // Count trades per month
+  for (const t of trades) {
+    if (!t.timestamp) continue;
+    const dt = t.timestamp.slice(0, 7);
+    if (monthlyMap[dt]) monthlyMap[dt].trades++;
+  }
+  const monthlyReturns = Object.values(monthlyMap).map(m => ({
+    year: m.year, month: m.month, return: m.pnlSum, trades: m.trades,
+  }));
+
+  // ── BTC/ETH Benchmarks ──
+  let btcReturn = 0, ethReturn = 0;
+  try {
+    const http = getAxios();
+    const benchStart = startDate.toISOString();
+    // Fetch BTC candles for benchmark period
+    const btcResp = await http.get(
+      `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${Math.min(daysRan, 200)}`,
+      { timeout: 8000 },
+    );
+    if (btcResp.data && btcResp.data.length >= 2) {
+      const btcCandles = btcResp.data.reverse();
+      const btcStart = btcCandles[0].trade_price;
+      const btcEnd = btcCandles[btcCandles.length - 1].trade_price;
+      btcReturn = btcStart > 0 ? ((btcEnd - btcStart) / btcStart) * 100 : 0;
+    }
+    const ethResp = await http.get(
+      `https://api.upbit.com/v1/candles/days?market=KRW-ETH&count=${Math.min(daysRan, 200)}`,
+      { timeout: 8000 },
+    );
+    if (ethResp.data && ethResp.data.length >= 2) {
+      const ethCandles = ethResp.data.reverse();
+      const ethStart = ethCandles[0].trade_price;
+      const ethEnd = ethCandles[ethCandles.length - 1].trade_price;
+      ethReturn = ethStart > 0 ? ((ethEnd - ethStart) / ethStart) * 100 : 0;
+    }
+  } catch (benchErr) {
+    console.warn("[getPaperReport] Benchmark fetch failed:", benchErr.message);
+  }
+
+  // ── Beta / Alpha (vs BTC as benchmark) ──
+  const benchReturns = dailyPnl.map((d) => d.benchmark || 0);
+  let beta = 1, alpha = totalReturn;
+  if (returns.length > 5 && benchReturns.length === returns.length) {
+    const avgBench = benchReturns.reduce((a, b) => a + b, 0) / benchReturns.length;
+    const covariance = returns.reduce((s, r, i) => s + (r - avgReturn) * (benchReturns[i] - avgBench), 0) / returns.length;
+    const benchVariance = benchReturns.reduce((s, r) => s + (r - avgBench) ** 2, 0) / benchReturns.length;
+    beta = benchVariance > 0 ? covariance / benchVariance : 1;
+    alpha = totalReturn - beta * btcReturn;
+  }
+
+  // ── Detailed Drawdown Events ──
+  const drawdownEvents = [];
+  let ddPeak = agent.seed, ddTrough = agent.seed;
+  let ddStartDate = null, inDrawdown = false, ddPeakVal = agent.seed;
+  for (const d of dailyPnl) {
+    if (d.portfolioValue > ddPeak) {
+      if (inDrawdown && ddStartDate) {
+        drawdownEvents.push({
+          startDate: ddStartDate, endDate: d.date,
+          depth: ddPeakVal > 0 ? ((ddTrough - ddPeakVal) / ddPeakVal) * 100 : 0,
+          duration: Math.round((new Date(d.date) - new Date(ddStartDate)) / 86400000),
+          recovery: Math.round((new Date(d.date) - new Date(ddStartDate)) / 86400000),
+          peakValue: ddPeakVal, troughValue: ddTrough,
+        });
+      }
+      ddPeak = d.portfolioValue;
+      ddPeakVal = d.portfolioValue;
+      ddTrough = d.portfolioValue;
+      inDrawdown = false;
+      ddStartDate = null;
+    } else if (d.portfolioValue < ddPeak) {
+      if (!inDrawdown) { ddStartDate = d.date; inDrawdown = true; }
+      if (d.portfolioValue < ddTrough) ddTrough = d.portfolioValue;
+    }
+  }
+  // If still in drawdown at end of period
+  if (inDrawdown && ddStartDate) {
+    drawdownEvents.push({
+      startDate: ddStartDate, endDate: null,
+      depth: ddPeakVal > 0 ? ((ddTrough - ddPeakVal) / ddPeakVal) * 100 : 0,
+      duration: Math.round((now - new Date(ddStartDate)) / 86400000),
+      recovery: null, peakValue: ddPeakVal, troughValue: ddTrough,
+    });
+  }
+
   // Asset performance
   const assetMap = {};
   for (const t of trades) {
     if (!assetMap[t.asset]) {
-      assetMap[t.asset] = { trades: 0, wins: 0, totalPnl: 0, totalValue: 0, best: -Infinity, worst: Infinity };
+      assetMap[t.asset] = { trades: 0, wins: 0, sells: 0, totalPnl: 0, totalValue: 0, best: -Infinity, worst: Infinity, holdTimes: [] };
     }
     const a = assetMap[t.asset];
     a.trades++;
     a.totalValue += t.value;
     if (t.side === "sell") {
+      a.sells++;
       if (t.pnl > 0) a.wins++;
       a.totalPnl += t.pnl;
       if (t.pnlPercent > a.best) a.best = t.pnlPercent;
       if (t.pnlPercent < a.worst) a.worst = t.pnlPercent;
+      if (t.holdingPeriod) a.holdTimes.push(t.holdingPeriod);
     }
   }
   const totalAlloc = Object.values(assetMap).reduce((s, a) => s + a.totalValue, 0);
-  const assetPerformance = Object.entries(assetMap).map(([asset, data]) => ({
-    asset,
-    trades: data.trades,
-    winRate: data.trades > 0 ? (data.wins / Math.max(data.trades / 2, 1)) * 100 : 0,
-    totalPnl: data.totalPnl,
-    totalReturn: data.totalValue > 0 ? (data.totalPnl / data.totalValue) * 100 : 0,
-    avgHoldingPeriod: 24,
-    bestTrade: data.best === -Infinity ? 0 : data.best,
-    worstTrade: data.worst === Infinity ? 0 : data.worst,
-    sharpeRatio: 0,
-    allocation: totalAlloc > 0 ? (data.totalValue / totalAlloc) * 100 : 0,
-  }));
+  const assetPerformance = Object.entries(assetMap).map(([asset, data]) => {
+    const assetReturns = trades.filter(t => t.asset === asset && t.side === "sell").map(t => t.pnlPercent || 0);
+    const assetAvg = assetReturns.length > 0 ? assetReturns.reduce((a, b) => a + b, 0) / assetReturns.length : 0;
+    const assetStd = assetReturns.length > 1 ? Math.sqrt(assetReturns.reduce((s, r) => s + (r - assetAvg) ** 2, 0) / (assetReturns.length - 1)) : 1;
+    return {
+      asset,
+      trades: data.trades,
+      winRate: data.sells > 0 ? (data.wins / data.sells) * 100 : 0,
+      totalPnl: data.totalPnl,
+      totalReturn: data.totalValue > 0 ? (data.totalPnl / data.totalValue) * 100 : 0,
+      avgHoldingPeriod: data.holdTimes.length > 0 ? data.holdTimes.reduce((a, b) => a + b, 0) / data.holdTimes.length : 24,
+      bestTrade: data.best === -Infinity ? 0 : data.best,
+      worstTrade: data.worst === Infinity ? 0 : data.worst,
+      sharpeRatio: assetStd > 0 ? (assetAvg / assetStd) * annFactor : 0,
+      allocation: totalAlloc > 0 ? (data.totalValue / totalAlloc) * 100 : 0,
+    };
+  });
 
   // Build report
   const report = {
@@ -26945,8 +27057,8 @@ exports.getPaperReport = onCall({
       profitFactor,
       avgWin,
       avgLoss,
-      maxConsecutiveWins: 0,
-      maxConsecutiveLosses: 0,
+      maxConsecutiveWins,
+      maxConsecutiveLosses,
       signalsGenerated: trades.length,
       signalsExecuted: trades.length,
       signalsSkipped: 0,
@@ -26958,8 +27070,8 @@ exports.getPaperReport = onCall({
       maxDrawdown: maxDD,
       maxDrawdownDuration: maxDDduration,
       volatility: stdDev * annFactor,
-      beta: 1,
-      alpha: totalReturn,
+      beta,
+      alpha,
       var95: avgReturn - 1.645 * stdDev,
       var99: avgReturn - 2.326 * stdDev,
       winRate,
@@ -26969,21 +27081,13 @@ exports.getPaperReport = onCall({
       kellyFraction: avgLoss > 0 && winRate > 0
         ? ((winRate / 100) - ((1 - winRate / 100) / (avgWin / avgLoss || 1))) : 0,
     },
-    drawdowns: maxDD < 0 ? [{
-      startDate: startStr,
-      endDate: null,
-      depth: maxDD,
-      duration: maxDDduration,
-      recovery: null,
-      peakValue: peak,
-      troughValue: peak * (1 + maxDD / 100),
-    }] : [],
-    monthlyReturns: [],
+    drawdowns: drawdownEvents,
+    monthlyReturns,
     benchmarks: {
-      btcReturn: 0,
-      ethReturn: 0,
-      marketAvg: 0,
-      outperformance: totalReturn,
+      btcReturn,
+      ethReturn,
+      marketAvg: (btcReturn + ethReturn) / 2,
+      outperformance: totalReturn - btcReturn,
     },
   };
 

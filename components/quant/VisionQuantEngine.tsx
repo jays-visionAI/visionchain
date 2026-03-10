@@ -50,9 +50,9 @@ import {
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, PaperTrade, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades } from '../../services/quant/paperTradingService';
 import { registerExchangeKey, getUserExchangeKeys, type ExchangeKeyInfo, type SupportedExchange } from '../../services/quant/exchangeKeyService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
@@ -158,6 +158,11 @@ const VisionQuantEngine = (): JSX.Element => {
     const [keyRegistering, setKeyRegistering] = createSignal(false);
     const [keyFormData, setKeyFormData] = createSignal({ apiKey: '', apiSecret: '', passphrase: '', label: '' });
     const [keyError, setKeyError] = createSignal('');
+
+    // === Signals Tab State ===
+    const [signalTrades, setSignalTrades] = createSignal<PaperTrade[]>([]);
+    const [signalFilter, setSignalFilter] = createSignal<'all' | 'buy' | 'sell'>('all');
+    const [signalAgentFilter, setSignalAgentFilter] = createSignal<string>('all');
 
     // Exchange metadata for UI
     const EXCHANGE_LIST = [
@@ -375,6 +380,35 @@ const VisionQuantEngine = (): JSX.Element => {
             setActiveCompetitions(comps);
         }).catch(() => { /* silent */ });
     });
+
+    // === Signals Tab: Subscribe to all agents' trades ===
+    {
+        let tradeUnsubs: (() => void)[] = [];
+        createEffect(() => {
+            const agents = paperAgents();
+            // Cleanup previous subscriptions
+            tradeUnsubs.forEach(u => u());
+            tradeUnsubs = [];
+            if (agents.length === 0) { setSignalTrades([]); return; }
+
+            const allTrades: Record<string, PaperTrade[]> = {};
+            const mergeAndSet = () => {
+                const merged = Object.values(allTrades).flat()
+                    .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+                setSignalTrades(merged);
+            };
+
+            for (const agent of agents) {
+                allTrades[agent.id] = [];
+                const unsub = subscribeToPaperTrades(agent.id, (trades) => {
+                    allTrades[agent.id] = trades;
+                    mergeAndSet();
+                }, 30);
+                tradeUnsubs.push(unsub);
+            }
+        });
+        onCleanup(() => tradeUnsubs.forEach(u => u()));
+    }
 
     // === Setup Helpers ===
     const toggleAsset = (currency: string) => {
@@ -991,12 +1025,117 @@ const VisionQuantEngine = (): JSX.Element => {
 
                         {/* ═══ SIGNALS TAB ═══ */}
                         <Show when={activeTab() === 'signals'}>
-                            <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
-                                <Activity class="w-6 h-6 text-gray-600" />
-                                <h3 class="text-base font-black text-white mt-4 mb-2">No Signals Yet</h3>
-                                <p class="text-xs text-gray-500 text-center max-w-sm">
-                                    에이전트가 활성화되면 실시간 시그널이 여기에 표시됩니다.
-                                </p>
+                            <div class="space-y-4">
+                                {/* Filters */}
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <div class="flex gap-1.5 bg-[#0a0a0b] rounded-xl p-1 border border-white/[0.04]">
+                                        {(['all', 'buy', 'sell'] as const).map(f => (
+                                            <button
+                                                onClick={() => setSignalFilter(f)}
+                                                class={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${signalFilter() === f
+                                                    ? f === 'buy' ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                        : f === 'sell' ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                                            : 'bg-white/[0.06] text-white border border-white/10'
+                                                    : 'text-gray-500 hover:text-gray-300'
+                                                    }`}
+                                            >
+                                                {f === 'all' ? 'ALL' : f.toUpperCase()}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <select
+                                        value={signalAgentFilter()}
+                                        onChange={(e) => setSignalAgentFilter(e.currentTarget.value)}
+                                        class="bg-[#0a0a0b] border border-white/[0.06] rounded-xl px-3 py-1.5 text-[11px] text-gray-300 font-bold outline-none"
+                                    >
+                                        <option value="all">All Agents</option>
+                                        <For each={paperAgents()}>
+                                            {(agent) => (
+                                                <option value={agent.id}>{agent.strategyName}</option>
+                                            )}
+                                        </For>
+                                    </select>
+                                    <span class="text-[10px] text-gray-600 ml-auto">
+                                        {signalTrades().length} signals
+                                    </span>
+                                </div>
+
+                                {/* Signal Feed */}
+                                <Show when={signalTrades().length > 0} fallback={
+                                    <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
+                                        <Activity class="w-6 h-6 text-gray-600" />
+                                        <h3 class="text-base font-black text-white mt-4 mb-2">No Signals Yet</h3>
+                                        <p class="text-xs text-gray-500 text-center max-w-sm">
+                                            Agent를 활성화하면 실시간 시그널이 여기에 표시됩니다.
+                                            Strategies 탭에서 전략을 설정하고 Agent를 생성하세요.
+                                        </p>
+                                    </div>
+                                }>
+                                    <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1" style="scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;">
+                                        <For each={
+                                            signalTrades()
+                                                .filter(t => signalFilter() === 'all' || t.side === signalFilter())
+                                                .filter(t => signalAgentFilter() === 'all' || t.agentId === signalAgentFilter())
+                                        }>
+                                            {(trade) => {
+                                                const agent = () => paperAgents().find(a => a.id === trade.agentId);
+                                                const timeAgo = () => {
+                                                    const diff = Date.now() - new Date(trade.timestamp).getTime();
+                                                    if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+                                                    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                                                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                                                    return `${Math.floor(diff / 86400000)}d ago`;
+                                                };
+                                                return (
+                                                    <div class="flex items-center gap-3 p-3 bg-[#111113]/60 rounded-2xl border border-white/[0.04] hover:border-white/[0.08] transition-all">
+                                                        {/* Direction Badge */}
+                                                        <div class={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${trade.side === 'buy'
+                                                            ? 'bg-green-500/15 border border-green-500/20'
+                                                            : 'bg-red-500/15 border border-red-500/20'
+                                                            }`}>
+                                                            {trade.side === 'buy'
+                                                                ? <TrendingUp class="w-4 h-4 text-green-400" />
+                                                                : <TrendingDown class="w-4 h-4 text-red-400" />
+                                                            }
+                                                        </div>
+
+                                                        {/* Trade Info */}
+                                                        <div class="flex-1 min-w-0">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class={`text-[10px] font-black uppercase ${trade.side === 'buy' ? 'text-green-400' : 'text-red-400'
+                                                                    }`}>{trade.side}</span>
+                                                                <span class="text-xs font-bold text-white">{trade.asset?.replace('KRW-', '')}</span>
+                                                                <span class="text-[9px] text-gray-600">@{Number(trade.price).toLocaleString()}</span>
+                                                            </div>
+                                                            <div class="flex items-center gap-2 mt-0.5">
+                                                                <span class="text-[9px] text-gray-500 truncate">{trade.signal || trade.strategy}</span>
+                                                                <Show when={agent()}>
+                                                                    <span class="text-[8px] text-gray-600 px-1.5 py-0.5 bg-white/[0.03] rounded">{agent()?.strategyName}</span>
+                                                                </Show>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* PnL & Time */}
+                                                        <div class="text-right flex-shrink-0">
+                                                            <Show when={trade.side === 'sell' && trade.pnl !== undefined}>
+                                                                <div class={`text-xs font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                                                    }`}>
+                                                                    {trade.pnl >= 0 ? '+' : ''}{trade.pnlPercent?.toFixed(2)}%
+                                                                </div>
+                                                            </Show>
+                                                            <Show when={trade.side === 'buy'}>
+                                                                <div class="text-[10px] text-gray-500">
+                                                                    {Number(trade.value).toLocaleString()} {trade.asset?.startsWith('KRW') ? 'KRW' : 'USDT'}
+                                                                </div>
+                                                            </Show>
+                                                            <div class="text-[9px] text-gray-600 mt-0.5">{timeAgo()}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        </For>
+                                    </div>
+                                </Show>
                             </div>
                         </Show>
 

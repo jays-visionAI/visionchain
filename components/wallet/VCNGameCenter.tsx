@@ -1,6 +1,9 @@
 import { createSignal, Show, For, onMount, createMemo, onCleanup, Accessor } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { WalletViewHeader } from './WalletViewHeader';
+import { MemoryMatchGame } from './MemoryMatchGame';
+import { FallingCoinsGame } from './FallingCoinsGame';
+import { PricePredictGame } from './PricePredictGame';
 import { useI18n } from '../../i18n/i18nContext';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 import { getFirebaseDb } from '../../services/firebaseService';
@@ -89,7 +92,7 @@ interface GamePlayRecord {
     vcn: number;
     rp: number;
     timestamp: string;
-    game: 'spin' | 'block' | 'scratch';
+    game: 'spin' | 'block' | 'scratch' | 'memory' | 'falling' | 'predict';
 }
 
 interface DailyGameData {
@@ -97,15 +100,24 @@ interface DailyGameData {
     spinsUsed: number;
     blocksUsed: number;
     scratchCards: number;
+    memoryUsed: number;
+    fallingUsed: number;
+    predictUsed: number;
     totalVCN: number;
     totalRP: number;
-    bestBlockTime: number; // best block break time in seconds (daily)
+    bestBlockTime: number;
+    bestMemoryTime: number;
+    bestFallingScore: number;
+    bestPredictStreak: number;
     games: GamePlayRecord[];
 }
 
 // ─── Default Constants (overridden by RPConfig) ────────────────────────────
 const DEFAULT_DAILY_SPINS = 3;
 const DEFAULT_DAILY_BLOCKS = 2;
+const DEFAULT_DAILY_MEMORY = 3;
+const DEFAULT_DAILY_FALLING = 3;
+const DEFAULT_DAILY_PREDICT = 3;
 
 const SPIN_SEGMENTS: SpinSegment[] = [
     { label: '0.1 VCN', vcn: 0.1, rp: 1, color: '#374151', glowColor: '#6B7280', probability: 0.25 },
@@ -189,15 +201,21 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     let gameContainerRef: HTMLDivElement | undefined;
 
     // State
-    const [activeGame, setActiveGame] = createSignal<'spin' | 'block' | 'scratch' | null>(null);
+    const [activeGame, setActiveGame] = createSignal<'spin' | 'block' | 'scratch' | 'memory' | 'falling' | 'predict' | null>(null);
     const [dailyData, setDailyData] = createSignal<DailyGameData>({
         date: getTodayStr(),
         spinsUsed: 0,
         blocksUsed: 0,
         scratchCards: 0,
+        memoryUsed: 0,
+        fallingUsed: 0,
+        predictUsed: 0,
         totalVCN: 0,
         totalRP: 0,
         bestBlockTime: 0,
+        bestMemoryTime: 0,
+        bestFallingScore: 0,
+        bestPredictStreak: 0,
         games: [],
     });
     const [isLoading, setIsLoading] = createSignal(true);
@@ -232,9 +250,15 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     // RPConfig loaded values
     const [maxSpins, setMaxSpins] = createSignal(DEFAULT_DAILY_SPINS);
     const [maxBlocks, setMaxBlocks] = createSignal(DEFAULT_DAILY_BLOCKS);
+    const [maxMemory, setMaxMemory] = createSignal(DEFAULT_DAILY_MEMORY);
+    const [maxFalling, setMaxFalling] = createSignal(DEFAULT_DAILY_FALLING);
+    const [maxPredict, setMaxPredict] = createSignal(DEFAULT_DAILY_PREDICT);
 
     const spinsRemaining = createMemo(() => Math.max(0, maxSpins() - dailyData().spinsUsed));
     const blocksRemaining = createMemo(() => Math.max(0, maxBlocks() - dailyData().blocksUsed));
+    const memoryRemaining = createMemo(() => Math.max(0, maxMemory() - dailyData().memoryUsed));
+    const fallingRemaining = createMemo(() => Math.max(0, maxFalling() - dailyData().fallingUsed));
+    const predictRemaining = createMemo(() => Math.max(0, maxPredict() - dailyData().predictUsed));
 
     // ─── Firestore persistence ──────────────────────────────────────
     const loadDailyData = async () => {
@@ -251,6 +275,12 @@ export const VCNGameCenter = (props: GameCenterProps) => {
             if (snap.exists()) {
                 const d = snap.data() as DailyGameData;
                 if (!d.bestBlockTime) d.bestBlockTime = 0;
+                if (!d.memoryUsed) d.memoryUsed = 0;
+                if (!d.bestMemoryTime) d.bestMemoryTime = 0;
+                if (!d.fallingUsed) d.fallingUsed = 0;
+                if (!d.bestFallingScore) d.bestFallingScore = 0;
+                if (!d.predictUsed) d.predictUsed = 0;
+                if (!d.bestPredictStreak) d.bestPredictStreak = 0;
                 setDailyData(d);
                 if (d.bestBlockTime > 0) setBestTime(d.bestBlockTime);
             } else {
@@ -259,9 +289,15 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     spinsUsed: 0,
                     blocksUsed: 0,
                     scratchCards: 0,
+                    memoryUsed: 0,
+                    fallingUsed: 0,
+                    predictUsed: 0,
                     totalVCN: 0,
                     totalRP: 0,
                     bestBlockTime: 0,
+                    bestMemoryTime: 0,
+                    bestFallingScore: 0,
+                    bestPredictStreak: 0,
                     games: [],
                 });
             }
@@ -320,7 +356,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         }
     };
 
-    const allPlaysUsed = createMemo(() => spinsRemaining() <= 0 && blocksRemaining() <= 0);
+    const allPlaysUsed = createMemo(() => spinsRemaining() <= 0 && blocksRemaining() <= 0 && memoryRemaining() <= 0 && fallingRemaining() <= 0 && predictRemaining() <= 0);
 
     onMount(() => {
         loadDailyData();
@@ -328,6 +364,9 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         getRPConfig().then(cfg => {
             if (cfg.game_daily_spins) setMaxSpins(cfg.game_daily_spins);
             if (cfg.game_daily_blocks) setMaxBlocks(cfg.game_daily_blocks);
+            if (cfg.game_daily_memory) setMaxMemory(cfg.game_daily_memory);
+            if (cfg.game_daily_falling) setMaxFalling(cfg.game_daily_falling);
+            if (cfg.game_daily_predict) setMaxPredict(cfg.game_daily_predict);
         }).catch(() => { });
     });
 
@@ -622,7 +661,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
 
                 {/* Game Cards */}
                 <Show when={activeGame() === null}>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {/* Lucky Spin Card */}
                         <button
                             onClick={() => setActiveGame('spin')}
@@ -686,6 +725,93 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Price Predict Card */}
+                        <button
+                            onClick={() => predictRemaining() > 0 && setActiveGame('predict')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-indigo-500/30 transition-all duration-300 text-left ${predictRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={predictRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-violet-500/5 group-hover:from-indigo-500/15 group-hover:to-violet-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M3 17l4-4 4 4 4-8 4 4" />
+                                        <circle cx="19" cy="13" r="2" />
+                                        <path d="M19 13v4" stroke-dasharray="2 2" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Price Predict</h3>
+                                <p class="text-xs text-gray-500 mb-4">Predict UP or DOWN</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${predictRemaining() > 0 ? 'bg-indigo-500/15 text-indigo-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {predictRemaining()}/{maxPredict()} left
+                                    </span>
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* Falling Coins Card */}
+                        <button
+                            onClick={() => fallingRemaining() > 0 && setActiveGame('falling')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-rose-500/30 transition-all duration-300 text-left ${fallingRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={fallingRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-pink-500/5 group-hover:from-rose-500/15 group-hover:to-pink-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl group-hover:bg-rose-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-rose-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <circle cx="12" cy="6" r="3" />
+                                        <circle cx="6" cy="14" r="2" />
+                                        <circle cx="18" cy="12" r="2.5" />
+                                        <path d="M12 9v4M6 16v3M18 14.5v4" stroke-dasharray="2 2" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Falling Coins</h3>
+                                <p class="text-xs text-gray-500 mb-4">Catch coins, avoid bombs!</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${fallingRemaining() > 0 ? 'bg-rose-500/15 text-rose-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {fallingRemaining()}/{maxFalling()} left
+                                    </span>
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* Memory Match Card */}
+                        <button
+                            onClick={() => memoryRemaining() > 0 && setActiveGame('memory')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-emerald-500/30 transition-all duration-300 text-left ${memoryRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={memoryRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 group-hover:from-emerald-500/15 group-hover:to-teal-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <rect x="3" y="3" width="8" height="8" rx="1.5" />
+                                        <rect x="13" y="3" width="8" height="8" rx="1.5" />
+                                        <rect x="3" y="13" width="8" height="8" rx="1.5" />
+                                        <rect x="13" y="13" width="8" height="8" rx="1.5" />
+                                        <path d="M7 7h0M17 7h0M7 17h0" stroke-width="3" stroke-linecap="round" opacity="0.5" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Memory Match</h3>
+                                <p class="text-xs text-gray-500 mb-4">Match crypto card pairs</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${memoryRemaining() > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {memoryRemaining()}/{maxMemory()} left
+                                    </span>
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                </div>
+                            </div>
+                        </button>
                     </div>
                 </Show>
 
@@ -1013,6 +1139,88 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     </div>
                 </Show>
 
+                {/* ═══════════════════ MEMORY MATCH GAME ═══════════════════ */}
+                <Show when={activeGame() === 'memory'}>
+                    <MemoryMatchGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.time, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'memory'
+                            };
+                            const newBest = prev.bestMemoryTime === 0 || result.time < prev.bestMemoryTime
+                                ? result.time : prev.bestMemoryTime;
+                            const updated: DailyGameData = {
+                                ...prev,
+                                memoryUsed: prev.memoryUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                bestMemoryTime: newBest,
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            awardRewards(result.vcn, result.rp, `Memory Match (${result.grade})`);
+                        }}
+                    />
+                </Show>
+
+                {/* ═══════════════════ FALLING COINS GAME ═══════════════════ */}
+                <Show when={activeGame() === 'falling'}>
+                    <FallingCoinsGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.score, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'falling'
+                            };
+                            const newBest = result.score > prev.bestFallingScore
+                                ? result.score : prev.bestFallingScore;
+                            const updated: DailyGameData = {
+                                ...prev,
+                                fallingUsed: prev.fallingUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                bestFallingScore: newBest,
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            awardRewards(result.vcn, result.rp, `Falling Coins (${result.grade})`);
+                        }}
+                    />
+                </Show>
+
+                {/* ═══════════════════ PRICE PREDICT GAME ═══════════════════ */}
+                <Show when={activeGame() === 'predict'}>
+                    <PricePredictGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.streak, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'predict'
+                            };
+                            const newBest = result.streak > prev.bestPredictStreak
+                                ? result.streak : prev.bestPredictStreak;
+                            const isFirstPlay = prev.games.filter(g => g.game === 'predict').length === 0;
+                            const updated: DailyGameData = {
+                                ...prev,
+                                predictUsed: isFirstPlay ? prev.predictUsed + 1 : prev.predictUsed,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                bestPredictStreak: newBest,
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            awardRewards(result.vcn, result.rp, `Price Predict (${result.correct ? 'Correct' : 'Wrong'})`);
+                        }}
+                    />
+                </Show>
+
                 {/* Game History */}
                 <Show when={dailyData().games.length > 0 && activeGame() === null}>
                     <div class="bg-[#111113]/60 rounded-2xl border border-white/[0.04] overflow-hidden">
@@ -1024,13 +1232,31 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                             <For each={dailyData().games.slice().reverse()}>
                                 {(g) => (
                                     <div class="flex items-center gap-3 p-3 hover:bg-white/[0.02] transition-colors">
-                                        <div class={`w-8 h-8 rounded-lg flex items-center justify-center ${g.game === 'spin' ? 'bg-cyan-500/15' : g.game === 'block' ? 'bg-amber-500/15' : 'bg-purple-500/15'}`}>
+                                        <div class={`w-8 h-8 rounded-lg flex items-center justify-center ${g.game === 'spin' ? 'bg-cyan-500/15' : g.game === 'block' ? 'bg-amber-500/15' : g.game === 'memory' ? 'bg-emerald-500/15' : g.game === 'falling' ? 'bg-rose-500/15' : g.game === 'predict' ? 'bg-indigo-500/15' : 'bg-purple-500/15'}`}>
                                             {g.game === 'spin' && <SpinWheelIcon class="w-4 h-4 text-cyan-400" />}
                                             {g.game === 'block' && <BlockIcon class="w-4 h-4 text-amber-400" />}
+                                            {g.game === 'memory' && (
+                                                <svg viewBox="0 0 24 24" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="8" height="8" rx="1.5" />
+                                                    <rect x="13" y="3" width="8" height="8" rx="1.5" />
+                                                    <rect x="3" y="13" width="8" height="8" rx="1.5" />
+                                                    <rect x="13" y="13" width="8" height="8" rx="1.5" />
+                                                </svg>
+                                            )}
+                                            {g.game === 'falling' && (
+                                                <svg viewBox="0 0 24 24" class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <circle cx="12" cy="6" r="3" /><path d="M12 9v6" stroke-dasharray="2 2" />
+                                                </svg>
+                                            )}
+                                            {g.game === 'predict' && (
+                                                <svg viewBox="0 0 24 24" class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <path d="M3 17l4-4 4 4 4-8 4 4" />
+                                                </svg>
+                                            )}
                                             {g.game === 'scratch' && <ScratchIcon class="w-4 h-4 text-purple-400" />}
                                         </div>
                                         <div class="flex-1">
-                                            <span class="text-xs font-bold text-white capitalize">{g.game === 'spin' ? 'Lucky Spin' : g.game === 'block' ? 'Block Breaker' : 'Scratch Card'}</span>
+                                            <span class="text-xs font-bold text-white capitalize">{g.game === 'spin' ? 'Lucky Spin' : g.game === 'block' ? 'Block Breaker' : g.game === 'memory' ? 'Memory Match' : g.game === 'falling' ? 'Falling Coins' : g.game === 'predict' ? 'Price Predict' : 'Scratch Card'}</span>
                                             <div class="text-[10px] text-gray-600">{new Date(g.timestamp).toLocaleTimeString()}</div>
                                         </div>
                                         <div class="text-right">
