@@ -259,6 +259,34 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "paperTrades",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "agentId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "paperDailyPnl",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "agentId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "date",
+                    "order": "ASCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": []
