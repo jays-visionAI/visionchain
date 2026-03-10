@@ -50,9 +50,9 @@ import {
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, PaperTrade, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, PaperTrade, DecisionLogEntry, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades, subscribeToDecisionLogs } from '../../services/quant/paperTradingService';
 import { registerExchangeKey, getUserExchangeKeys, type ExchangeKeyInfo, type SupportedExchange } from '../../services/quant/exchangeKeyService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
@@ -106,6 +106,91 @@ const BithumbIcon = () => (
 // ─── Tab Types ──────────────────────────────────────────────────────────────
 
 type QuantTab = 'strategies' | 'agents' | 'arena' | 'signals' | 'reports';
+
+// ─── Decision Log Timeline (inline component) ─────────────────────────
+
+const DecisionLogTimeline = (props: { agentId: string }) => {
+    const [logs, setLogs] = createSignal<DecisionLogEntry[]>([]);
+    const [loading, setLoading] = createSignal(true);
+
+    onMount(() => {
+        const unsub = subscribeToDecisionLogs(props.agentId, (entries) => {
+            setLogs(entries);
+            setLoading(false);
+        }, 15);
+        onCleanup(unsub);
+    });
+
+    return (
+        <Show when={!loading()} fallback={
+            <div class="text-[10px] text-gray-600 py-3">Loading decision logs...</div>
+        }>
+            <Show when={logs().length > 0} fallback={
+                <div class="text-[10px] text-gray-600 py-3">No decision logs yet. Logs appear after the agent processes its first evaluation cycle.</div>
+            }>
+                <div class="space-y-1.5 max-h-[200px] overflow-y-auto" style="scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;">
+                    <For each={logs()}>
+                        {(log) => {
+                            const isApproved = () => log.risk?.approved !== false;
+                            const isNoSignal = () => log.signal?.side === 'none';
+                            const timeStr = () => {
+                                try { return new Date(log.timestamp).toLocaleTimeString(); } catch { return '-'; }
+                            };
+                            return (
+                                <div class={`flex items-center gap-2 p-2 rounded-lg border transition-all ${isNoSignal()
+                                        ? 'bg-white/[0.01] border-white/[0.03]'
+                                        : isApproved()
+                                            ? log.signal?.side === 'buy'
+                                                ? 'bg-green-500/[0.04] border-green-500/10'
+                                                : 'bg-red-500/[0.04] border-red-500/10'
+                                            : 'bg-orange-500/[0.04] border-orange-500/10'
+                                    }`}>
+                                    {/* Side badge */}
+                                    <div class={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[8px] font-black ${isNoSignal() ? 'bg-gray-700 text-gray-400' :
+                                            !isApproved() ? 'bg-orange-500/20 text-orange-400' :
+                                                log.signal?.side === 'buy' ? 'bg-green-500/20 text-green-400' :
+                                                    'bg-red-500/20 text-red-400'
+                                        }`}>
+                                        {isNoSignal() ? '-' : !isApproved() ? 'X' : log.signal?.side === 'buy' ? 'B' : 'S'}
+                                    </div>
+                                    {/* Info */}
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[10px] font-bold text-white truncate">
+                                                {isNoSignal() ? 'No Signal' : log.signal?.asset?.replace('KRW-', '') || '-'}
+                                            </span>
+                                            <Show when={!isApproved()}>
+                                                <span class="text-[8px] text-orange-400 px-1 py-0.5 bg-orange-500/10 rounded">
+                                                    {log.risk?.layer || 'Blocked'}
+                                                </span>
+                                            </Show>
+                                            <Show when={isApproved() && log.execution}>
+                                                <span class="text-[8px] text-cyan-400 px-1 py-0.5 bg-cyan-500/10 rounded">Executed</span>
+                                            </Show>
+                                        </div>
+                                        <div class="text-[8px] text-gray-600 truncate mt-0.5">
+                                            {!isApproved() ? (log.risk?.rejectReason || 'Blocked') : (log.signal?.reason || '-')}
+                                        </div>
+                                    </div>
+                                    {/* Time + PnL */}
+                                    <div class="text-right flex-shrink-0">
+                                        <Show when={log.execution?.pnl !== undefined && log.execution?.pnl !== null}>
+                                            <div class={`text-[10px] font-bold ${(log.execution?.pnlPercent || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                                                }`}>
+                                                {(log.execution?.pnlPercent || 0) >= 0 ? '+' : ''}{(log.execution?.pnlPercent || 0).toFixed(2)}%
+                                            </div>
+                                        </Show>
+                                        <div class="text-[8px] text-gray-600">{timeStr()}</div>
+                                    </div>
+                                </div>
+                            );
+                        }}
+                    </For>
+                </div>
+            </Show>
+        </Show>
+    );
+};
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -994,6 +1079,82 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                     </div>
                                                                 </div>
                                                             </Show>
+
+                                                            {/* ── Risk Dashboard ── */}
+                                                            <Show when={agent.riskStatus}>
+                                                                <div>
+                                                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Risk Status</div>
+                                                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                        {/* Daily Drawdown */}
+                                                                        <div class="p-2.5 bg-white/[0.02] rounded-xl">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Daily PnL</div>
+                                                                            <div class={`text-sm font-black ${(agent.riskStatus?.dailyPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                                {(agent.riskStatus?.dailyPnl || 0) >= 0 ? '+' : ''}{(agent.riskStatus?.dailyPnl || 0).toFixed(2)}%
+                                                                            </div>
+                                                                            <div class="mt-1.5 h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    class={`h-full rounded-full transition-all ${(agent.riskStatus?.dailyPnl || 0) >= 0 ? 'bg-green-500/60' : 'bg-red-500/60'}`}
+                                                                                    style={`width: ${Math.min(Math.abs(agent.riskStatus?.dailyPnl || 0) / 5 * 100, 100)}%`}
+                                                                                />
+                                                                            </div>
+                                                                            <div class="text-[8px] text-gray-600 mt-0.5">Limit: -{Number(agent.params?.daily_drawdown_limit || 5)}%</div>
+                                                                        </div>
+                                                                        {/* Weekly Drawdown */}
+                                                                        <div class="p-2.5 bg-white/[0.02] rounded-xl">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Weekly PnL</div>
+                                                                            <div class={`text-sm font-black ${(agent.riskStatus?.weeklyPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                                {(agent.riskStatus?.weeklyPnl || 0) >= 0 ? '+' : ''}{(agent.riskStatus?.weeklyPnl || 0).toFixed(2)}%
+                                                                            </div>
+                                                                            <div class="mt-1.5 h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    class={`h-full rounded-full transition-all ${(agent.riskStatus?.weeklyPnl || 0) >= 0 ? 'bg-green-500/60' : 'bg-red-500/60'}`}
+                                                                                    style={`width: ${Math.min(Math.abs(agent.riskStatus?.weeklyPnl || 0) / 10 * 100, 100)}%`}
+                                                                                />
+                                                                            </div>
+                                                                            <div class="text-[8px] text-gray-600 mt-0.5">Limit: -{Number(agent.params?.weekly_drawdown_limit || 10)}%</div>
+                                                                        </div>
+                                                                        {/* Consecutive Losses */}
+                                                                        <div class="p-2.5 bg-white/[0.02] rounded-xl">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Consecutive Losses</div>
+                                                                            <div class={`text-sm font-black ${(agent.riskStatus?.consecutiveLosses || 0) >= 3 ? 'text-red-400' : 'text-white'}`}>
+                                                                                {agent.riskStatus?.consecutiveLosses || 0}
+                                                                            </div>
+                                                                            <div class="text-[8px] text-gray-600 mt-1">
+                                                                                {(agent.riskStatus?.consecutiveLosses || 0) >= 3 ? 'Cooldown active' : 'Normal'}
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Today Trades */}
+                                                                        <div class="p-2.5 bg-white/[0.02] rounded-xl">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Today Trades</div>
+                                                                            <div class="text-sm font-black text-white">
+                                                                                {agent.riskStatus?.todayTradeCount || 0} / {Number(agent.params?.max_daily_trades || 6)}
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Cooldown Timer */}
+                                                                        <Show when={agent.riskStatus?.cooldownUntil}>
+                                                                            <div class="p-2.5 bg-red-500/[0.06] rounded-xl border border-red-500/10">
+                                                                                <div class="text-[9px] text-red-400 mb-1">Cooldown Until</div>
+                                                                                <div class="text-[11px] font-bold text-red-300">
+                                                                                    {new Date(agent.riskStatus!.cooldownUntil!).toLocaleTimeString()}
+                                                                                </div>
+                                                                            </div>
+                                                                        </Show>
+                                                                        {/* Pause Reason */}
+                                                                        <Show when={agent.riskStatus?.pauseReason}>
+                                                                            <div class="p-2.5 bg-orange-500/[0.06] rounded-xl border border-orange-500/10 col-span-2 sm:col-span-3">
+                                                                                <div class="text-[9px] text-orange-400 mb-1">Pause Reason</div>
+                                                                                <div class="text-[10px] text-orange-300">{agent.riskStatus?.pauseReason}</div>
+                                                                            </div>
+                                                                        </Show>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* ── Decision Log Timeline ── */}
+                                                            <div>
+                                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Recent Decisions</div>
+                                                                <DecisionLogTimeline agentId={agent.id} />
+                                                            </div>
 
                                                             {/* Edit hint */}
                                                             <Show when={agent.status === 'paused'}>

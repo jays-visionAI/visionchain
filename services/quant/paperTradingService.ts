@@ -14,6 +14,7 @@ import { httpsCallable, getFunctions } from 'firebase/functions';
 import type {
     PaperAgent, PaperTrade, PaperAgentStatus, BudgetConfig,
     Competition, CompetitionEntry, PerformanceReport, ReportPeriod,
+    DecisionLogEntry,
 } from './types';
 import { PAPER_TRADING_SEED } from './types';
 
@@ -24,6 +25,7 @@ const COLLECTIONS = {
     PAPER_TRADES: 'paperTrades',
     COMPETITIONS: 'competitions',
     COMPETITION_ENTRIES: 'competitionEntries',
+    DECISION_LOGS: 'decisionLogs',
 } as const;
 
 // ─── Paper Agent CRUD ──────────────────────────────────────────────────────
@@ -327,6 +329,43 @@ export function subscribeToPaperTrades(
         callback(snap.docs.map(d => d.data() as PaperTrade));
     }, (err) => {
         console.error('[subscribeToPaperTrades] Error:', err.message);
+        callback([]);
+    });
+}
+
+// ─── Decision Logs ─────────────────────────────────────────────────────────
+
+/** Get recent decision logs for an agent */
+export async function getDecisionLogs(agentId: string, max = 20): Promise<DecisionLogEntry[]> {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, COLLECTIONS.DECISION_LOGS),
+        where('agentId', '==', agentId),
+        orderBy('timestamp', 'desc'),
+        limit(max),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data() as DecisionLogEntry);
+}
+
+/** Subscribe to decision logs for an agent (realtime) */
+export function subscribeToDecisionLogs(
+    agentId: string,
+    callback: (logs: DecisionLogEntry[]) => void,
+    max = 20,
+): () => void {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, COLLECTIONS.DECISION_LOGS),
+        where('agentId', '==', agentId),
+        orderBy('timestamp', 'desc'),
+        limit(max),
+    );
+
+    return onSnapshot(q, (snap) => {
+        callback(snap.docs.map(d => d.data() as DecisionLogEntry));
+    }, (err) => {
+        console.error('[subscribeToDecisionLogs] Error:', err.message);
         callback([]);
     });
 }

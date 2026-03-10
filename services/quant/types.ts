@@ -267,6 +267,8 @@ export interface DecisionLogEntry {
         executedQty: number;
         fee: number;
         slippage?: number;
+        pnl?: number;
+        pnlPercent?: number;
     };
 
     /** Market snapshot at evaluation time */
