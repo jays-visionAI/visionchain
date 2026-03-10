@@ -98,6 +98,7 @@ interface DailyGameData {
     scratchCards: number;
     totalVCN: number;
     totalRP: number;
+    bestBlockTime: number; // best block break time in seconds (daily)
     games: GamePlayRecord[];
 }
 
@@ -195,6 +196,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         scratchCards: 0,
         totalVCN: 0,
         totalRP: 0,
+        bestBlockTime: 0,
         games: [],
     });
     const [isLoading, setIsLoading] = createSignal(true);
@@ -247,7 +249,9 @@ export const VCNGameCenter = (props: GameCenterProps) => {
 
             if (snap.exists()) {
                 const d = snap.data() as DailyGameData;
+                if (!d.bestBlockTime) d.bestBlockTime = 0;
                 setDailyData(d);
+                if (d.bestBlockTime > 0) setBestTime(d.bestBlockTime);
             } else {
                 setDailyData({
                     date: today,
@@ -256,6 +260,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     scratchCards: 0,
                     totalVCN: 0,
                     totalRP: 0,
+                    bestBlockTime: 0,
                     games: [],
                 });
             }
@@ -522,11 +527,13 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 score: blockMaxHP(), vcn: reward.vcn, rp: reward.rp,
                 timestamp: new Date().toISOString(), game: 'block'
             };
+            const newBest = recordBonus ? elapsed : prev.bestBlockTime;
             const updated: DailyGameData = {
                 ...prev,
                 blocksUsed: prev.blocksUsed + 1,
                 totalVCN: prev.totalVCN + reward.vcn,
                 totalRP: prev.totalRP + reward.rp,
+                bestBlockTime: newBest || elapsed,
                 games: [...prev.games, record],
             };
             setDailyData(updated);
