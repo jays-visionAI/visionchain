@@ -1100,7 +1100,8 @@ export type RPActionType =
     | 'staking_deposit' | 'transfer_send'
     | 'mobile_node_daily'
     | 'referral_tier1_rp' | 'referral_tier2_rp'
-    | 'cex_connect' | 'quant_strategy_setup';
+    | 'cex_connect' | 'quant_strategy_setup'
+    | 'mini_game';
 
 export interface RPEntry {
     id?: string;
@@ -1159,6 +1160,12 @@ export interface RPConfig {
     rush_3rd: number;
     rush_top10: number;
     rush_top50: number;
+    // Mini Game
+    game_spin_rp: number;
+    game_block_rp: number;
+    game_scratch_rp: number;
+    game_daily_spins: number;
+    game_daily_blocks: number;
 }
 
 const DEFAULT_RP_CONFIG: RPConfig = {
@@ -1199,6 +1206,12 @@ const DEFAULT_RP_CONFIG: RPConfig = {
     rush_3rd: 1000,
     rush_top10: 500,
     rush_top50: 100,
+    // Mini Game
+    game_spin_rp: 3,
+    game_block_rp: 5,
+    game_scratch_rp: 10,
+    game_daily_spins: 3,
+    game_daily_blocks: 2,
 };
 
 let _rpConfigCache: RPConfig | null = null;

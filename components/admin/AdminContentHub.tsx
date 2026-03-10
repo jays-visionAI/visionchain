@@ -3,6 +3,7 @@ import { AdminTabs } from './AdminTabs';
 
 const Announcements = lazy(() => import('./AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
 const DailyTips = lazy(() => import('./AdminDailyTips'));
+const MarketModeration = lazy(() => import('./AdminMarketModeration'));
 
 const TABS = [
     {
@@ -24,6 +25,15 @@ const TABS = [
             </svg>
         ),
     },
+    {
+        id: 'market',
+        label: 'Market Moderation',
+        icon: () => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+        ),
+    },
 ];
 
 export default function AdminContentHub() {
@@ -39,6 +49,7 @@ export default function AdminContentHub() {
             }>
                 {activeTab() === 'announcements' && <Announcements />}
                 {activeTab() === 'tips' && <DailyTips />}
+                {activeTab() === 'market' && <MarketModeration />}
             </Suspense>
         </div>
     );

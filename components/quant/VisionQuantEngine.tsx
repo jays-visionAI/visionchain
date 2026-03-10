@@ -47,7 +47,8 @@ import {
     getCategoryLabel,
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent } from '../../services/quant/types';
+import { DEFAULT_BUDGET_CONFIG } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
@@ -124,10 +125,72 @@ const VisionQuantEngine = (): JSX.Element => {
     const [selectedExchange, setSelectedExchange] = createSignal<string>('');
     const [riskProfile, setRiskProfile] = createSignal<'conservative' | 'balanced' | 'aggressive'>('balanced');
     const [customParams, setCustomParams] = createSignal<Record<string, number | string | boolean>>({});
+    const [budgetConfig, setBudgetConfig] = createSignal<BudgetConfig>({ ...DEFAULT_BUDGET_CONFIG });
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
     const [acceptedBeta, setAcceptedBeta] = createSignal(false);
+
+    // === Budget Helpers ===
+    const totalPortfolioValue = createMemo(() => {
+        const agg = aggregated();
+        return agg?.totalValueKrw || 0;
+    });
+
+    const totalPortfolioValueUsd = createMemo(() => {
+        const agg = aggregated();
+        return agg?.totalValueUsd || 0;
+    });
+
+    const budgetPctOfTotal = (amount: number) => {
+        const total = budgetConfig().currency === 'KRW' ? totalPortfolioValue() : totalPortfolioValueUsd();
+        if (total <= 0 || amount <= 0) return 0;
+        return Math.min((amount / total) * 100, 100);
+    };
+
+    const formatBudgetValue = (v: number) => {
+        if (budgetConfig().currency === 'KRW') {
+            if (v >= 100000000) return `${(v / 100000000).toFixed(1)}억`;
+            if (v >= 10000) return `${(v / 10000).toFixed(0)}만`;
+            return v.toLocaleString();
+        }
+        if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
+        if (v >= 1000) return `$${(v / 1000).toFixed(1)}K`;
+        return `$${v.toLocaleString()}`;
+    };
+
+    const budgetCurrencySymbol = () => budgetConfig().currency === 'KRW' ? '₩' : '$';
+
+    const updateBudgetField = <K extends keyof BudgetConfig>(key: K, value: BudgetConfig[K]) => {
+        setBudgetConfig(prev => ({ ...prev, [key]: value }));
+    };
+
+    const budgetPresets = createMemo(() => {
+        if (budgetConfig().currency === 'KRW') {
+            return [500000, 1000000, 2000000, 5000000, 10000000];
+        }
+        return [500, 1000, 2000, 5000, 10000];
+    });
+
+    const budgetValidationWarnings = createMemo(() => {
+        const cfg = budgetConfig();
+        const warnings: string[] = [];
+        const totalRef = cfg.currency === 'KRW' ? totalPortfolioValue() : totalPortfolioValueUsd();
+
+        if (cfg.totalBudgetEnabled && cfg.totalBudget > totalRef && totalRef > 0) {
+            warnings.push('전체 운용 한도가 보유 자산을 초과합니다.');
+        }
+        if (cfg.totalBudgetEnabled && cfg.perAssetBudgetEnabled && cfg.perAssetBudget > cfg.totalBudget && cfg.totalBudget > 0) {
+            warnings.push('종목당 한도가 전체 한도보다 큽니다.');
+        }
+        if (cfg.perAssetBudgetEnabled && cfg.maxOrderSizeEnabled && cfg.maxOrderSize > cfg.perAssetBudget && cfg.perAssetBudget > 0) {
+            warnings.push('1회 주문 한도가 종목당 한도보다 큽니다.');
+        }
+        if (cfg.dailyTradingLimitEnabled && cfg.maxOrderSizeEnabled && cfg.dailyTradingLimit < cfg.maxOrderSize) {
+            warnings.push('일일 거래 한도가 1회 주문 한도보다 작습니다.');
+        }
+        return warnings;
+    });
 
     // === Derived ===
     const displayAssets = createMemo(() => aggregated()?.assets || []);
@@ -187,6 +250,7 @@ const VisionQuantEngine = (): JSX.Element => {
         setSelectedAssets([]);
         setAcceptedTerms(false);
         setAcceptedBeta(false);
+        setBudgetConfig({ ...DEFAULT_BUDGET_CONFIG });
         // Initialize params from strategy defaults
         const params: Record<string, number | string | boolean> = {};
         strategy.parameters.forEach(p => { params[p.key] = p.value; });
@@ -739,6 +803,208 @@ const VisionQuantEngine = (): JSX.Element => {
                                     </div>
                                 </Show>
 
+                                {/* ═══ BUDGET ALLOCATION SECTION ═══ */}
+                                <div>
+                                    <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" /><path d="M6 16h4" />
+                                        </svg>
+                                        Budget Allocation
+                                        <span class="text-[9px] font-normal text-gray-600 ml-auto">
+                                            총 자산: {budgetConfig().currency === 'KRW' ? formatKrw(totalPortfolioValue()) : formatUsd(totalPortfolioValueUsd())}
+                                        </span>
+                                    </h4>
+
+                                    {/* Currency Toggle */}
+                                    <div class="flex items-center gap-1 mb-4 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] w-fit">
+                                        <button
+                                            onClick={() => updateBudgetField('currency', 'KRW')}
+                                            class={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${budgetConfig().currency === 'KRW' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                        >KRW (원)</button>
+                                        <button
+                                            onClick={() => updateBudgetField('currency', 'USD')}
+                                            class={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${budgetConfig().currency === 'USD' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                        >USD ($)</button>
+                                    </div>
+
+                                    <div class="space-y-4">
+                                        {/* Total Budget */}
+                                        <div class={`p-4 rounded-xl border transition-all ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div>
+                                                    <div class="text-xs font-bold text-white">전체 운용 한도</div>
+                                                    <div class="text-[10px] text-gray-500">에이전트가 사용할 최대 총 금액</div>
+                                                </div>
+                                                <button
+                                                    onClick={() => updateBudgetField('totalBudgetEnabled', !budgetConfig().totalBudgetEnabled)}
+                                                    class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500' : 'bg-gray-700'}`}
+                                                >
+                                                    <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().totalBudgetEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                </button>
+                                            </div>
+                                            <Show when={budgetConfig().totalBudgetEnabled}>
+                                                <div class="mt-3 space-y-2">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={budgetConfig().totalBudget || ''}
+                                                            onInput={(e) => updateBudgetField('totalBudget', Number(e.currentTarget.value) || 0)}
+                                                            placeholder="금액 입력"
+                                                            class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                                                        />
+                                                        <Show when={budgetConfig().totalBudget > 0}>
+                                                            <span class="text-[10px] text-cyan-400 font-bold whitespace-nowrap">
+                                                                {budgetPctOfTotal(budgetConfig().totalBudget).toFixed(1)}%
+                                                            </span>
+                                                        </Show>
+                                                    </div>
+                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                        <For each={budgetPresets()}>
+                                                            {(preset) => (
+                                                                <button
+                                                                    onClick={() => updateBudgetField('totalBudget', preset)}
+                                                                    class={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${budgetConfig().totalBudget === preset ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white'}`}
+                                                                >
+                                                                    {formatBudgetValue(preset)}
+                                                                </button>
+                                                            )}
+                                                        </For>
+                                                    </div>
+                                                </div>
+                                            </Show>
+                                        </div>
+
+                                        {/* Per Asset Budget */}
+                                        <div class={`p-4 rounded-xl border transition-all ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div>
+                                                    <div class="text-xs font-bold text-white">종목당 운용 한도</div>
+                                                    <div class="text-[10px] text-gray-500">개별 코인에 투입할 최대 금액</div>
+                                                </div>
+                                                <button
+                                                    onClick={() => updateBudgetField('perAssetBudgetEnabled', !budgetConfig().perAssetBudgetEnabled)}
+                                                    class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500' : 'bg-gray-700'}`}
+                                                >
+                                                    <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().perAssetBudgetEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                </button>
+                                            </div>
+                                            <Show when={budgetConfig().perAssetBudgetEnabled}>
+                                                <div class="mt-3 space-y-2">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={budgetConfig().perAssetBudget || ''}
+                                                            onInput={(e) => updateBudgetField('perAssetBudget', Number(e.currentTarget.value) || 0)}
+                                                            placeholder="금액 입력"
+                                                            class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                                                        />
+                                                        <Show when={budgetConfig().perAssetBudget > 0 && budgetConfig().totalBudgetEnabled && budgetConfig().totalBudget > 0}>
+                                                            <span class="text-[10px] text-gray-400 font-bold whitespace-nowrap">
+                                                                전체의 {((budgetConfig().perAssetBudget / budgetConfig().totalBudget) * 100).toFixed(0)}%
+                                                            </span>
+                                                        </Show>
+                                                    </div>
+                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                        <For each={budgetPresets().map(p => Math.round(p / 5))}>
+                                                            {(preset) => (
+                                                                <button
+                                                                    onClick={() => updateBudgetField('perAssetBudget', preset)}
+                                                                    class={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${budgetConfig().perAssetBudget === preset ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white'}`}
+                                                                >
+                                                                    {formatBudgetValue(preset)}
+                                                                </button>
+                                                            )}
+                                                        </For>
+                                                    </div>
+                                                </div>
+                                            </Show>
+                                        </div>
+
+                                        {/* Advanced-only: Max Order Size & Daily Limit */}
+                                        <Show when={setupMode() === 'advanced'}>
+                                            {/* Max Order Size */}
+                                            <div class={`p-4 rounded-xl border transition-all ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div>
+                                                        <div class="text-xs font-bold text-white">1회 주문 최대 금액</div>
+                                                        <div class="text-[10px] text-gray-500">한 번 주문에 넣을 수 있는 최대 금액</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => updateBudgetField('maxOrderSizeEnabled', !budgetConfig().maxOrderSizeEnabled)}
+                                                        class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500' : 'bg-gray-700'}`}
+                                                    >
+                                                        <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().maxOrderSizeEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                </div>
+                                                <Show when={budgetConfig().maxOrderSizeEnabled}>
+                                                    <div class="mt-3">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={budgetConfig().maxOrderSize || ''}
+                                                                onInput={(e) => updateBudgetField('maxOrderSize', Number(e.currentTarget.value) || 0)}
+                                                                placeholder="금액 입력"
+                                                                class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </Show>
+                                            </div>
+
+                                            {/* Daily Trading Limit */}
+                                            <div class={`p-4 rounded-xl border transition-all ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div>
+                                                        <div class="text-xs font-bold text-white">일일 거래 한도</div>
+                                                        <div class="text-[10px] text-gray-500">하루 총 거래 금액 상한</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => updateBudgetField('dailyTradingLimitEnabled', !budgetConfig().dailyTradingLimitEnabled)}
+                                                        class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500' : 'bg-gray-700'}`}
+                                                    >
+                                                        <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().dailyTradingLimitEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                </div>
+                                                <Show when={budgetConfig().dailyTradingLimitEnabled}>
+                                                    <div class="mt-3">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={budgetConfig().dailyTradingLimit || ''}
+                                                                onInput={(e) => updateBudgetField('dailyTradingLimit', Number(e.currentTarget.value) || 0)}
+                                                                placeholder="금액 입력"
+                                                                class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </Show>
+                                            </div>
+                                        </Show>
+
+                                        {/* Validation Warnings */}
+                                        <Show when={budgetValidationWarnings().length > 0}>
+                                            <div class="space-y-1.5">
+                                                <For each={budgetValidationWarnings()}>
+                                                    {(warning) => (
+                                                        <div class="flex items-center gap-1.5 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                                                            <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                                            <span class="text-[10px] text-amber-400">{warning}</span>
+                                                        </div>
+                                                    )}
+                                                </For>
+                                            </div>
+                                        </Show>
+                                    </div>
+                                </div>
+
                                 {/* Risk Summary Panel */}
                                 <div class="p-4 bg-white/[0.02] rounded-2xl border border-white/[0.04]">
                                     <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
@@ -762,6 +1028,18 @@ const VisionQuantEngine = (): JSX.Element => {
                                             <div class="text-[9px] text-gray-600 mb-0.5">Vol Overlay</div>
                                             <div class="text-xs font-bold text-cyan-400">Enabled</div>
                                         </div>
+                                        <Show when={budgetConfig().totalBudgetEnabled}>
+                                            <div class="p-2.5 bg-cyan-500/[0.04] rounded-lg border border-cyan-500/10">
+                                                <div class="text-[9px] text-gray-600 mb-0.5">Total Budget</div>
+                                                <div class="text-xs font-bold text-cyan-400">{budgetCurrencySymbol()}{budgetConfig().totalBudget.toLocaleString()}</div>
+                                            </div>
+                                        </Show>
+                                        <Show when={budgetConfig().perAssetBudgetEnabled}>
+                                            <div class="p-2.5 bg-cyan-500/[0.04] rounded-lg border border-cyan-500/10">
+                                                <div class="text-[9px] text-gray-600 mb-0.5">Per Asset</div>
+                                                <div class="text-xs font-bold text-cyan-400">{budgetCurrencySymbol()}{budgetConfig().perAssetBudget.toLocaleString()}</div>
+                                            </div>
+                                        </Show>
                                     </div>
                                     <Show when={selectedAssets().length > 0 && Number(customParams()['max_position'] || selectedStrategy()!.riskRules.maxPositionPct) > 25}>
                                         <div class="flex items-center gap-1.5 mt-3 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
@@ -834,6 +1112,33 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <span class="text-[10px] text-gray-500 uppercase tracking-wider">Daily Loss Limit</span>
                                         <span class="text-xs font-bold text-red-400">{selectedStrategy()!.riskRules.dailyDrawdownLimit}%</span>
                                     </div>
+                                    <Show when={budgetConfig().totalBudgetEnabled}>
+                                        <div class="flex items-center justify-between p-3 bg-cyan-500/[0.03] rounded-xl border border-cyan-500/10">
+                                            <span class="text-[10px] text-gray-500 uppercase tracking-wider">Total Budget</span>
+                                            <div class="text-right">
+                                                <span class="text-xs font-bold text-cyan-400">{budgetCurrencySymbol()}{budgetConfig().totalBudget.toLocaleString()}</span>
+                                                <div class="text-[9px] text-gray-500">전체 자산의 {budgetPctOfTotal(budgetConfig().totalBudget).toFixed(1)}%</div>
+                                            </div>
+                                        </div>
+                                    </Show>
+                                    <Show when={budgetConfig().perAssetBudgetEnabled}>
+                                        <div class="flex items-center justify-between p-3 bg-cyan-500/[0.03] rounded-xl border border-cyan-500/10">
+                                            <span class="text-[10px] text-gray-500 uppercase tracking-wider">Per Asset Limit</span>
+                                            <span class="text-xs font-bold text-cyan-400">{budgetCurrencySymbol()}{budgetConfig().perAssetBudget.toLocaleString()}</span>
+                                        </div>
+                                    </Show>
+                                    <Show when={budgetConfig().maxOrderSizeEnabled}>
+                                        <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                                            <span class="text-[10px] text-gray-500 uppercase tracking-wider">Max Order Size</span>
+                                            <span class="text-xs font-bold text-white">{budgetCurrencySymbol()}{budgetConfig().maxOrderSize.toLocaleString()}</span>
+                                        </div>
+                                    </Show>
+                                    <Show when={budgetConfig().dailyTradingLimitEnabled}>
+                                        <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                                            <span class="text-[10px] text-gray-500 uppercase tracking-wider">Daily Trading Limit</span>
+                                            <span class="text-xs font-bold text-white">{budgetCurrencySymbol()}{budgetConfig().dailyTradingLimit.toLocaleString()}</span>
+                                        </div>
+                                    </Show>
                                 </div>
 
                                 {/* Legal Checkboxes */}
@@ -886,6 +1191,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                             strategy: selectedStrategy()!.id,
                                             assets: selectedAssets(),
                                             params: customParams(),
+                                            budgetConfig: budgetConfig(),
                                         });
 
                                         // Award quant_strategy_setup RP (fire-and-forget)

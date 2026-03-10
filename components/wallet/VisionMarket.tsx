@@ -44,6 +44,7 @@ import {
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
+import { useI18n } from '../../i18n/i18nContext';
 
 // Contract constants (must match transferService.ts)
 const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
@@ -71,6 +72,7 @@ const fileTypeColor = (type: string): string => {
 
 const VisionMarket = (props: { walletAddress?: string }) => {
     const auth = useAuth();
+    const { t } = useI18n();
     const [items, setItems] = createSignal<DiskFile[]>([]);
     const [isLoading, setIsLoading] = createSignal(true);
     const [searchQuery, setSearchQuery] = createSignal('');
@@ -469,10 +471,10 @@ const VisionMarket = (props: { walletAddress?: string }) => {
     return (
         <div class="h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-4 lg:px-8 pb-32 lg:pb-8 max-w-5xl mx-auto w-full overflow-y-auto custom-scrollbar">
             <WalletViewHeader
-                tag="Global Channel"
-                title="VISION"
-                titleAccent="MARKET"
-                description="Discover and purchase premium datasets, media, and documents."
+                tag={t('wallet.market.tag')}
+                title={t('wallet.market.title')}
+                titleAccent={t('wallet.market.titleAccent')}
+                description={t('wallet.market.description')}
                 icon={ShoppingBag}
                 rightElement={
                     <div class="flex items-center gap-3">

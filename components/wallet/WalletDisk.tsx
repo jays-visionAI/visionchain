@@ -8,6 +8,7 @@ import {
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
+import { useI18n } from '../../i18n/i18nContext';
 import { addRewardPoints, getRPConfig, getUserContacts } from '../../services/firebaseService';
 import {
     uploadDiskFile, downloadDiskFile, downloadDiskFileGranular, listDiskFiles, deleteDiskFile, renameDiskFile,
@@ -122,6 +123,7 @@ export const WalletDisk = (props: {
     onRestoreWallet?: () => void;
 }) => {
     const auth = useAuth();
+    const { t } = useI18n();
     const email = () => auth.user()?.email || '';
 
     // State
@@ -668,7 +670,10 @@ export const WalletDisk = (props: {
     // ─── Delete ───
 
     const handleDeleteFile = async (file: DiskFile) => {
-        if (!confirm(`Delete "${file.name}"? This cannot be undone.`)) return;
+        const confirmMsg = file.isPublished
+            ? `Delete "${file.name}"? This file is published on Vision Market and will be automatically unpublished. This cannot be undone.`
+            : `Delete "${file.name}"? This cannot be undone.`;
+        if (!confirm(confirmMsg)) return;
         setDeletingId(file.id);
         try {
             await deleteDiskFile(email(), file.id);
@@ -1411,10 +1416,10 @@ export const WalletDisk = (props: {
 
             {/* ── Header ── */}
             <WalletViewHeader
-                tag="Decentralized"
-                title="VISION"
-                titleAccent="DISK"
-                description="Decentralized storage powered by Vision Nodes"
+                tag={t('wallet.disk.tag')}
+                title={t('wallet.disk.title')}
+                titleAccent={t('wallet.disk.titleAccent')}
+                description={t('wallet.disk.description')}
                 icon={HardDrive}
             />
 

@@ -1,0 +1,376 @@
+{
+  "timestamp": "2026-03-10T02:25:15.741Z",
+  "dryRun": true,
+  "snapshotDate": "2026-02-04T10:56:46.795Z",
+  "snapshotBlock": 517273,
+  "snapshotAddresses": 55,
+  "miningNodes": 45,
+  "newMinerWallets": 45,
+  "totalWallets": 100,
+  "restored": 100,
+  "failed": 0,
+  "totalVCNTransferred": "4000000005.728538",
+  "totalMinedVCNAdded": "5.728538",
+  "miningDetails": [
+    {
+      "nodeId": "mn_00ebbde50a5f3b32",
+      "wallet": "0x9b4cb3afe775b0894b40aa133bb4ba852efe3c6b",
+      "email": "johnryu77@naver.com",
+      "pending": "0.208980",
+      "claimed": "0.000000",
+      "totalMined": "0.208980"
+    },
+    {
+      "nodeId": "mn_0e9536ecb7c25ab3",
+      "wallet": "0x343422f69d2f452ec86810b4b9e085a4444d9b33",
+      "email": "0427ge@gmail.com",
+      "pending": "0.086890",
+      "claimed": "0.000000",
+      "totalMined": "0.086890"
+    },
+    {
+      "nodeId": "mn_156e7849e202d6bc",
+      "wallet": "0x687f53c2ba9ada9827e72d422d407ae59eb87718",
+      "email": "castest717@gmail.com",
+      "pending": "0.017378",
+      "claimed": "0.000000",
+      "totalMined": "0.017378"
+    },
+    {
+      "nodeId": "mn_1964fbb38fe99d16",
+      "wallet": "0x7f22f2ebe91890fc3a475be59bf0b62380be5295",
+      "email": "young030300@gmail.com",
+      "pending": "0.086900",
+      "claimed": "0.000000",
+      "totalMined": "0.086900"
+    },
+    {
+      "nodeId": "mn_21fde8ddb40e99c1",
+      "wallet": "0x7ff704bbc3ea697066221ba724e5440ba018b9cc",
+      "email": "0408jh87@gmail.com",
+      "pending": "0.035420",
+      "claimed": "0.000000",
+      "totalMined": "0.035420"
+    },
+    {
+      "nodeId": "mn_25da028f899366f5",
+      "wallet": "0x5a617eb8b066f591966db01a4f4079f3ad90c5b2",
+      "email": "030300nan@gmail.com",
+      "pending": "0.086830",
+      "claimed": "0.000000",
+      "totalMined": "0.086830"
+    },
+    {
+      "nodeId": "mn_26063a02fe95bf86",
+      "wallet": "0x6838200fc52060599c9fc9b6258625d099c56b1e",
+      "email": "0216cd@gmail.com",
+      "pending": "0.086850",
+      "claimed": "0.000000",
+      "totalMined": "0.086850"
+    },
+    {
+      "nodeId": "mn_2a12644c3d71b2a2",
+      "wallet": "0x3a8f2e4953cfd6e0233adc000bf713317f661c27",
+      "email": "080800young@gmail.com",
+      "pending": "0.086920",
+      "claimed": "0.000000",
+      "totalMined": "0.086920"
+    },
+    {
+      "nodeId": "mn_31911df188392c14",
+      "wallet": "0x0a93bd691e80021f0e5b5686601a5e5c3d29375e",
+      "email": "hamyung1234@gmail.com",
+      "pending": "0.086900",
+      "claimed": "0.000000",
+      "totalMined": "0.086900"
+    },
+    {
+      "nodeId": "mn_31b469f3e12d83d0",
+      "wallet": "0x8369426012afd4869cb3675c00c895611027debe",
+      "email": "030300nany@gmail.com",
+      "pending": "0.043435",
+      "claimed": "0.000000",
+      "totalMined": "0.043435"
+    },
+    {
+      "nodeId": "mn_402eec200ec5640f",
+      "wallet": "0x2643f2a54bafc17af295908bd405dd2ef684cac9",
+      "email": "jinpretty2@gmail.com",
+      "pending": "0.332730",
+      "claimed": "0.000000",
+      "totalMined": "0.332730"
+    },
+    {
+      "nodeId": "mn_4318b6e4c270d53e",
+      "wallet": "0x728f908a7014e25fa0b909cae8472261c6ebad6c",
+      "email": "0303000park@gmail.com",
+      "pending": "0.086900",
+      "claimed": "0.000000",
+      "totalMined": "0.086900"
+    },
+    {
+      "nodeId": "mn_47f60182348614b3",
+      "wallet": "0x117776ac299e187d3183b673d1074fa14481a10e",
+      "email": "030300hy@gmail.com",
+      "pending": "0.086870",
+      "claimed": "0.000000",
+      "totalMined": "0.086870"
+    },
+    {
+      "nodeId": "mn_4972045a1314aee6",
+      "wallet": "0xb97f51ecd9cf8c06755f9ca30030a7b762465f39",
+      "email": "davidohthai@gmail.com",
+      "pending": "0.173860",
+      "claimed": "0.000000",
+      "totalMined": "0.173860"
+    },
+    {
+      "nodeId": "mn_556afa970c4981ab",
+      "wallet": "0x2ca1db5620d687eddec591c5981b8c4a5bb4bd95",
+      "email": "saivian7777@gmail.com",
+      "pending": "0.173720",
+      "claimed": "0.000000",
+      "totalMined": "0.173720"
+    },
+    {
+      "nodeId": "mn_55cfdae5ef528991",
+      "wallet": "0x2b1c571c914ea5706de03fa60b3001e8fdeb6d36",
+      "email": "shimyh6624@gmail.com",
+      "pending": "0.083880",
+      "claimed": "0.000000",
+      "totalMined": "0.083880"
+    },
+    {
+      "nodeId": "mn_5742af9b9ec87a2d",
+      "wallet": "0x6db39b78438900fb3fd83cebd769dd8515f34f01",
+      "email": "pjj850301@gmail.com",
+      "pending": "0.196220",
+      "claimed": "0.000000",
+      "totalMined": "0.196220"
+    },
+    {
+      "nodeId": "mn_5ae879abe0269be1",
+      "wallet": "0x3569aed45ae04613b91d287fe9901559e447ebcc",
+      "email": "030300seung@gmail.com",
+      "pending": "0.086850",
+      "claimed": "0.000000",
+      "totalMined": "0.086850"
+    },
+    {
+      "nodeId": "mn_5f89a632ddb3c29f",
+      "wallet": "0x67d9469efb630e4e46495276e7ef9c0e0918a1c4",
+      "email": "kwt9086@naver.com",
+      "pending": "0.280360",
+      "claimed": "0.000000",
+      "totalMined": "0.280360"
+    },
+    {
+      "nodeId": "mn_673ee6465ae8eb46",
+      "wallet": "0x8830fc872c17851c16ae0ddbeecdac759778b588",
+      "email": "99chunja@naver.com",
+      "pending": "0.000600",
+      "claimed": "0.000000",
+      "totalMined": "0.000600"
+    },
+    {
+      "nodeId": "mn_6bc4fe4d28c0a212",
+      "wallet": "0xebeb0d4e300e118f50ae0ded9ed9e5b4afaf2d3d",
+      "email": "sjh022086@gmail.com",
+      "pending": "0.086810",
+      "claimed": "0.000000",
+      "totalMined": "0.086810"
+    },
+    {
+      "nodeId": "mn_74fb58454e915b9f",
+      "wallet": "0xb368b131181732a654653964316c3f2eb7ef049b",
+      "email": "030300ssy@gmail.com",
+      "pending": "0.086840",
+      "claimed": "0.000000",
+      "totalMined": "0.086840"
+    },
+    {
+      "nodeId": "mn_7abe89ed4dba5aeb",
+      "wallet": "0xc19898f5ef43e378c3d4d944041d967c428ee24a",
+      "email": "030300park@gmail.com",
+      "pending": "0.086890",
+      "claimed": "0.000000",
+      "totalMined": "0.086890"
+    },
+    {
+      "nodeId": "mn_7bf03cf76cfae3bc",
+      "wallet": "0x2a1bbbde00724b206229fc861c26342dbe2e5df7",
+      "email": "970707ds@gmail.com",
+      "pending": "0.086900",
+      "claimed": "0.000000",
+      "totalMined": "0.086900"
+    },
+    {
+      "nodeId": "mn_80eb6840cfbf794e",
+      "wallet": "0x49a7a2299532c35b094bb4f84122560d5c37e176",
+      "email": "080800park@gmail.com",
+      "pending": "0.300150",
+      "claimed": "0.000000",
+      "totalMined": "0.300150"
+    },
+    {
+      "nodeId": "mn_85448572fce70764",
+      "wallet": "0xd4f0b2be54b34721d84e7a04d5493385b7802d25",
+      "email": "jays@visai.io",
+      "pending": "0.173700",
+      "claimed": "0.000000",
+      "totalMined": "0.173700"
+    },
+    {
+      "nodeId": "mn_85fe19c7a8f10eb3",
+      "wallet": "0x1638960e9af5ce88fb1a483b4e760b87175bb772",
+      "email": "mazingaai@gmail.com",
+      "pending": "0.024780",
+      "claimed": "0.000000",
+      "totalMined": "0.024780"
+    },
+    {
+      "nodeId": "mn_8f30f25da3992571",
+      "wallet": "0x38699cffca394f80644b524a8b8c9bb603946c6e",
+      "email": "psp820213@gmail.com",
+      "pending": "0.176420",
+      "claimed": "0.000000",
+      "totalMined": "0.176420"
+    },
+    {
+      "nodeId": "mn_90695aa2cdf5c8de",
+      "wallet": "0x554e19e6e68be44fd62dd819e1d77e4d18f6e7f2",
+      "email": "lgh321006@gmail.com",
+      "pending": "0.086860",
+      "claimed": "0.000000",
+      "totalMined": "0.086860"
+    },
+    {
+      "nodeId": "mn_98bd63beb9b73de9",
+      "wallet": "0x1d0dd9b1c843947920683c6a8e5980a143ea5814",
+      "email": "0808sh02@gmail.com",
+      "pending": "0.056810",
+      "claimed": "0.000000",
+      "totalMined": "0.056810"
+    },
+    {
+      "nodeId": "mn_9992927d74c0fd48",
+      "wallet": "0x78fb75d22a0747d38e1305cd912cf62977ed380d",
+      "email": "yousy778@gmail.com",
+      "pending": "0.013190",
+      "claimed": "0.000000",
+      "totalMined": "0.013190"
+    },
+    {
+      "nodeId": "mn_a326fc0b1252f8f2",
+      "wallet": "0x4dacf44a90a2dbdb916110467461ce4629cfd62c",
+      "email": "sangky94@gmail.com",
+      "pending": "0.018690",
+      "claimed": "0.000000",
+      "totalMined": "0.018690"
+    },
+    {
+      "nodeId": "mn_a5ca370a099235ec",
+      "wallet": "0x45414ded323c906032b42443fa9074268f5140f1",
+      "email": "nan992021@gmail.com",
+      "pending": "0.086860",
+      "claimed": "0.000000",
+      "totalMined": "0.086860"
+    },
+    {
+      "nodeId": "mn_a7d608d618a09545",
+      "wallet": "0x571b9c535a7cc18a9523b64545784ad441c47f5b",
+      "email": "030300sh@gmail.com",
+      "pending": "0.076190",
+      "claimed": "0.000000",
+      "totalMined": "0.076190"
+    },
+    {
+      "nodeId": "mn_ab3644e6f7998bfc",
+      "wallet": "0xaa5d94ccc70c5f64976131d9f9a9c6116da6aff4",
+      "email": "a01087499561@gmail.com",
+      "pending": "0.662060",
+      "claimed": "0.000000",
+      "totalMined": "0.662060"
+    },
+    {
+      "nodeId": "mn_b3d586f37962c5d7",
+      "wallet": "0x7a03c56fc99518d3b1469b981fff5d281ffb02ed",
+      "email": "080800seung@gmail.com",
+      "pending": "0.086850",
+      "claimed": "0.000000",
+      "totalMined": "0.086850"
+    },
+    {
+      "nodeId": "mn_b964a59b3487a117",
+      "wallet": "0x962e1241b23b022b78b27edddf60befa420cf91f",
+      "email": "msp1123@naver.com",
+      "pending": "0.426125",
+      "claimed": "0.000000",
+      "totalMined": "0.426125"
+    },
+    {
+      "nodeId": "mn_bdc639e15c3b8eb5",
+      "wallet": "0x554298de819cd082884f99ef497df5dea3d1cb9c",
+      "email": "570228jg@gmail.com",
+      "pending": "0.065740",
+      "claimed": "0.000000",
+      "totalMined": "0.065740"
+    },
+    {
+      "nodeId": "mn_cfa81030162b5ae2",
+      "wallet": "0x2c5a5f683c575f30fb76c1e849ea12447c8c827e",
+      "email": "sjh860220@gmail.com",
+      "pending": "0.020990",
+      "claimed": "0.000000",
+      "totalMined": "0.020990"
+    },
+    {
+      "nodeId": "mn_d1839273c835fa9d",
+      "wallet": "0xde8f7482bac2e7127b6923d91ecdbe6e8799dee4",
+      "email": "700223hk@gmail.com",
+      "pending": "0.136570",
+      "claimed": "0.000000",
+      "totalMined": "0.136570"
+    },
+    {
+      "nodeId": "mn_d353562fff4fdf9f",
+      "wallet": "0xe0dfb6876507e9eef93067bd37164075417f6739",
+      "email": "ds19770923@gmail.com",
+      "pending": "0.493170",
+      "claimed": "0.000000",
+      "totalMined": "0.493170"
+    },
+    {
+      "nodeId": "mn_da439a88360b6e89",
+      "wallet": "0x6220b250fa932c94a3b773d20e0b7a191105e61d",
+      "email": "030303seung@gmail.com",
+      "pending": "0.006000",
+      "claimed": "0.000000",
+      "totalMined": "0.006000"
+    },
+    {
+      "nodeId": "mn_e138af2f159d8424",
+      "wallet": "0xa70c3575d264849b264261788046cb1730b08e12",
+      "email": "dodong3857@gmail.com",
+      "pending": "0.043445",
+      "claimed": "0.000000",
+      "totalMined": "0.043445"
+    },
+    {
+      "nodeId": "mn_e630ab594dbc7134",
+      "wallet": "0x5be477da02e4df911444eb75521b7abf4468813b",
+      "email": "030300jin@gmail.com",
+      "pending": "0.052750",
+      "claimed": "0.000000",
+      "totalMined": "0.052750"
+    },
+    {
+      "nodeId": "mn_ef36e756d2096387",
+      "wallet": "0xf93bfe416fad23be6678aa110153cfe33ade5844",
+      "email": "zxcv1896@naver.com",
+      "pending": "0.045255",
+      "claimed": "0.000000",
+      "totalMined": "0.045255"
+    }
+  ]
+}

@@ -37,6 +37,39 @@ export interface RiskRules {
     maxConsecutiveLosses?: number;
 }
 
+export interface BudgetConfig {
+    /** Total budget the agent is allowed to use (in currency units) */
+    totalBudget: number;
+    totalBudgetEnabled: boolean;
+
+    /** Max amount to allocate to a single asset */
+    perAssetBudget: number;
+    perAssetBudgetEnabled: boolean;
+
+    /** Max amount for a single order */
+    maxOrderSize: number;
+    maxOrderSizeEnabled: boolean;
+
+    /** Daily total trading volume limit */
+    dailyTradingLimit: number;
+    dailyTradingLimitEnabled: boolean;
+
+    /** Currency unit for all budget values */
+    currency: 'KRW' | 'USD';
+}
+
+export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
+    totalBudget: 0,
+    totalBudgetEnabled: false,
+    perAssetBudget: 0,
+    perAssetBudgetEnabled: false,
+    maxOrderSize: 100000,
+    maxOrderSizeEnabled: false,
+    dailyTradingLimit: 1000000,
+    dailyTradingLimitEnabled: false,
+    currency: 'KRW',
+};
+
 export interface VolatilityOverlayConfig {
     enabled: boolean;
     window: number;
@@ -125,6 +158,7 @@ export interface QuantAgent {
     strategyName: string;
     customizedParameters: Record<string, number | string | boolean>;
     riskLimits: RiskRules;
+    budgetConfig: BudgetConfig;
     exceptionRules: ExceptionRule[];
     volatilityOverlay: VolatilityOverlayConfig;
     status: AgentStatus;

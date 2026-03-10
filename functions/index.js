@@ -21597,6 +21597,16 @@ exports.diskDelete = onCall({ cors: true }, async (request) => {
 
   const fileMeta = fileDoc.data();
 
+  // ── Auto-unpublish: remove from global market if published ──
+  if (fileMeta.isPublished) {
+    try {
+      await db.collection("published_materials").doc(fileId).delete();
+      console.log(`[DiskDelete] Auto-unpublished file ${fileId} from market`);
+    } catch (unpubErr) {
+      console.warn("[DiskDelete] Failed to auto-unpublish (non-blocking):", unpubErr.message);
+    }
+  }
+
   if (fileMeta.storageType === "cloud") {
     try {
       const bucket = admin.storage().bucket();
@@ -21651,7 +21661,279 @@ exports.diskGetChunk = onCall({ cors: true, maxInstances: 30, timeoutSeconds: 30
   throw new HttpsError("unavailable", "Chunk is currently being replicated to nodes.");
 });
 
-// ─── AI Memory Storage - Phase 1: Foundation Data Layer ────────────────────
+// ─── Admin Market Moderation ─────────────────────────────────────────────────
+
+/**
+ * adminRemoveMarketItem - Admin forcefully removes a published item from the market.
+ * Also logs the violation and optionally auto-bans the publisher.
+ */
+exports.adminRemoveMarketItem = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const adminEmail = request.auth.token.email?.toLowerCase();
+  if (!adminEmail) throw new HttpsError("permission-denied", "Admin access required.");
+
+  // Verify admin role
+  const adminDoc = await db.collection("users").doc(adminEmail).get();
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  const { fileId, reason, autoBan } = request.data;
+  if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
+  if (!reason) throw new HttpsError("invalid-argument", "reason is required.");
+
+  // 1. Get the published item metadata
+  const marketDoc = await db.collection("published_materials").doc(fileId).get();
+  if (!marketDoc.exists) {
+    throw new HttpsError("not-found", "Published item not found in market.");
+  }
+  const itemData = marketDoc.data();
+  const publisherEmail = (itemData.publisherEmail || "").toLowerCase();
+
+  // 2. Remove from published_materials
+  await db.collection("published_materials").doc(fileId).delete();
+
+  // 3. Update original file's isPublished flag (if the file still exists)
+  if (publisherEmail) {
+    try {
+      const fileRef = db.collection("users").doc(publisherEmail).collection("disk_files").doc(fileId);
+      const fileDoc = await fileRef.get();
+      if (fileDoc.exists) {
+        await fileRef.update({
+          isPublished: false,
+          priceVcn: 0,
+          adminRemoved: true,
+          adminRemovedAt: new Date().toISOString(),
+          adminRemovedBy: adminEmail,
+          adminRemoveReason: reason,
+        });
+      }
+    } catch (err) {
+      console.warn("[AdminMarket] Failed to update original file:", err.message);
+    }
+  }
+
+  // 4. Log the violation
+  const now = new Date().toISOString();
+  const violationRef = db.collection("market_violations").doc();
+  await violationRef.set({
+    id: violationRef.id,
+    fileId,
+    fileName: itemData.name || "Unknown",
+    fileType: itemData.type || "",
+    publisherEmail,
+    reason,
+    action: "removed",
+    adminEmail,
+    createdAt: now,
+  });
+
+  // 5. Increment user's violation count
+  if (publisherEmail) {
+    const banRef = db.collection("publish_bans").doc(publisherEmail);
+    const banDoc = await banRef.get();
+    if (banDoc.exists) {
+      await banRef.update({
+        violationCount: (banDoc.data().violationCount || 0) + 1,
+        lastViolationAt: now,
+        lastViolationReason: reason,
+      });
+    } else {
+      await banRef.set({
+        email: publisherEmail,
+        isBanned: false,
+        violationCount: 1,
+        lastViolationAt: now,
+        lastViolationReason: reason,
+        createdAt: now,
+      });
+    }
+  }
+
+  // 6. Auto-ban if requested
+  if (autoBan && publisherEmail) {
+    const banRef = db.collection("publish_bans").doc(publisherEmail);
+    await banRef.update({
+      isBanned: true,
+      bannedAt: now,
+      bannedBy: adminEmail,
+      banReason: reason,
+      banType: "permanent",
+    });
+
+    // Also remove ALL other published items from this user
+    const userItems = await db.collection("published_materials")
+      .where("publisherEmail", "==", publisherEmail)
+      .get();
+
+    const batch = db.batch();
+    let removedCount = 0;
+    for (const doc of userItems.docs) {
+      batch.delete(doc.ref);
+      removedCount++;
+
+      // Log each removal
+      const vRef = db.collection("market_violations").doc();
+      batch.set(vRef, {
+        id: vRef.id,
+        fileId: doc.id,
+        fileName: doc.data().name || "Unknown",
+        fileType: doc.data().type || "",
+        publisherEmail,
+        reason: `Auto-removed: publisher banned (${reason})`,
+        action: "auto_removed_ban",
+        adminEmail,
+        createdAt: now,
+      });
+    }
+    if (removedCount > 0) {
+      await batch.commit();
+    }
+
+    console.log(`[AdminMarket] Banned ${publisherEmail} and removed ${removedCount} additional items`);
+  }
+
+  console.log(`[AdminMarket] Removed item ${fileId} by admin ${adminEmail}. Reason: ${reason}`);
+
+  return {
+    success: true,
+    fileId,
+    publisherEmail,
+    reason,
+    autoBanned: autoBan || false,
+  };
+});
+
+/**
+ * adminBanPublisher - Admin bans or unbans a user from publishing to the market.
+ */
+exports.adminBanPublisher = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const adminEmail = request.auth.token.email?.toLowerCase();
+  if (!adminEmail) throw new HttpsError("permission-denied", "Admin access required.");
+
+  const adminDoc = await db.collection("users").doc(adminEmail).get();
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  const { targetEmail, action, reason } = request.data;
+  if (!targetEmail) throw new HttpsError("invalid-argument", "targetEmail is required.");
+  if (!["ban", "unban"].includes(action)) throw new HttpsError("invalid-argument", "action must be 'ban' or 'unban'.");
+
+  const now = new Date().toISOString();
+  const banRef = db.collection("publish_bans").doc(targetEmail.toLowerCase());
+  const banDoc = await banRef.get();
+
+  if (action === "ban") {
+    if (banDoc.exists) {
+      await banRef.update({
+        isBanned: true,
+        bannedAt: now,
+        bannedBy: adminEmail,
+        banReason: reason || "Admin decision",
+        banType: "permanent",
+      });
+    } else {
+      await banRef.set({
+        email: targetEmail.toLowerCase(),
+        isBanned: true,
+        bannedAt: now,
+        bannedBy: adminEmail,
+        banReason: reason || "Admin decision",
+        banType: "permanent",
+        violationCount: 0,
+        createdAt: now,
+      });
+    }
+
+    // Remove all published items from this user
+    const userItems = await db.collection("published_materials")
+      .where("publisherEmail", "==", targetEmail.toLowerCase())
+      .get();
+
+    if (!userItems.empty) {
+      const batch = db.batch();
+      userItems.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      console.log(`[AdminMarket] Removed ${userItems.size} published items from banned user ${targetEmail}`);
+    }
+
+    console.log(`[AdminMarket] Banned ${targetEmail} from publishing by ${adminEmail}`);
+  } else {
+    // Unban
+    if (banDoc.exists) {
+      await banRef.update({
+        isBanned: false,
+        unbannedAt: now,
+        unbannedBy: adminEmail,
+      });
+    }
+    console.log(`[AdminMarket] Unbanned ${targetEmail} by ${adminEmail}`);
+  }
+
+  return { success: true, targetEmail: targetEmail.toLowerCase(), action };
+});
+
+/**
+ * adminGetMarketModeration - Get market moderation data for admin dashboard.
+ * Returns: published items list, banned users, violation history.
+ */
+exports.adminGetMarketModeration = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const adminEmail = request.auth.token.email?.toLowerCase();
+  if (!adminEmail) throw new HttpsError("permission-denied", "Admin access required.");
+
+  const adminDoc = await db.collection("users").doc(adminEmail).get();
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  // 1. Get all published items
+  const publishedSnap = await db.collection("published_materials")
+    .orderBy("publishedAt", "desc")
+    .limit(200)
+    .get();
+
+  const publishedItems = publishedSnap.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  // 2. Get banned users
+  const bansSnap = await db.collection("publish_bans")
+    .where("isBanned", "==", true)
+    .get();
+
+  const bannedUsers = bansSnap.docs.map(doc => ({
+    email: doc.id,
+    ...doc.data(),
+  }));
+
+  // 3. Get recent violations
+  const violationsSnap = await db.collection("market_violations")
+    .orderBy("createdAt", "desc")
+    .limit(50)
+    .get();
+
+  const violations = violationsSnap.docs.map(doc => doc.data());
+
+  // 4. Stats
+  const allBansSnap = await db.collection("publish_bans").get();
+  const totalViolations = allBansSnap.docs.reduce((sum, doc) => sum + (doc.data().violationCount || 0), 0);
+
+  return {
+    success: true,
+    publishedItems,
+    bannedUsers,
+    violations,
+    stats: {
+      totalPublished: publishedItems.length,
+      totalBanned: bannedUsers.length,
+      totalViolations,
+    },
+  };
+});
 
 /**
  * aiRequestIndexing - Request AI indexing for a file

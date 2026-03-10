@@ -1,8 +1,10 @@
 import { Component, createSignal, onMount, Show, For, createMemo } from 'solid-js';
 import { WalletViewHeader } from './WalletViewHeader';
 import { VisionInsightService, type InsightSnapshot, type AgentViewData, type NewsArticle, type CategoryInfo, type MarketBrief } from '../../services/visionInsightService';
+import { useI18n } from '../../i18n/i18nContext';
 
 const VisionInsight: Component = () => {
+    const { t } = useI18n();
     const [snapshot, setSnapshot] = createSignal<InsightSnapshot | null>(null);
     const [agentData, setAgentData] = createSignal<AgentViewData | null>(null);
     const [loading, setLoading] = createSignal(true);
@@ -163,10 +165,10 @@ const VisionInsight: Component = () => {
         <div class="flex-1 overflow-y-auto p-4 lg:p-8">
             <div class="max-w-5xl mx-auto space-y-6">
                 <WalletViewHeader
-                    tag="Live"
-                    title="VISION"
-                    titleAccent="INSIGHT"
-                    description="Real-time Crypto News & Intelligence"
+                    tag={t('wallet.insight.tag')}
+                    title={t('wallet.insight.title')}
+                    titleAccent={t('wallet.insight.titleAccent')}
+                    description={t('wallet.insight.description')}
                     rightElement={
                         <button
                             onClick={toggleAgentView}

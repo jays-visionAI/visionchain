@@ -502,6 +502,30 @@
             "titleAccent": "노드",
             "tag": "네트워크 노드",
             "description": "Vision Chain 밸리데이터 노드를 모니터링하고 관리하세요."
+        },
+        "agent": {
+            "title": "비전",
+            "titleAccent": "에이전트",
+            "tag": "AI 호스팅",
+            "description": "Vision Chain 인프라에서 자율 AI 에이전트를 생성하세요. 서버 없이 VCN 토큰으로 구동됩니다."
+        },
+        "insight": {
+            "title": "비전",
+            "titleAccent": "인사이트",
+            "tag": "실시간",
+            "description": "실시간 암호화폐 뉴스 및 인텔리전스"
+        },
+        "market": {
+            "title": "비전",
+            "titleAccent": "마켓",
+            "tag": "글로벌 채널",
+            "description": "프리미엄 데이터셋, 미디어, 문서를 검색하고 구매하세요."
+        },
+        "disk": {
+            "title": "비전",
+            "titleAccent": "디스크",
+            "tag": "탈중앙화",
+            "description": "비전 노드 기반 탈중앙화 스토리지"
         }
     },
     "staking": {

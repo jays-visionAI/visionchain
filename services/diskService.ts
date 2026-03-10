@@ -915,6 +915,18 @@ export const deleteDiskFile = async (email: string, fileId: string): Promise<voi
 
     const fileData = fileSnap.data() as DiskFile;
 
+    // ── Auto-unpublish: if file is published, remove from global market first ──
+    if (fileData.isPublished) {
+        try {
+            const db = getFirebaseDb();
+            await deleteDoc(doc(db, 'published_materials', fileId));
+            console.log(`[Disk] Auto-unpublished file ${fileId} before deletion`);
+        } catch (unpubErr) {
+            console.warn('[Disk] Failed to auto-unpublish (non-blocking):', unpubErr);
+            // Continue with deletion even if unpublish fails
+        }
+    }
+
     // For distributed files, use Cloud Function to clean up chunks
     if (fileData.storageType === 'distributed' || fileData.cid) {
         const functions = getFunctions(getFirebaseApp());
@@ -1130,10 +1142,32 @@ export const getDiskUsage = async (email: string): Promise<DiskUsage> => {
 // ─── Publishing & Marketplace ───
 
 /**
+ * Check if a user is banned from publishing.
+ */
+export const checkPublishBan = async (email: string): Promise<{ isBanned: boolean; reason?: string }> => {
+    const db = getFirebaseDb();
+    const banDoc = await getDoc(doc(db, 'publish_bans', email.toLowerCase()));
+    if (banDoc.exists()) {
+        const data = banDoc.data();
+        if (data.isBanned) {
+            return { isBanned: true, reason: data.banReason || 'Your publish access has been revoked.' };
+        }
+    }
+    return { isBanned: false };
+};
+
+/**
  * Publish a file to the global market.
  */
 export const publishDiskFile = async (email: string, fileId: string, priceVcn: number): Promise<void> => {
     const db = getFirebaseDb();
+
+    // ── Check publish ban before proceeding ──
+    const banStatus = await checkPublishBan(email);
+    if (banStatus.isBanned) {
+        throw new Error(`Publish access denied: ${banStatus.reason}`);
+    }
+
     const userFileRef = doc(getUserDiskCollection(email), fileId);
     const fileSnap = await getDoc(userFileRef);
 
@@ -1158,6 +1192,51 @@ export const publishDiskFile = async (email: string, fileId: string, priceVcn: n
         ...updateData,
         purchaseCount: 0
     });
+};
+
+// ─── Admin Market Moderation ───
+
+/**
+ * Admin: Remove a published item from the market.
+ */
+export const adminRemoveMarketItem = async (fileId: string, reason: string, autoBan: boolean = false): Promise<{ success: boolean; publisherEmail: string }> => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<
+        { fileId: string; reason: string; autoBan: boolean },
+        { success: boolean; fileId: string; publisherEmail: string; autoBanned: boolean }
+    >(functions, 'adminRemoveMarketItem');
+    const result = await call({ fileId, reason, autoBan });
+    return result.data;
+};
+
+/**
+ * Admin: Ban or unban a user from publishing.
+ */
+export const adminBanPublisher = async (targetEmail: string, action: 'ban' | 'unban', reason?: string): Promise<{ success: boolean }> => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<
+        { targetEmail: string; action: string; reason?: string },
+        { success: boolean }
+    >(functions, 'adminBanPublisher');
+    const result = await call({ targetEmail, action, reason });
+    return result.data;
+};
+
+/**
+ * Admin: Get market moderation data.
+ */
+export interface MarketModerationData {
+    publishedItems: (DiskFile & { id: string; purchaseCount?: number })[];
+    bannedUsers: { email: string; isBanned: boolean; violationCount: number; banReason?: string; bannedAt?: string; bannedBy?: string }[];
+    violations: { id: string; fileId: string; fileName: string; publisherEmail: string; reason: string; action: string; adminEmail: string; createdAt: string }[];
+    stats: { totalPublished: number; totalBanned: number; totalViolations: number };
+}
+
+export const adminGetMarketModeration = async (): Promise<MarketModerationData> => {
+    const functions = getFunctions(getFirebaseApp());
+    const call = httpsCallable<{}, { success: boolean } & MarketModerationData>(functions, 'adminGetMarketModeration');
+    const result = await call({});
+    return result.data;
 };
 
 /**

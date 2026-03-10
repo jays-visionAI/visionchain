@@ -2,6 +2,7 @@ import { createSignal, Show, For, onMount, createMemo, createEffect } from 'soli
 import { Bot, Play, Pause, Settings, Clock, Zap, ArrowUpRight, Shield, RefreshCw, ChevronRight, AlertTriangle, CheckCircle, Trash2, Copy } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { addRewardPoints, getRPConfig } from '../../services/firebaseService';
+import { useI18n } from '../../i18n/i18nContext';
 
 // Agent Gateway API URL - environment-aware
 const AGENT_API_URL = (() => {
@@ -232,6 +233,7 @@ const COST_LABELS: Record<string, string> = {
 };
 
 export default function AgentHosting(props: AgentHostingProps) {
+    const { t } = useI18n();
     const [activeTab, setActiveTab] = createSignal<'overview' | 'setup' | 'logs'>('overview');
     const [agents, setAgents] = createSignal<HostedAgent[]>([]);
     const [loading, setLoading] = createSignal(true);
@@ -997,10 +999,10 @@ export default function AgentHosting(props: AgentHostingProps) {
 
                 {/* Header */}
                 <WalletViewHeader
-                    tag="AI Hosting"
-                    title="VISION"
-                    titleAccent="AGENT"
-                    description="Create autonomous AI agents that run on Vision Chain's infrastructure. No server needed -- powered by VCN tokens."
+                    tag={t('wallet.agent.tag')}
+                    title={t('wallet.agent.title')}
+                    titleAccent={t('wallet.agent.titleAccent')}
+                    description={t('wallet.agent.description')}
                     icon={Bot}
                 />
 

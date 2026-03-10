@@ -502,6 +502,30 @@
             "titleAccent": "NODES",
             "tag": "Network nodes",
             "description": "Monitor and manage Vision Chain validator nodes."
+        },
+        "agent": {
+            "title": "VISION",
+            "titleAccent": "AGENT",
+            "tag": "AI Hosting",
+            "description": "Create autonomous AI agents that run on Vision Chain's infrastructure. No server needed -- powered by VCN tokens."
+        },
+        "insight": {
+            "title": "VISION",
+            "titleAccent": "INSIGHT",
+            "tag": "Live",
+            "description": "Real-time Crypto News & Intelligence"
+        },
+        "market": {
+            "title": "VISION",
+            "titleAccent": "MARKET",
+            "tag": "Global Channel",
+            "description": "Discover and purchase premium datasets, media, and documents."
+        },
+        "disk": {
+            "title": "VISION",
+            "titleAccent": "DISK",
+            "tag": "Decentralized",
+            "description": "Decentralized storage powered by Vision Nodes"
         }
     },
     "staking": {

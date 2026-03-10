@@ -47,20 +47,152 @@ const VisionQuantEngine = lazy(() => import('../quant/VisionQuantEngine'));
 
 type CexTab = 'portfolio' | 'quant';
 
-// SVG Icons (no emoji/emoticon usage)
-const UpbitIcon = () => (
-    <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none">
-        <circle cx="12" cy="12" r="10" fill="#093687" />
-        <path d="M7 14L12 7L17 14" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-    </svg>
-);
+// SVG Exchange Logo Icons - colorful brand-accurate SVGs for all 15 exchanges
+// Size bumped ~10%: w-5.5 h-5.5 → rendered at w-6 h-6 for better visibility
+const ExchangeIcon = (props: { exchange: string; size?: string }) => {
+    const s = props.size || 'w-6 h-6';
+    const icons: Record<string, () => JSX.Element> = {
+        upbit: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#093687" />
+                <path d="M7.5 14.5L12 7L16.5 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+        ),
+        bithumb: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#F37021" />
+                <path d="M9 7h4.5a2.8 2.8 0 0 1 0 5.5H9V7z" fill="white" />
+                <path d="M9 12.5h5a3 3 0 0 1 0 5.5H9V12.5z" fill="white" />
+                <rect x="9" y="7" width="1.8" height="11" fill="white" />
+            </svg>
+        ),
+        binance: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#F0B90B" />
+                <path d="M12 6l2.5 2.5-1.5 1.5L12 9l-1 1-1.5-1.5L12 6z" fill="#1E2026" />
+                <path d="M16.5 10.5L19 13l-2.5 2.5-1.5-1.5 1-1-1-1 1.5-1.5z" fill="#1E2026" />
+                <path d="M7.5 10.5L5 13l2.5 2.5 1.5-1.5-1-1 1-1-1.5-1.5z" fill="#1E2026" />
+                <path d="M12 18l-2.5-2.5 1.5-1.5 1 1 1-1 1.5 1.5L12 18z" fill="#1E2026" />
+                <rect x="10.8" y="11.8" width="2.4" height="2.4" rx="0.3" transform="rotate(45 12 13)" fill="#1E2026" />
+            </svg>
+        ),
+        bybit: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#F7A600" />
+                <path d="M7 8h3v8H7V8z" fill="white" />
+                <path d="M11.5 8H17l-2.5 4 2.5 4h-5.5l2.5-4-2.5-4z" fill="white" />
+            </svg>
+        ),
+        bitget: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#00F0FF" />
+                <path d="M7 9l5 3-5 3V9z" fill="#1A1A2E" />
+                <path d="M17 9l-5 3 5 3V9z" fill="#1A1A2E" />
+            </svg>
+        ),
+        okx: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#FFFFFF" />
+                <rect x="6" y="6" width="4" height="4" rx="0.8" fill="#000" />
+                <rect x="10" y="10" width="4" height="4" rx="0.8" fill="#000" />
+                <rect x="14" y="6" width="4" height="4" rx="0.8" fill="#000" />
+                <rect x="6" y="14" width="4" height="4" rx="0.8" fill="#000" />
+                <rect x="14" y="14" width="4" height="4" rx="0.8" fill="#000" />
+            </svg>
+        ),
+        kucoin: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#23AF91" />
+                <circle cx="12" cy="10" r="2" fill="white" />
+                <path d="M12 12l4 4M12 12l-4 4M12 12v5" stroke="white" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+        ),
+        mexc: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#2354E6" />
+                <path d="M6 16l3-8 3 5 3-5 3 8" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+            </svg>
+        ),
+        bitkub: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#05C184" />
+                <path d="M8 7h3.5a4 4 0 0 1 0 5H8V7z" fill="white" />
+                <path d="M8 12h4a5 5 0 0 1 0 5H8V12z" fill="white" />
+            </svg>
+        ),
+        coinbase: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#0052FF" />
+                <circle cx="12" cy="12" r="6" fill="white" />
+                <rect x="10" y="10" width="4" height="4" rx="1" fill="#0052FF" />
+            </svg>
+        ),
+        bitflyer: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#FF6B35" />
+                <path d="M8 8l4 2.5L16 8v3l-4 2.5L8 11V8z" fill="white" />
+                <path d="M8 13l4 2.5L16 13v3l-4 2.5L8 16v-3z" fill="white" opacity="0.7" />
+            </svg>
+        ),
+        gmo: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#0066CC" />
+                <path d="M8 10a4 4 0 1 1 0 4h3v-2h-1" stroke="white" stroke-width="2" stroke-linecap="round" fill="none" />
+                <circle cx="16" cy="12" r="1.5" fill="white" />
+            </svg>
+        ),
+        coincheck: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#30D88B" />
+                <path d="M8 12l3 3 5-6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+        ),
+        coinone: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#0062DF" />
+                <circle cx="12" cy="12" r="5" stroke="white" stroke-width="2" fill="none" />
+                <circle cx="12" cy="12" r="1.5" fill="white" />
+            </svg>
+        ),
+        cryptocom: () => (
+            <svg viewBox="0 0 24 24" class={s} fill="none">
+                <circle cx="12" cy="12" r="11" fill="#002D74" />
+                <path d="M12 5l7 4v6l-7 4-7-4V9l7-4z" stroke="#6FAAFF" stroke-width="1.2" fill="none" />
+                <path d="M9 10l3-1.5L15 10v4l-3 1.5L9 14V10z" fill="#6FAAFF" />
+            </svg>
+        ),
+    };
+    const IconFn = icons[props.exchange];
+    if (IconFn) return <IconFn />;
+    // Fallback: colored initial letter
+    return (
+        <div class={`${s} rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px] font-black text-cyan-300`}>
+            {(EXCHANGE_LABELS[props.exchange as SupportedExchange] || props.exchange).charAt(0).toUpperCase()}
+        </div>
+    );
+};
 
-const BithumbIcon = () => (
-    <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none">
-        <circle cx="12" cy="12" r="10" fill="#F37021" />
-        <text x="12" y="16" text-anchor="middle" fill="white" font-size="10" font-weight="bold">B</text>
-    </svg>
-);
+// Brand color map for exchange backgrounds  
+const EXCHANGE_COLORS: Record<string, { bg: string; text: string }> = {
+    upbit: { bg: 'bg-[#093687]/15', text: 'text-[#4B7BF5]' },
+    bithumb: { bg: 'bg-[#F37021]/15', text: 'text-[#F37021]' },
+    binance: { bg: 'bg-[#F0B90B]/15', text: 'text-[#F0B90B]' },
+    bybit: { bg: 'bg-[#F7A600]/15', text: 'text-[#F7A600]' },
+    bitget: { bg: 'bg-[#00F0FF]/15', text: 'text-[#00F0FF]' },
+    okx: { bg: 'bg-white/10', text: 'text-white' },
+    kucoin: { bg: 'bg-[#23AF91]/15', text: 'text-[#23AF91]' },
+    mexc: { bg: 'bg-[#2354E6]/15', text: 'text-[#2354E6]' },
+    bitkub: { bg: 'bg-[#05C184]/15', text: 'text-[#05C184]' },
+    coinbase: { bg: 'bg-[#0052FF]/15', text: 'text-[#0052FF]' },
+    bitflyer: { bg: 'bg-[#FF6B35]/15', text: 'text-[#FF6B35]' },
+    gmo: { bg: 'bg-[#0066CC]/15', text: 'text-[#0066CC]' },
+    coincheck: { bg: 'bg-[#30D88B]/15', text: 'text-[#30D88B]' },
+    coinone: { bg: 'bg-[#0062DF]/15', text: 'text-[#0062DF]' },
+    cryptocom: { bg: 'bg-[#002D74]/20', text: 'text-[#6FAAFF]' },
+};
+
+const UpbitIcon = () => <ExchangeIcon exchange="upbit" />;
+const BithumbIcon = () => <ExchangeIcon exchange="bithumb" />;
 
 const EmptyPortfolioIcon = () => (
     <svg viewBox="0 0 120 120" class="w-24 h-24 text-gray-600 opacity-50" fill="none" stroke="currentColor" stroke-width="1">
@@ -382,8 +514,8 @@ const WalletCexPortfolio = (): JSX.Element => {
                         <button
                             onClick={() => setActiveTab('portfolio')}
                             class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === 'portfolio'
-                                    ? 'bg-white/[0.08] text-white shadow-lg'
-                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                                ? 'bg-white/[0.08] text-white shadow-lg'
+                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
                                 }`}
                         >
                             <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -395,8 +527,8 @@ const WalletCexPortfolio = (): JSX.Element => {
                         <button
                             onClick={() => setActiveTab('quant')}
                             class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === 'quant'
-                                    ? 'bg-white/[0.08] text-white shadow-lg'
-                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                                ? 'bg-white/[0.08] text-white shadow-lg'
+                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
                                 }`}
                         >
                             <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -511,18 +643,8 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     const snapshot = portfolios().find(p => p.credentialId === cred.id);
                                     return (
                                         <div class="flex items-center gap-3 p-3 bg-[#111113]/60 rounded-2xl border border-white/[0.04] hover:border-white/[0.08] transition-all group">
-                                            <div class={`p-2 rounded-xl ${cred.exchange === 'upbit' ? 'bg-[#093687]/15' : cred.exchange === 'bithumb' ? 'bg-[#F37021]/15' : 'bg-cyan-500/10'}`}>
-                                                <Show when={cred.exchange === 'upbit'} fallback={
-                                                    <Show when={cred.exchange === 'bithumb'} fallback={
-                                                        <div class="w-5 h-5 rounded-md bg-cyan-500/15 flex items-center justify-center text-[9px] font-black text-cyan-300">
-                                                            {(EXCHANGE_LABELS[cred.exchange as SupportedExchange] || cred.exchange).charAt(0).toUpperCase()}
-                                                        </div>
-                                                    }>
-                                                        <BithumbIcon />
-                                                    </Show>
-                                                }>
-                                                    <UpbitIcon />
-                                                </Show>
+                                            <div class={`p-2.5 rounded-xl ${(EXCHANGE_COLORS[cred.exchange] || { bg: 'bg-cyan-500/10' }).bg}`}>
+                                                <ExchangeIcon exchange={cred.exchange} />
                                             </div>
                                             <div class="flex-1 min-w-0">
                                                 <div class="text-sm font-bold text-white truncate">{cred.label}</div>
@@ -781,25 +903,18 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div>
                                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">{t('cex.exchange')}</label>
                                     <div class="grid grid-cols-3 gap-2">
-                                        <For each={SUPPORTED_EXCHANGES}>{(ex) => (
-                                            <button
-                                                onClick={() => { setAddExchange(ex); setAddPassphrase(''); }}
-                                                class={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${addExchange() === ex ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'}`}
-                                            >
-                                                <Show when={ex === 'upbit'} fallback={
-                                                    <Show when={ex === 'bithumb'} fallback={
-                                                        <div class={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black ${addExchange() === ex ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/[0.06] text-gray-500'}`}>
-                                                            {EXCHANGE_LABELS[ex].charAt(0).toUpperCase()}
-                                                        </div>
-                                                    }>
-                                                        <BithumbIcon />
-                                                    </Show>
-                                                }>
-                                                    <UpbitIcon />
-                                                </Show>
-                                                <span class={`text-[11px] font-bold ${addExchange() === ex ? 'text-white' : 'text-gray-400'}`}>{EXCHANGE_LABELS[ex]}</span>
-                                            </button>
-                                        )}</For>
+                                        <For each={SUPPORTED_EXCHANGES}>{(ex) => {
+                                            const colors = EXCHANGE_COLORS[ex] || { bg: 'bg-white/5', text: 'text-gray-400' };
+                                            return (
+                                                <button
+                                                    onClick={() => { setAddExchange(ex); setAddPassphrase(''); }}
+                                                    class={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${addExchange() === ex ? `${colors.bg} border-cyan-500/30` : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'}`}
+                                                >
+                                                    <ExchangeIcon exchange={ex} />
+                                                    <span class={`text-xs font-bold ${addExchange() === ex ? 'text-white' : 'text-gray-400'}`}>{EXCHANGE_LABELS[ex]}</span>
+                                                </button>
+                                            );
+                                        }}</For>
                                     </div>
                                 </div>
 

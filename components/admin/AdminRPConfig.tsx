@@ -43,6 +43,12 @@ const RP_ACTION_DEFS: { key: keyof RPConfig; label: string; category: string; de
     { key: 'rush_3rd', label: '3rd Place', category: 'Referral Rush', description: 'Bronze finisher bonus RP' },
     { key: 'rush_top10', label: 'Top 10', category: 'Referral Rush', description: 'Top 10 finisher bonus RP' },
     { key: 'rush_top50', label: 'Top 50', category: 'Referral Rush', description: 'Top 50 finisher bonus RP' },
+    // Mini Game
+    { key: 'game_spin_rp', label: 'Spin RP', category: 'Mini Game', description: 'Base RP per Lucky Spin play' },
+    { key: 'game_block_rp', label: 'Block RP', category: 'Mini Game', description: 'Base RP per Block Breaker play' },
+    { key: 'game_scratch_rp', label: 'Scratch RP', category: 'Mini Game', description: 'Base RP per Scratch Card play' },
+    { key: 'game_daily_spins', label: 'Daily Spins', category: 'Mini Game', description: 'Max spins per day (default 3)' },
+    { key: 'game_daily_blocks', label: 'Daily Blocks', category: 'Mini Game', description: 'Max blocks per day (default 2)' },
 ];
 
 // Action type display colors
@@ -54,6 +60,7 @@ const ACTION_COLORS: Record<string, string> = {
     cex_connect: '#f97316', quant_strategy_setup: '#6366f1', mobile_node_daily: '#8b5cf6',
     referral_tier1_rp: '#34d399', referral_tier2_rp: '#6ee7b7',
     storage_contribution: '#7c3aed',
+    mini_game: '#22d3ee', game_spin_rp: '#06b6d4', game_block_rp: '#f59e0b',
 };
 
 interface TodayActionStat {
