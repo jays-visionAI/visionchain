@@ -138,6 +138,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [paperAgents, setPaperAgents] = createSignal<PaperAgent[]>([]);
     const [agentsLoading, setAgentsLoading] = createSignal(true);
     const [creatingAgent, setCreatingAgent] = createSignal(false);
+    const [successToast, setSuccessToast] = createSignal<string | null>(null);
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
@@ -562,12 +563,41 @@ const VisionQuantEngine = (): JSX.Element => {
                                     <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
                                         <BotIcon />
                                         <h3 class="text-base font-black text-white mt-4 mb-2">No Active Agents</h3>
-                                        <p class="text-xs text-gray-500 text-center max-w-sm">
-                                            전략 탭에서 전략을 선택하고 에이전트를 생성하여 자동매매를 시작하세요.
+                                        <p class="text-xs text-gray-500 text-center max-w-sm mb-4">
+                                            Trading Agent is a bot that automatically monitors the market and executes trades based on a strategy you configure.
                                         </p>
+                                        <div class="w-full max-w-sm space-y-2 mb-5">
+                                            <div class="flex items-start gap-2.5 p-2.5 bg-white/[0.02] rounded-lg">
+                                                <div class="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <span class="text-[9px] font-black text-cyan-400">1</span>
+                                                </div>
+                                                <div>
+                                                    <div class="text-[11px] font-bold text-white">Select Strategy</div>
+                                                    <div class="text-[10px] text-gray-500">Strategies tab where you can browse and choose a strategy</div>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-start gap-2.5 p-2.5 bg-white/[0.02] rounded-lg">
+                                                <div class="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <span class="text-[9px] font-black text-cyan-400">2</span>
+                                                </div>
+                                                <div>
+                                                    <div class="text-[11px] font-bold text-white">Configure Agent</div>
+                                                    <div class="text-[10px] text-gray-500">Set target assets, parameters, and trading budget</div>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-start gap-2.5 p-2.5 bg-white/[0.02] rounded-lg">
+                                                <div class="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <span class="text-[9px] font-black text-cyan-400">3</span>
+                                                </div>
+                                                <div>
+                                                    <div class="text-[11px] font-bold text-white">Deploy & Monitor</div>
+                                                    <div class="text-[10px] text-gray-500">Agent starts monitoring and trading here in the Agents tab</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <button
                                             onClick={() => setActiveTab('strategies')}
-                                            class="mt-4 px-4 py-2 text-xs font-bold text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl transition-all border border-cyan-500/20"
+                                            class="px-5 py-2.5 text-xs font-bold text-black bg-cyan-500 hover:bg-cyan-400 rounded-xl transition-all"
                                         >
                                             Browse Strategies
                                         </button>
@@ -874,8 +904,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <Settings class="w-5 h-5 text-cyan-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-sm font-black text-white">Setup: {selectedStrategy()!.name}</h3>
-                                        <p class="text-[10px] text-gray-500">Select assets and configure parameters</p>
+                                        <h3 class="text-sm font-black text-white">Create Agent: {selectedStrategy()!.name}</h3>
+                                        <p class="text-[10px] text-gray-500">Configure your trading agent's assets, parameters, and budget</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setShowSetup(false)} class="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
@@ -1332,8 +1362,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <CheckCircle class="w-5 h-5 text-green-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-sm font-black text-white">Confirm Strategy</h3>
-                                        <p class="text-[10px] text-gray-500">Review and create your agent</p>
+                                        <h3 class="text-sm font-black text-white">Confirm Agent Creation</h3>
+                                        <p class="text-[10px] text-gray-500">Review settings before deploying your trading agent</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setShowConfirm(false)} class="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
@@ -1470,8 +1500,11 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 });
 
                                                 console.log('[Quant] Paper agent created successfully');
+                                                setSuccessToast(`Trading Agent "${strategy.name}" has been created and deployed.`);
+                                                setTimeout(() => setSuccessToast(null), 5000);
                                             } catch (err) {
                                                 console.error('[Quant] Failed to create paper agent:', err);
+                                                setSuccessToast(null);
                                             } finally {
                                                 setCreatingAgent(false);
                                             }
@@ -1498,9 +1531,27 @@ const VisionQuantEngine = (): JSX.Element => {
                                     <Show when={!creatingAgent()}>
                                         <Play class="w-4 h-4" />
                                     </Show>
-                                    {creatingAgent() ? 'Creating...' : tradingMode() === 'paper' ? 'Start Paper Trading' : 'Create Agent'}
+                                    {creatingAgent() ? 'Creating Agent...' : tradingMode() === 'paper' ? 'Create Paper Agent' : 'Create Live Agent'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </Show>
+
+                {/* Success Toast */}
+                <Show when={successToast()}>
+                    <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div class="flex items-center gap-3 px-5 py-3.5 bg-green-500/15 border border-green-500/25 rounded-2xl backdrop-blur-xl shadow-2xl">
+                            <div class="p-1.5 bg-green-500/20 rounded-lg">
+                                <CheckCircle class="w-4 h-4 text-green-400" />
+                            </div>
+                            <div>
+                                <div class="text-xs font-bold text-green-400">Agent Created Successfully</div>
+                                <div class="text-[10px] text-green-300/70">{successToast()}</div>
+                            </div>
+                            <button onClick={() => setSuccessToast(null)} class="ml-2 p-1 hover:bg-white/5 rounded-lg">
+                                <X class="w-3 h-3 text-green-400/50" />
+                            </button>
                         </div>
                     </div>
                 </Show>

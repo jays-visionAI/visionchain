@@ -16,11 +16,12 @@ const VCN_PRICE = 0.375;
 const VALIDATOR_PRICE_USD = 10000;
 const ENTERPRISE_PRICE_USD = 100000;
 
-// Download URLs - pinned to v1.1.2-beta release
+// Download URLs - served via Cloud Function nodeDownload (Firestore-driven)
+const CF_BASE = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/nodeDownload';
 const DOWNLOAD_URLS = {
-    mac_arm64: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-arm64.dmg',
-    mac_x64: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-x64.dmg',
-    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
+    mac_arm64: `${CF_BASE}?platform=mac_arm64`,
+    mac_x64: `${CF_BASE}?platform=mac_x64`,
+    windows: `${CF_BASE}?platform=windows`,
 };
 
 const CLI_CMD = 'curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash';

@@ -15,12 +15,13 @@ function detectOS(): 'mac' | 'windows' | 'linux' {
     return 'linux';
 }
 
-// Download URLs -- pinned to v1.1.2-beta release
+// Download URLs -- served via Cloud Function nodeDownload (reads from Firestore)
+const CF_BASE = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/nodeDownload';
 const DOWNLOAD_URLS = {
-    mac_arm64: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-arm64.dmg',
-    mac_x64: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-x64.dmg',
-    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
-    linux: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe', // CLI recommended for Linux
+    mac_arm64: `${CF_BASE}?platform=mac_arm64`,
+    mac_x64: `${CF_BASE}?platform=mac_x64`,
+    windows: `${CF_BASE}?platform=windows`,
+    linux: `${CF_BASE}?platform=linux`,
 };
 
 const CLI_INSTALL_CMD = 'curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash';
@@ -119,11 +120,12 @@ export default function VisionNodeDownload() {
                 <div style="max-width:960px;margin:0 auto;text-align:center;position:relative">
                     {/* Logo */}
                     <div style="margin-bottom:32px">
-                        <svg width="64" height="64" viewBox="0 0 48 48" fill="none" style="margin:0 auto">
-                            <rect width="48" height="48" rx="14" fill="url(#hero-grad)" />
-                            <path d="M14 24L20 18L26 24L32 18L38 24" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-                            <path d="M14 30L20 24L26 30L32 24L38 30" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5" />
-                            <defs><linearGradient id="hero-grad" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#6366f1" /><stop offset="1" stop-color="#06b6d4" /></linearGradient></defs>
+                        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" style="margin:0 auto">
+                            <rect width="64" height="64" rx="16" fill="url(#vn-grad)" />
+                            <path d="M16 18L30 46" stroke="white" stroke-width="5" stroke-linecap="round" />
+                            <path d="M27 46L48 16" stroke="#22D3EE" stroke-width="5" stroke-linecap="round" />
+                            <circle cx="29" cy="46" r="3" fill="white" />
+                            <defs><linearGradient id="vn-grad" x1="0" y1="0" x2="64" y2="64"><stop stop-color="#1e3a5f" /><stop offset="1" stop-color="#0891b2" /></linearGradient></defs>
                         </svg>
                     </div>
 

@@ -129,11 +129,12 @@ const MN_NODE_ID = 'mn_node_id';
 
 // ---------- Version ----------
 const NODE_VERSION = '1.1.2-beta';
+const CF_BASE = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/nodeDownload';
 const DOWNLOAD_URLS: Record<string, string> = {
-    mac_arm: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-arm64.dmg',
-    mac_intel: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-x64.dmg',
-    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
-    linux: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
+    mac_arm: `${CF_BASE}?platform=mac_arm64`,
+    mac_intel: `${CF_BASE}?platform=mac_x64`,
+    windows: `${CF_BASE}?platform=windows`,
+    linux: `${CF_BASE}?platform=linux`,
 };
 
 const DownloadIcon = (props: { class?: string }) => (

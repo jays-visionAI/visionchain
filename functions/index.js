@@ -25216,3 +25216,172 @@ exports.weeklyRPSummary = onSchedule({
   }
 });
 
+// =============================================================================
+// NODE DOWNLOAD SYSTEM - Firestore-driven release management
+// =============================================================================
+// Admin stores release info in Firestore: nodeReleases/{releaseId}
+// {
+//   version: "1.1.2-beta",
+//   isLatest: true,
+//   releaseDate: Timestamp,
+//   releaseNotes: "...",
+//   downloads: {
+//     mac_arm64: "https://storage.googleapis.com/...",
+//     mac_x64: "https://storage.googleapis.com/...",
+//     windows: "https://storage.googleapis.com/...",
+//     linux: "https://storage.googleapis.com/...",
+//     android_apk: "https://storage.googleapis.com/..."
+//   }
+// }
+// =============================================================================
+
+/**
+ * nodeDownload - HTTP redirect endpoint for node downloads
+ * Usage: GET /nodeDownload?platform=mac_arm64
+ * Reads latest release from Firestore and redirects to the download URL
+ */
+exports.nodeDownload = onRequest({
+  cors: true,
+  region: "us-central1",
+  memory: "256MiB",
+}, async (req, res) => {
+  try {
+    const platform = req.query.platform || "mac_arm64";
+    const requestedVersion = req.query.version; // optional: specific version
+
+    let releaseDoc;
+    if (requestedVersion) {
+      // Get specific version
+      const snap = await db.collection("nodeReleases")
+        .where("version", "==", requestedVersion)
+        .limit(1).get();
+      if (!snap.empty) releaseDoc = snap.docs[0].data();
+    }
+
+    if (!releaseDoc) {
+      // Get latest release
+      const snap = await db.collection("nodeReleases")
+        .where("isLatest", "==", true)
+        .limit(1).get();
+      if (!snap.empty) {
+        releaseDoc = snap.docs[0].data();
+      } else {
+        // Fallback: get most recent by date
+        const snap2 = await db.collection("nodeReleases")
+          .orderBy("releaseDate", "desc")
+          .limit(1).get();
+        if (!snap2.empty) releaseDoc = snap2.docs[0].data();
+      }
+    }
+
+    if (!releaseDoc || !releaseDoc.downloads) {
+      res.status(404).json({ error: "No release found" });
+      return;
+    }
+
+    const downloadUrl = releaseDoc.downloads[platform];
+    if (!downloadUrl) {
+      res.status(400).json({
+        error: `Platform "${platform}" not available`,
+        available: Object.keys(releaseDoc.downloads),
+        version: releaseDoc.version,
+      });
+      return;
+    }
+
+    // Set download headers
+    res.setHeader("Content-Disposition", `attachment`);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+
+    // Redirect to the actual download URL
+    res.redirect(302, downloadUrl);
+  } catch (err) {
+    console.error("[nodeDownload] Error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * getNodeRelease - Returns latest release metadata (for version checking)
+ * Called by nodes and frontend to check for updates
+ */
+exports.getNodeRelease = onCall({
+  region: "us-central1",
+  memory: "256MiB",
+}, async (request) => {
+  try {
+    const snap = await db.collection("nodeReleases")
+      .where("isLatest", "==", true)
+      .limit(1).get();
+
+    if (snap.empty) {
+      return { success: false, error: "No release found" };
+    }
+
+    const release = snap.docs[0].data();
+    return {
+      success: true,
+      version: release.version,
+      releaseDate: release.releaseDate,
+      releaseNotes: release.releaseNotes || "",
+      downloads: release.downloads || {},
+      minVersion: release.minVersion || null, // Force update threshold
+    };
+  } catch (err) {
+    console.error("[getNodeRelease] Error:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+/**
+ * adminSetNodeRelease - Admin sets/updates a node release
+ * Stores download URLs and version metadata in Firestore
+ */
+exports.adminSetNodeRelease = onCall({
+  region: "us-central1",
+  memory: "256MiB",
+}, async (request) => {
+  try {
+    const { version, downloads, releaseNotes, minVersion, adminKey } = request.data;
+
+    // Admin auth check
+    if (adminKey !== "vcn-admin-2026") {
+      throw new HttpsError("permission-denied", "Unauthorized");
+    }
+
+    if (!version || !downloads) {
+      throw new HttpsError("invalid-argument", "version and downloads required");
+    }
+
+    // Unset previous latest
+    const prevLatest = await db.collection("nodeReleases")
+      .where("isLatest", "==", true).get();
+    const batch = db.batch();
+    prevLatest.docs.forEach((doc) => {
+      batch.update(doc.ref, { isLatest: false });
+    });
+
+    // Set new release
+    const releaseRef = db.collection("nodeReleases").doc(`v${version}`);
+    batch.set(releaseRef, {
+      version,
+      isLatest: true,
+      releaseDate: admin.firestore.Timestamp.now(),
+      releaseNotes: releaseNotes || "",
+      downloads,
+      minVersion: minVersion || null,
+      updatedAt: admin.firestore.Timestamp.now(),
+    }, { merge: true });
+
+    await batch.commit();
+
+    return {
+      success: true,
+      message: `Release v${version} is now the latest`,
+    };
+  } catch (err) {
+    console.error("[adminSetNodeRelease] Error:", err);
+    if (err instanceof HttpsError) throw err;
+    return { success: false, error: err.message };
+  }
+});
