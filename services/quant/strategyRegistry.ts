@@ -5,7 +5,90 @@
  * Each strategy is designed for explainability, controllability, and risk engine compatibility.
  */
 
-import type { StrategyTemplate } from './types';
+import type { StrategyTemplate, StrategyParameter } from './types';
+
+/**
+ * Common Risk Engine & Runtime parameters
+ *
+ * These parameters are appended to every strategy template to support:
+ * - Risk Engine: daily/weekly loss limits, consecutive loss pause, cooldown
+ * - Runtime Config: evaluation timeframe, max daily trades, spread threshold
+ *
+ * Each strategy can override defaults via the overrides parameter.
+ */
+function riskRuntimeParams(overrides: Partial<Record<string, number | string>> = {}): StrategyParameter[] {
+    return [
+        {
+            key: 'daily_loss_limit',
+            label: 'Daily Loss Limit %',
+            labelKo: '일일 손실 한도 %',
+            type: 'number',
+            value: overrides.daily_loss_limit ?? 3,
+            min: 1, max: 15, step: 0.5,
+            group: 'risk',
+        },
+        {
+            key: 'weekly_loss_limit',
+            label: 'Weekly Loss Limit %',
+            labelKo: '주간 손실 한도 %',
+            type: 'number',
+            value: overrides.weekly_loss_limit ?? 7,
+            min: 2, max: 25, step: 0.5,
+            group: 'risk',
+        },
+        {
+            key: 'consecutive_loss_pause',
+            label: 'Pause After N Losses',
+            labelKo: '연속 손실 시 정지 횟수',
+            type: 'number',
+            value: overrides.consecutive_loss_pause ?? 3,
+            min: 2, max: 10, step: 1,
+            group: 'risk',
+        },
+        {
+            key: 'max_daily_trades',
+            label: 'Max Daily Trades',
+            labelKo: '일일 최대 거래 횟수',
+            type: 'number',
+            value: overrides.max_daily_trades ?? 10,
+            min: 1, max: 50, step: 1,
+            group: 'risk',
+        },
+        {
+            key: 'cooldown_after_loss_hours',
+            label: 'Cooldown After Loss (hours)',
+            labelKo: '손실 후 대기 시간 (시간)',
+            type: 'number',
+            value: overrides.cooldown_after_loss_hours ?? 4,
+            min: 0, max: 48, step: 1,
+            group: 'risk',
+        },
+        {
+            key: 'min_spread_pct',
+            label: 'Min Spread Threshold %',
+            labelKo: '최소 스프레드 임계값 %',
+            type: 'number',
+            value: overrides.min_spread_pct ?? 0.3,
+            min: 0.05, max: 2.0, step: 0.05,
+            group: 'filter',
+        },
+        {
+            key: 'evaluation_timeframe',
+            label: 'Evaluation Timeframe',
+            labelKo: '평가 타임프레임',
+            type: 'select',
+            value: overrides.evaluation_timeframe ?? '4h',
+            options: [
+                { value: '5m', label: '5 min' },
+                { value: '15m', label: '15 min' },
+                { value: '1h', label: '1 hour' },
+                { value: '4h', label: '4 hours' },
+                { value: '1d', label: '1 day' },
+            ],
+            group: 'risk',
+        },
+    ];
+}
 
 export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
     // ─── Module 1: Conservative Trend Core ──────────────────────────────
@@ -61,6 +144,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
             { key: 'take_profit', label: 'Take Profit %', labelKo: '익절률 %', type: 'number', value: 8, min: 3, max: 20, step: 0.5, group: 'exit' },
             { key: 'trailing_stop', label: 'Trailing Stop %', labelKo: '추적매도 %', type: 'number', value: 2.5, min: 1, max: 5, step: 0.5, group: 'exit' },
             { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 15, min: 5, max: 30, step: 1, group: 'risk' },
+            ...riskRuntimeParams({ daily_loss_limit: 3, weekly_loss_limit: 7, evaluation_timeframe: '4h' }),
         ],
         userCount: 1842,
         avgReturn30d: 3.2,
@@ -115,6 +199,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
             { key: 'trend_filter_ema', label: 'Trend Filter EMA', labelKo: '추세필터 EMA', type: 'number', value: 100, min: 50, max: 200, step: 10, group: 'filter' },
             { key: 'stop_loss', label: 'Stop Loss %', labelKo: '손절률 %', type: 'number', value: 3, min: 1, max: 8, step: 0.5, group: 'exit' },
             { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 12, min: 5, max: 25, step: 1, group: 'risk' },
+            ...riskRuntimeParams({ daily_loss_limit: 3, weekly_loss_limit: 7, evaluation_timeframe: '4h' }),
         ],
         userCount: 1156,
         avgReturn30d: 2.1,
@@ -171,6 +256,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
             { key: 'stop_loss', label: 'Stop Loss %', labelKo: '손절률 %', type: 'number', value: 2.8, min: 1, max: 6, step: 0.2, group: 'exit' },
             { key: 'take_profit', label: 'Take Profit %', labelKo: '익절률 %', type: 'number', value: 5.5, min: 3, max: 12, step: 0.5, group: 'exit' },
             { key: 'max_scale_in', label: 'Max Scale-in', labelKo: '최대 분할진입', type: 'number', value: 2, min: 1, max: 4, step: 1, group: 'risk' },
+            ...riskRuntimeParams({ daily_loss_limit: 3, weekly_loss_limit: 7, consecutive_loss_pause: 3, evaluation_timeframe: '4h' }),
         ],
         userCount: 2310,
         avgReturn30d: 1.8,
@@ -224,6 +310,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
             { key: 'atr_stop', label: 'ATR Stop Multiple', labelKo: 'ATR 손절 배수', type: 'number', value: 1.8, min: 1.0, max: 3.0, step: 0.1, group: 'exit' },
             { key: 'trailing_atr', label: 'Trailing ATR Multiple', labelKo: '추적매도 ATR 배수', type: 'number', value: 2.0, min: 1.0, max: 4.0, step: 0.1, group: 'exit' },
             { key: 'max_positions', label: 'Max Simultaneous', labelKo: '최대 동시포지션', type: 'number', value: 3, min: 1, max: 5, step: 1, group: 'risk' },
+            ...riskRuntimeParams({ daily_loss_limit: 3, weekly_loss_limit: 7, evaluation_timeframe: '4h' }),
         ],
         userCount: 987,
         avgReturn30d: 4.5,
@@ -285,6 +372,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
             { key: 'atr_stop', label: 'ATR Stop Multiple', labelKo: 'ATR 손절 배수', type: 'number', value: 1.6, min: 1.0, max: 3.0, step: 0.1, group: 'exit' },
             { key: 'atr_profit', label: 'ATR Profit Multiple', labelKo: 'ATR 익절 배수', type: 'number', value: 3.0, min: 2.0, max: 5.0, step: 0.1, group: 'exit' },
             { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 15, min: 5, max: 30, step: 1, group: 'risk' },
+            ...riskRuntimeParams({ daily_loss_limit: 3, weekly_loss_limit: 7, evaluation_timeframe: '4h' }),
         ],
         userCount: 1248,
         avgReturn30d: 3.8,

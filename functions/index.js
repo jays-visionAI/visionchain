@@ -26725,3 +26725,157 @@ exports.updateContentDraft = onCall(async (request) => {
   await db.collection("contentDrafts").doc(draftId).update(updateData);
   return { success: true };
 });
+
+// ─── ZYNK Integration API ──────────────────────────────────────────────────
+// Public REST API for ZYNK project to consume Vision Chain release data
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.zynkAPI = onRequest({ cors: true, invoker: "public", timeoutSeconds: 30, memory: "256MiB" }, async (req, res) => {
+  // API Key authentication
+  const apiKey = req.headers["x-api-key"] || req.query.apiKey;
+  const validKeys = ["vcn-zynk-integration-2026"]; // TODO: move to Firestore config
+  if (!apiKey || !validKeys.includes(apiKey)) {
+    return res.status(401).json({ error: "Invalid or missing API key" });
+  }
+
+  const path = req.path.replace(/^\//, "").split("/");
+  const resource = path[0] || "";
+
+  try {
+    // ── GET /releases/latest ─────────────────────────────────────────
+    // Returns the latest Vision Chain release info
+    if (resource === "releases") {
+      const subResource = path[1] || "latest";
+
+      if (subResource === "latest") {
+        const snap = await db.collection("nodeReleases")
+          .where("isLatest", "==", true)
+          .limit(1)
+          .get();
+
+        if (snap.empty) {
+          return res.json({ release: null });
+        }
+
+        const release = snap.docs[0].data();
+        return res.json({
+          release: {
+            version: release.version,
+            releaseNotes: release.releaseNotes || "",
+            releaseDate: release.releaseDate?.toDate?.()?.toISOString() || null,
+            downloads: release.downloads || {},
+          },
+        });
+      }
+
+      // GET /releases/history?limit=10
+      if (subResource === "history") {
+        const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+        const snap = await db.collection("nodeReleases")
+          .orderBy("releaseDate", "desc")
+          .limit(limit)
+          .get();
+
+        const releases = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            version: data.version,
+            releaseNotes: data.releaseNotes || "",
+            releaseDate: data.releaseDate?.toDate?.()?.toISOString() || null,
+            isLatest: data.isLatest || false,
+          };
+        });
+        return res.json({ releases });
+      }
+
+      return res.status(404).json({ error: `Unknown releases sub-resource: ${subResource}` });
+    }
+
+    // ── GET /content/drafts ─────────────────────────────────────────
+    // Returns generated content drafts (for ZYNK to pick up and publish)
+    if (resource === "content") {
+      const subResource = path[1] || "drafts";
+
+      if (subResource === "drafts") {
+        const status = req.query.status || "approved"; // ZYNK should pick up 'approved' ones
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+        let query = db.collection("contentDrafts").orderBy("createdAt", "desc").limit(limit);
+        if (status !== "all") {
+          query = query.where("status", "==", status);
+        }
+
+        const snap = await query.get();
+        const drafts = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            version: data.version || "",
+            updateType: data.updateType || "",
+            title: data.title || "",
+            status: data.status || "draft",
+            content: data.content || {},
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+          };
+        });
+        return res.json({ drafts });
+      }
+
+      // POST /content/drafts/:id/status - ZYNK can mark drafts as 'published'
+      if (subResource === "drafts" && path[2] && path[3] === "status" && req.method === "POST") {
+        const draftId = path[2];
+        const { status: newStatus } = req.body || {};
+        if (!["published", "archived"].includes(newStatus)) {
+          return res.status(400).json({ error: "status must be 'published' or 'archived'" });
+        }
+        await db.collection("contentDrafts").doc(draftId).update({
+          status: newStatus,
+          publishedBy: "zynk",
+          publishedAt: new Date().toISOString(),
+        });
+        return res.json({ success: true, draftId, status: newStatus });
+      }
+
+      return res.status(404).json({ error: `Unknown content sub-resource: ${subResource}` });
+    }
+
+    // ── GET /stats ──────────────────────────────────────────────────
+    // Returns project-level KPIs for ZYNK marketing content
+    if (resource === "stats") {
+      const [usersSnap, arenaSnap] = await Promise.all([
+        db.collection("users").count().get(),
+        db.collection("quant_competitions").where("status", "==", "active").limit(5).get(),
+      ]);
+
+      const totalUsers = usersSnap.data().count || 0;
+      const activeCompetitions = arenaSnap.docs.map((d) => ({
+        id: d.id,
+        title: d.data().title || "",
+        prizePool: d.data().prizePool || 0,
+        participantCount: d.data().participantCount || 0,
+      }));
+
+      return res.json({
+        stats: {
+          totalUsers,
+          activeCompetitions,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    return res.status(404).json({
+      error: "Unknown resource",
+      availableEndpoints: [
+        "GET /releases/latest",
+        "GET /releases/history?limit=10",
+        "GET /content/drafts?status=approved&limit=20",
+        "POST /content/drafts/:id/status",
+        "GET /stats",
+      ],
+    });
+  } catch (err) {
+    console.error("[zynkAPI] Error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
