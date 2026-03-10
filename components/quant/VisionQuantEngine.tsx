@@ -216,10 +216,7 @@ const VisionQuantEngine = (): JSX.Element => {
         // Market type filter
         if (marketFilter() === 'spot') strategies = strategies.filter(s => s.marketType === 'spot');
         else if (marketFilter() === 'futures') strategies = strategies.filter(s => s.marketType === 'futures');
-        // Category filter
-        if (categoryFilter() === 'all') return strategies;
-        if (categoryFilter() === 'premium') return strategies.filter(s => s.premium);
-        return strategies.filter(s => s.category === categoryFilter());
+        return strategies;
     });
 
     const krwToUsdRate = createMemo(() => {
@@ -422,45 +419,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                 ))}
                             </div>
 
-                            {/* Category Filters */}
-                            <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                                {[
-                                    { id: 'all', label: 'All' },
-                                    { id: 'premium', label: 'Premium' },
-                                    ...(marketFilter() !== 'futures' ? [
-                                        { id: 'trend_following', label: 'Trend' },
-                                        { id: 'mean_reversion', label: 'Mean Reversion' },
-                                        { id: 'multi_signal', label: 'Multi-Signal' },
-                                        { id: 'breakout', label: 'Breakout' },
-                                        { id: 'turtle_trading', label: 'Turtle' },
-                                        { id: 'momentum_swing', label: 'Momentum' },
-                                        { id: 'williams', label: 'Williams' },
-                                        { id: 'stage_analysis', label: 'Stage' },
-                                    ] : []),
-                                    ...(marketFilter() !== 'spot' ? [
-                                        { id: 'futures_trend', label: 'F-Trend' },
-                                        { id: 'futures_mean_reversion', label: 'F-Mean Rev' },
-                                        { id: 'futures_breakout', label: 'F-Breakout' },
-                                        { id: 'futures_arbitrage', label: 'F-Arb' },
-                                        { id: 'futures_scalping', label: 'F-Scalp' },
-                                    ] : []),
-                                ].map(cat => (
-                                    <button
-                                        onClick={() => setCategoryFilter(cat.id)}
-                                        class={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap border ${categoryFilter() === cat.id
-                                            ? cat.id === 'premium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                : cat.id.startsWith('futures_') ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                                    : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                                            : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white hover:border-white/[0.1]'
-                                            }`}
-                                    >
-                                        {cat.id === 'premium' && (
-                                            <svg viewBox="0 0 24 24" class="w-3 h-3 inline mr-1 -mt-0.5" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                                        )}
-                                        {cat.label}
-                                    </button>
-                                ))}
-                            </div>
+
 
                             {/* Strategy Cards */}
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
