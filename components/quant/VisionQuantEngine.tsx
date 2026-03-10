@@ -361,7 +361,7 @@ const VisionQuantEngine = (): JSX.Element => {
                             </div>
                             <div class="p-4 bg-[#111113]/60 rounded-2xl border border-white/[0.04]">
                                 <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Active Agents</div>
-                                <div class="text-lg font-black text-cyan-400">0</div>
+                                <div class="text-lg font-black text-cyan-400">{paperAgents().filter(a => a.status === 'running').length}</div>
                             </div>
                             <div class="p-4 bg-[#111113]/60 rounded-2xl border border-white/[0.04]">
                                 <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Today P&L</div>

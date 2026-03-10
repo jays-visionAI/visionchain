@@ -153,7 +153,10 @@ export function subscribeToPaperAgents(
 
     return onSnapshot(q, (snap) => {
         callback(snap.docs.map(d => d.data() as PaperAgent));
-    }, () => callback([]));
+    }, (err) => {
+        console.error('[subscribeToPaperAgents] Snapshot error:', err.message, err.code);
+        callback([]);
+    });
 }
 
 // ─── Paper Trades ──────────────────────────────────────────────────────────
