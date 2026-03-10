@@ -25529,6 +25529,9 @@ exports.adminFinalizeRelease = onCall({
       }
     }
 
+    // Fire-and-forget: auto-generate marketing content from release notes
+    autoGenerateReleaseContent(version, releaseNotes).catch(() => { });
+
     return {
       success: true,
       message: `Release v${version} is now live`,
@@ -25542,6 +25545,63 @@ exports.adminFinalizeRelease = onCall({
     return { success: false, error: err.message };
   }
 });
+
+// ── Auto-generate content after release (fire-and-forget helper) ──
+async function autoGenerateReleaseContent(version, releaseNotes) {
+  if (!releaseNotes) return;
+  try {
+    const systemPrompt = `You are a professional content writer for Vision Chain, a Web3/blockchain project.
+You create engaging, professional marketing content in BOTH Korean and English.
+Vision Chain is a blockchain platform with features including: crypto wallet, CEX portfolio aggregation, AI assistant, Quant trading engine, distributed storage nodes, and DeFi services.
+Your output must be valid JSON only. No markdown, no code fences.`;
+
+    const userPrompt = `Based on this Product Release update, generate marketing content in multiple formats.
+
+UPDATE DETAILS:
+Version: ${version}
+Type: Product Release
+Content: ${releaseNotes}
+
+Generate the following as a JSON object with these exact keys:
+{
+  "announcement_ko": "Korean formal announcement (300-500 chars). Start with the key update. Professional tone.",
+  "announcement_en": "English formal announcement (200-400 chars). Same content as Korean version.",
+  "twitter_ko": "Korean Twitter/X post (max 240 chars). Catchy, use relevant hashtags like #VisionChain #Web3. No emojis.",
+  "twitter_en": "English Twitter/X post (max 240 chars). Same energy as Korean version. No emojis.",
+  "telegram_ko": "Korean Telegram message (300-600 chars). Community-friendly, informative. No emojis.",
+  "telegram_en": "English Telegram message (300-600 chars). Same as Korean. No emojis.",
+  "push_title_ko": "Korean push notification title (max 40 chars)",
+  "push_title_en": "English push notification title (max 40 chars)",
+  "push_body_ko": "Korean push notification body (max 100 chars)",
+  "push_body_en": "English push notification body (max 100 chars)",
+  "blog_title_ko": "Korean blog post title",
+  "blog_title_en": "English blog post title",
+  "blog_body_ko": "Korean blog post body (600-1000 chars). Detailed, structured with line breaks.",
+  "blog_body_en": "English blog post body (500-800 chars). Same structure.",
+  "summary": "One-line summary of the update in English (max 100 chars)"
+}`;
+
+    const rawResponse = await callLLM("gemini-2.0-flash", systemPrompt, userPrompt);
+    const jsonStr = rawResponse.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const content = JSON.parse(jsonStr);
+
+    const draftId = `draft_release_v${version}_${Date.now()}`;
+    await db.collection("contentDrafts").doc(draftId).set({
+      id: draftId,
+      updateType: "release",
+      version,
+      sourceNotes: releaseNotes,
+      content,
+      status: "draft",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      publishedFormats: [],
+    });
+    console.log(`[autoGenerateReleaseContent] Draft created: ${draftId}`);
+  } catch (err) {
+    console.warn("[autoGenerateReleaseContent] Non-critical error:", err.message);
+  }
+}
 
 // =============================================================================
 // PAPER TRADING ENGINE
@@ -26482,4 +26542,141 @@ exports.seedArenaCompetitions = onCall(async (request) => {
   } catch (e) { /* ignore */ }
 
   return { success: true, message: "Spot & Futures competitions seeded" };
+});
+
+// =============================================================================
+// ZYNK - AUTO CONTENT GENERATION FROM UPDATES
+// =============================================================================
+
+/**
+ * generateReleaseContent - Generate multi-format marketing content from release notes
+ * Can be called standalone or triggered after adminFinalizeRelease
+ */
+exports.generateReleaseContent = onCall({
+  region: "us-central1",
+  memory: "512MiB",
+  timeoutSeconds: 60,
+}, async (request) => {
+  const {
+    version,
+    releaseNotes,
+    updateType = "release",     // release | feature | hotfix | weekly
+    customContext = "",          // extra context about the update
+  } = request.data || {};
+
+  if (!releaseNotes && !customContext) {
+    throw new HttpsError("invalid-argument", "releaseNotes or customContext required");
+  }
+
+  const source = releaseNotes || customContext;
+  const typeLabel = {
+    release: "Product Release",
+    feature: "New Feature",
+    hotfix: "Bug Fix / Hotfix",
+    weekly: "Weekly Update",
+  }[updateType] || "Update";
+
+  // Build the prompt
+  const systemPrompt = `You are a professional content writer for Vision Chain, a Web3/blockchain project.
+You create engaging, professional marketing content in BOTH Korean and English.
+Vision Chain is a blockchain platform with features including: crypto wallet, CEX portfolio aggregation, AI assistant, Quant trading engine, distributed storage nodes, and DeFi services.
+Your output must be valid JSON only. No markdown, no code fences.`;
+
+  const userPrompt = `Based on this ${typeLabel} update, generate marketing content in multiple formats.
+
+UPDATE DETAILS:
+${version ? `Version: ${version}` : ""}
+Type: ${typeLabel}
+Content: ${source}
+
+Generate the following as a JSON object with these exact keys:
+{
+  "announcement_ko": "Korean formal announcement (300-500 chars). Start with the key update. Professional tone.",
+  "announcement_en": "English formal announcement (200-400 chars). Same content as Korean version.",
+  "twitter_ko": "Korean Twitter/X post (max 240 chars). Catchy, use relevant hashtags like #VisionChain #Web3. No emojis.",
+  "twitter_en": "English Twitter/X post (max 240 chars). Same energy as Korean version. No emojis.",
+  "telegram_ko": "Korean Telegram message (300-600 chars). Community-friendly, informative. No emojis.",
+  "telegram_en": "English Telegram message (300-600 chars). Same as Korean. No emojis.",
+  "push_title_ko": "Korean push notification title (max 40 chars)",
+  "push_title_en": "English push notification title (max 40 chars)",
+  "push_body_ko": "Korean push notification body (max 100 chars)",
+  "push_body_en": "English push notification body (max 100 chars)",
+  "blog_title_ko": "Korean blog post title",
+  "blog_title_en": "English blog post title",
+  "blog_body_ko": "Korean blog post body (600-1000 chars). Detailed, structured with line breaks.",
+  "blog_body_en": "English blog post body (500-800 chars). Same structure.",
+  "summary": "One-line summary of the update in English (max 100 chars)"
+}`;
+
+  try {
+    const rawResponse = await callLLM("gemini-2.0-flash", systemPrompt, userPrompt);
+
+    // Parse JSON from response (strip markdown fences if present)
+    let content;
+    try {
+      const jsonStr = rawResponse.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      content = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error("[generateReleaseContent] JSON parse error:", parseErr.message);
+      console.log("[generateReleaseContent] Raw response:", rawResponse.substring(0, 500));
+      throw new HttpsError("internal", "Failed to parse AI response");
+    }
+
+    // Save to Firestore as a content draft
+    const draftId = `draft_${Date.now()}`;
+    const draft = {
+      id: draftId,
+      updateType,
+      version: version || null,
+      sourceNotes: source,
+      content,
+      status: "draft",       // draft | approved | published | archived
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      publishedFormats: [],   // tracks which formats have been published
+    };
+
+    await db.collection("contentDrafts").doc(draftId).set(draft);
+
+    return { success: true, draftId, content };
+  } catch (err) {
+    console.error("[generateReleaseContent] Error:", err);
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", err.message);
+  }
+});
+
+/**
+ * getContentDrafts - Fetch content drafts for admin review
+ */
+exports.getContentDrafts = onCall(async (request) => {
+  const { status = "all", limit: maxLimit = 20 } = request.data || {};
+
+  let q = db.collection("contentDrafts").orderBy("createdAt", "desc").limit(maxLimit);
+  if (status !== "all") {
+    q = db.collection("contentDrafts")
+      .where("status", "==", status)
+      .orderBy("createdAt", "desc")
+      .limit(maxLimit);
+  }
+
+  const snap = await q.get();
+  return { drafts: snap.docs.map(d => d.data()) };
+});
+
+/**
+ * updateContentDraft - Update draft status or content
+ */
+exports.updateContentDraft = onCall(async (request) => {
+  const { draftId, updates } = request.data || {};
+  if (!draftId) throw new HttpsError("invalid-argument", "draftId required");
+
+  const allowed = ["status", "content", "publishedFormats"];
+  const updateData = { updatedAt: new Date().toISOString() };
+  for (const key of allowed) {
+    if (updates[key] !== undefined) updateData[key] = updates[key];
+  }
+
+  await db.collection("contentDrafts").doc(draftId).update(updateData);
+  return { success: true };
 });

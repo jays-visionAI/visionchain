@@ -4,8 +4,19 @@ import { AdminTabs } from './AdminTabs';
 const Announcements = lazy(() => import('./AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
 const DailyTips = lazy(() => import('./AdminDailyTips'));
 const MarketModeration = lazy(() => import('./AdminMarketModeration'));
+const AutoDrafts = lazy(() => import('./AdminAutoDrafts'));
 
 const TABS = [
+    {
+        id: 'drafts',
+        label: 'Auto Drafts',
+        icon: () => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                <path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" />
+            </svg>
+        ),
+    },
     {
         id: 'announcements',
         label: 'Announcements',
@@ -37,7 +48,7 @@ const TABS = [
 ];
 
 export default function AdminContentHub() {
-    const [activeTab, setActiveTab] = createSignal('announcements');
+    const [activeTab, setActiveTab] = createSignal('drafts');
 
     return (
         <div class="p-6 max-w-7xl">
@@ -47,6 +58,7 @@ export default function AdminContentHub() {
                     <div class="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                 </div>
             }>
+                {activeTab() === 'drafts' && <AutoDrafts />}
                 {activeTab() === 'announcements' && <Announcements />}
                 {activeTab() === 'tips' && <DailyTips />}
                 {activeTab() === 'market' && <MarketModeration />}
