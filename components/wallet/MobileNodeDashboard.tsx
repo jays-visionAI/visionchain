@@ -127,6 +127,21 @@ const GlobeIcon = (props: { class?: string }) => (
 const MN_API_KEY = 'mn_api_key';
 const MN_NODE_ID = 'mn_node_id';
 
+// ---------- Version ----------
+const NODE_VERSION = '1.2.0';
+const DOWNLOAD_URLS: Record<string, string> = {
+    mac_arm: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-mac-arm64.dmg',
+    mac_intel: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-mac-x64.dmg',
+    windows: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-win-x64.exe',
+    linux: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-linux-x64.AppImage',
+};
+
+const DownloadIcon = (props: { class?: string }) => (
+    <svg class={props.class} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+);
+
 // ---------- Component ----------
 interface MobileNodeDashboardProps {
     userEmail?: string;
@@ -157,13 +172,15 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
     // Leaderboard
     const [leaderboard, setLeaderboard] = createSignal<LeaderboardEntry[]>([]);
     const [lbLoading, setLbLoading] = createSignal(false);
+    const [showLeaderboard, setShowLeaderboard] = createSignal(false);
 
     // Claim
     const [claiming, setClaiming] = createSignal(false);
     const [claimResult, setClaimResult] = createSignal('');
 
-    // Tabs
-    const [activeTab, setActiveTab] = createSignal<'dashboard' | 'leaderboard'>('dashboard');
+    // Version update
+    const [latestVersion, setLatestVersion] = createSignal('');
+    const [updateAvailable, setUpdateAvailable] = createSignal(false);
 
     // Referral copy
     const [refCopied, setRefCopied] = createSignal(false);
@@ -183,8 +200,8 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
     onMount(() => {
         if (registered()) {
             fetchStatus();
-            fetchLeaderboard();
             fetchQuality();
+            checkForUpdate();
             // Auto-start heartbeat on mount if tab is visible
             if (document.visibilityState === 'visible') {
                 startHeartbeat();
@@ -347,6 +364,28 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
         setLbLoading(false);
     };
 
+    // ---------- Version Check ----------
+    const checkForUpdate = async () => {
+        try {
+            const res = await fetch('https://api.github.com/repos/jays-visionAI/vision-node/releases/latest');
+            if (res.ok) {
+                const data = await res.json();
+                const remote = (data.tag_name || '').replace(/^v/, '');
+                if (remote && remote !== NODE_VERSION) {
+                    setLatestVersion(remote);
+                    setUpdateAvailable(true);
+                }
+            }
+        } catch (_) { /* ignore */ }
+    };
+
+    const getDownloadUrl = () => {
+        const ua = navigator.userAgent.toLowerCase();
+        if (ua.includes('mac')) return ua.includes('arm') ? DOWNLOAD_URLS.mac_arm : DOWNLOAD_URLS.mac_intel;
+        if (ua.includes('win')) return DOWNLOAD_URLS.windows;
+        return DOWNLOAD_URLS.linux;
+    };
+
     // ---------- Helpers ----------
     const formatUptime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -480,284 +519,309 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
 
             {/* Dashboard (Registered) */}
             <Show when={registered()}>
-                {/* Tab Switcher */}
-                <div class="flex gap-1 p-1 bg-white/[0.03] rounded-xl border border-white/5">
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        class={`flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all ${activeTab() === 'dashboard' ? 'bg-white/10 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                    >
-                        Dashboard
-                    </button>
-                    <button
-                        onClick={() => { setActiveTab('leaderboard'); fetchLeaderboard(); }}
-                        class={`flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all ${activeTab() === 'leaderboard' ? 'bg-white/10 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                    >
-                        Leaderboard
-                    </button>
-                </div>
-
-                {/* Dashboard Tab */}
-                <Show when={activeTab() === 'dashboard'}>
-                    <div class="space-y-6">
-                        {/* Main Control Card */}
-                        <div class="bg-[#111113] border border-white/[0.06] rounded-[28px] p-6 relative overflow-hidden">
-                            <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-transparent pointer-events-none" />
-                            <div class="relative z-10 space-y-5">
-                                {/* Session Timer */}
-                                <div class="text-center space-y-1">
-                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Session Uptime</div>
-                                    <div class="text-4xl font-black text-white font-mono tracking-wider">
-                                        {formatUptime(sessionUptime())}
-                                    </div>
-                                </div>
-
-                                {/* Play/Pause Control */}
-                                <div class="flex justify-center">
-                                    <button
-                                        onClick={() => isRunning() ? stopHeartbeat() : startHeartbeat()}
-                                        class={`w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-2xl ${isRunning()
-                                            ? 'bg-gradient-to-br from-red-600 to-red-700 shadow-red-500/30 hover:shadow-red-500/50'
-                                            : 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/30 hover:shadow-cyan-500/50'
-                                            }`}
-                                    >
-                                        <Show when={isRunning()} fallback={<PlayIcon class="w-6 h-6 text-white ml-0.5" />}>
-                                            <PauseIcon class="w-6 h-6 text-white" />
-                                        </Show>
-                                    </button>
-                                </div>
-
-                                {/* Status Info */}
-                                <Show when={lastHeartbeatResult()}>
-                                    <div class="flex items-center justify-center gap-4 text-xs text-gray-400">
-                                        <span>Mode: <b class="text-white">{lastHeartbeatResult()?.mode === 'wifi_full' ? 'WiFi' : 'Cellular'}</b></span>
-                                        <span class="w-1 h-1 rounded-full bg-gray-700" />
-                                        <span>Hash Rate: <b class="text-cyan-400">{lastHeartbeatResult()?.weight}x</b></span>
-                                        <span class="w-1 h-1 rounded-full bg-gray-700" />
-                                        <span>Next: <b class="text-white">5 min</b></span>
-                                    </div>
-                                </Show>
-                            </div>
-                        </div>
-
-                        {/* 3-Type Rewards */}
-                        <Show when={nodeStatus()}>
-                            <div class="grid grid-cols-3 gap-3">
-                                {/* USDT */}
-                                <div class="bg-[#111113] border border-emerald-500/10 rounded-2xl p-4 space-y-1">
-                                    <div class="flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <span class="text-[8px] font-black text-emerald-400/80 uppercase tracking-wider">USDT</span>
-                                    </div>
-                                    <div class="text-lg font-black text-emerald-400">${parseFloat(nodeStatus()!.pending_usdt || '0').toFixed(6)}</div>
-                                    <div class="text-[9px] text-gray-500">Storage Usage</div>
-                                </div>
-                                {/* VCN */}
-                                <div class="bg-[#111113] border border-cyan-500/10 rounded-2xl p-4 space-y-1">
-                                    <div class="flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                                        <span class="text-[8px] font-black text-cyan-400/80 uppercase tracking-wider">VCN</span>
-                                    </div>
-                                    <div class="text-lg font-black text-cyan-400">{parseFloat(nodeStatus()!.pending_reward).toFixed(2)}</div>
-                                    <div class="text-[9px] text-gray-500">Pending</div>
-                                </div>
-                                {/* RP */}
-                                <div class="bg-[#111113] border border-amber-500/10 rounded-2xl p-4 space-y-1">
-                                    <div class="flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
-                                        <span class="text-[8px] font-black text-amber-400/80 uppercase tracking-wider">RP</span>
-                                    </div>
-                                    <div class="text-lg font-black text-amber-400">{(nodeStatus()!.pending_rp || 0).toLocaleString()}</div>
-                                    <div class="text-[9px] text-gray-500">Testnet Bonus</div>
-                                </div>
-                            </div>
-
-                            {/* Total Earned + Uptime + Rank */}
-                            <div class="grid grid-cols-3 gap-3">
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
-                                    <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Total Earned</div>
-                                    <div class="text-base font-black text-white">{parseFloat(nodeStatus()!.total_earned || '0').toFixed(2)} <span class="text-[10px] text-gray-500">VCN</span></div>
-                                </div>
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
-                                    <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Uptime</div>
-                                    <div class="text-base font-black text-white">{nodeStatus()!.total_uptime_hours.toFixed(1)}<span class="text-[10px] text-gray-500">h</span></div>
-                                </div>
-                                <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
-                                    <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Rank</div>
-                                    <div class="text-base font-black text-purple-400">#{nodeStatus()!.network_rank} <span class="text-[10px] text-gray-500">/ {nodeStatus()!.total_nodes}</span></div>
-                                </div>
-                            </div>
-                        </Show>
-
-                        {/* Storage Usage Bar */}
-                        <Show when={nodeQuality()}>
-                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-3">
-                                <div class="flex justify-between items-center">
-                                    <div class="text-[9px] font-black text-gray-500 uppercase tracking-[0.15em]">Storage Usage</div>
-                                    <div class="text-xs text-gray-400">{formatStorage(nodeQuality()!.usedGb)} / {formatStorage(nodeQuality()!.allocatedGb)}</div>
-                                </div>
-                                <div class="h-2.5 bg-white/5 rounded-full overflow-hidden">
-                                    <div
-                                        class={`h-full rounded-full transition-all duration-700 ${storagePct() > 80 ? 'bg-gradient-to-r from-amber-500 to-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
-                                        style={`width: ${Math.max(2, storagePct())}%`}
-                                    />
-                                </div>
-                                <div class="text-[10px] text-gray-500">Rewards are based on actual storage used by the network</div>
-                            </div>
-                        </Show>
-
-                        {/* How You Earn - Collapsible */}
-                        <button
-                            onClick={() => setShowHowEarn(!showHowEarn())}
-                            class="w-full flex items-center justify-between px-4 py-3 bg-[#111113] border border-white/[0.06] rounded-2xl text-left hover:border-white/10 transition-all"
-                        >
-                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">How You Earn</span>
-                            <svg class={`w-4 h-4 text-gray-500 transition-transform ${showHowEarn() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                        </button>
-                        <Show when={showHowEarn()}>
-                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-3 -mt-3">
-                                <div class="flex items-start gap-3">
-                                    <div class="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                        <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-bold text-white">USDT</div>
-                                        <div class="text-[10px] text-gray-500 mt-0.5">Monthly reward proportional to actual storage used by the network. More storage used = higher payout.</div>
-                                    </div>
-                                </div>
-                                <div class="flex items-start gap-3">
-                                    <div class="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                        <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-bold text-white">VCN Token</div>
-                                        <div class="text-[10px] text-gray-500 mt-0.5">Earned continuously based on uptime and heartbeat activity. Keep your node running to maximize VCN rewards.</div>
-                                    </div>
-                                </div>
-                                <div class="flex items-start gap-3">
-                                    <div class="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                        <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-bold text-white">RP (Reward Points)</div>
-                                        <div class="text-[10px] text-gray-500 mt-0.5">Bonus points during testnet phase. Earned from daily streaks and participation. Convertible after mainnet launch.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </Show>
-
-                        {/* Action Buttons */}
-                        <Show when={nodeStatus()}>
-                            <div class="flex gap-3">
-                                <button
-                                    onClick={handleClaim}
-                                    disabled={claiming() || parseFloat(nodeStatus()!.pending_reward) <= 0}
-                                    class="flex-1 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-30 active:scale-[0.98]"
-                                >
-                                    {claiming() ? 'Claiming...' : 'Claim Rewards'}
-                                </button>
-                                <button
-                                    onClick={fetchStatus}
-                                    disabled={statusLoading()}
-                                    class="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/5 disabled:opacity-30"
-                                >
-                                    {statusLoading() ? '...' : 'Refresh'}
-                                </button>
-                            </div>
-                            <Show when={claimResult()}>
-                                <div class={`text-xs text-center px-3 py-2 rounded-lg ${claimResult().startsWith('Claimed') ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                                    {claimResult()}
-                                </div>
-                            </Show>
-                        </Show>
-
-                        {/* Node Info Card */}
-                        <Show when={nodeStatus()}>
-                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-5 space-y-4">
-                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.15em]">Node Details</div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                    <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
-                                        <span class="text-gray-400">Node ID</span>
-                                        <span class="text-white font-mono text-xs">{nodeId()}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
-                                        <span class="text-gray-400">Device</span>
-                                        <span class="text-white uppercase text-xs font-bold">{nodeStatus()!.device_type}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
-                                        <span class="text-gray-400">Wallet</span>
-                                        <span class="text-white font-mono text-xs">{nodeStatus()!.wallet_address.slice(0, 6)}...{nodeStatus()!.wallet_address.slice(-4)}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
-                                        <span class="text-gray-400">Referral Code</span>
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-cyan-400 font-mono text-xs">{nodeStatus()!.referral_code}</span>
-                                            <button onClick={copyRef} class="p-1 hover:bg-white/10 rounded transition-colors">
-                                                <Show when={refCopied()} fallback={<CopyIcon class="w-3.5 h-3.5 text-gray-400" />}>
-                                                    <CheckIcon class="w-3.5 h-3.5 text-green-400" />
-                                                </Show>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </Show>
-                    </div>
-                </Show>
-
-                {/* Leaderboard Tab */}
-                <Show when={activeTab() === 'leaderboard'}>
-                    <div class="bg-[#111113] border border-white/[0.06] rounded-[28px] overflow-hidden">
-                        <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                {/* Version Update Banner */}
+                <Show when={updateAvailable()}>
+                    <div class="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/20 rounded-2xl p-4">
+                        <div class="flex items-center justify-between">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-xl bg-yellow-500/10 flex items-center justify-center">
-                                    <TrophyIcon class="w-4 h-4 text-yellow-400" />
+                                <div class="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                                    <DownloadIcon class="w-4.5 h-4.5 text-amber-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-bold text-white">Global Rankings</h4>
-                                    <p class="text-[10px] text-gray-500">by total uptime contribution</p>
+                                    <div class="text-xs font-bold text-white">Update Available</div>
+                                    <div class="text-[10px] text-gray-400">v{NODE_VERSION} → v{latestVersion()}</div>
                                 </div>
                             </div>
-                            <button onClick={fetchLeaderboard} class="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors uppercase tracking-widest">
-                                {lbLoading() ? '...' : 'Refresh'}
-                            </button>
+                            <a
+                                href={getDownloadUrl()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="px-4 py-2 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-xl hover:bg-amber-500/30 active:scale-95 transition-all flex items-center gap-1.5"
+                            >
+                                <DownloadIcon class="w-3.5 h-3.5" />
+                                Download
+                            </a>
                         </div>
-
-                        <Show when={leaderboard().length > 0} fallback={
-                            <div class="p-8 text-center text-gray-500 text-sm">
-                                {lbLoading() ? 'Loading...' : 'No nodes in leaderboard yet'}
-                            </div>
-                        }>
-                            <div class="divide-y divide-white/[0.04]">
-                                <For each={leaderboard()}>
-                                    {(entry) => (
-                                        <div class={`flex items-center gap-4 px-6 py-3.5 hover:bg-white/[0.02] transition-colors ${entry.node_id === nodeId() ? 'bg-cyan-500/5' : ''}`}>
-                                            <div class={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${entry.rank === 1 ? 'bg-yellow-500/10 text-yellow-400' :
-                                                entry.rank === 2 ? 'bg-gray-400/10 text-gray-300' :
-                                                    entry.rank === 3 ? 'bg-amber-600/10 text-amber-500' :
-                                                        'bg-white/[0.03] text-gray-500'
-                                                }`}>
-                                                {entry.rank}
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-sm font-bold text-white truncate font-mono">{entry.node_id}</span>
-                                                    <Show when={entry.node_id === nodeId()}>
-                                                        <span class="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 text-[9px] font-bold rounded uppercase tracking-wider">You</span>
-                                                    </Show>
-                                                </div>
-                                                <div class="text-[10px] text-gray-500 uppercase">{entry.device_type}</div>
-                                            </div>
-                                            <div class="text-right">
-                                                <div class="text-sm font-bold text-white">{entry.total_uptime_hours.toFixed(1)}h</div>
-                                                <div class="text-[10px] text-gray-500">{entry.heartbeat_count} HB</div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
-                        </Show>
                     </div>
                 </Show>
+
+                <div class="space-y-6">
+                    {/* Main Control Card */}
+                    <div class="bg-[#111113] border border-white/[0.06] rounded-[28px] p-6 relative overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-transparent pointer-events-none" />
+                        <div class="relative z-10 space-y-5">
+                            {/* Session Timer */}
+                            <div class="text-center space-y-1">
+                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Session Uptime</div>
+                                <div class="text-4xl font-black text-white font-mono tracking-wider">
+                                    {formatUptime(sessionUptime())}
+                                </div>
+                            </div>
+
+                            {/* Play/Pause Control */}
+                            <div class="flex justify-center">
+                                <button
+                                    onClick={() => isRunning() ? stopHeartbeat() : startHeartbeat()}
+                                    class={`w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-2xl ${isRunning()
+                                        ? 'bg-gradient-to-br from-red-600 to-red-700 shadow-red-500/30 hover:shadow-red-500/50'
+                                        : 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/30 hover:shadow-cyan-500/50'
+                                        }`}
+                                >
+                                    <Show when={isRunning()} fallback={<PlayIcon class="w-6 h-6 text-white ml-0.5" />}>
+                                        <PauseIcon class="w-6 h-6 text-white" />
+                                    </Show>
+                                </button>
+                            </div>
+
+                            {/* Status Info */}
+                            <Show when={lastHeartbeatResult()}>
+                                <div class="flex items-center justify-center gap-4 text-xs text-gray-400">
+                                    <span>Mode: <b class="text-white">{lastHeartbeatResult()?.mode === 'wifi_full' ? 'WiFi' : 'Cellular'}</b></span>
+                                    <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                    <span>Hash Rate: <b class="text-cyan-400">{lastHeartbeatResult()?.weight}x</b></span>
+                                    <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                    <span>Next: <b class="text-white">5 min</b></span>
+                                </div>
+                            </Show>
+                        </div>
+                    </div>
+
+                    {/* 3-Type Rewards */}
+                    <Show when={nodeStatus()}>
+                        <div class="grid grid-cols-3 gap-3">
+                            {/* USDT */}
+                            <div class="bg-[#111113] border border-emerald-500/10 rounded-2xl p-4 space-y-1">
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <span class="text-[8px] font-black text-emerald-400/80 uppercase tracking-wider">USDT</span>
+                                </div>
+                                <div class="text-lg font-black text-emerald-400">${parseFloat(nodeStatus()!.pending_usdt || '0').toFixed(6)}</div>
+                                <div class="text-[9px] text-gray-500">Storage Usage</div>
+                            </div>
+                            {/* VCN */}
+                            <div class="bg-[#111113] border border-cyan-500/10 rounded-2xl p-4 space-y-1">
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                                    <span class="text-[8px] font-black text-cyan-400/80 uppercase tracking-wider">VCN</span>
+                                </div>
+                                <div class="text-lg font-black text-cyan-400">{parseFloat(nodeStatus()!.pending_reward).toFixed(2)}</div>
+                                <div class="text-[9px] text-gray-500">Pending</div>
+                            </div>
+                            {/* RP */}
+                            <div class="bg-[#111113] border border-amber-500/10 rounded-2xl p-4 space-y-1">
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
+                                    <span class="text-[8px] font-black text-amber-400/80 uppercase tracking-wider">RP</span>
+                                </div>
+                                <div class="text-lg font-black text-amber-400">{(nodeStatus()!.pending_rp || 0).toLocaleString()}</div>
+                                <div class="text-[9px] text-gray-500">Testnet Bonus</div>
+                            </div>
+                        </div>
+
+                        {/* Total Earned + Uptime + Rank */}
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
+                                <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Total Earned</div>
+                                <div class="text-base font-black text-white">
+                                    {parseFloat(nodeStatus()!.total_earned || '0') > 0
+                                        ? <>{parseFloat(nodeStatus()!.total_earned).toFixed(2)} <span class="text-[10px] text-gray-500">VCN</span></>
+                                        : <span class="text-cyan-400 text-sm">Accumulating<span class="animate-pulse">...</span></span>
+                                    }
+                                </div>
+                                <div class="text-[8px] text-gray-600">{parseFloat(nodeStatus()!.total_earned || '0') <= 0 ? 'Rewards are distributed periodically' : ''}</div>
+                            </div>
+                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
+                                <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Uptime</div>
+                                <div class="text-base font-black text-white">{nodeStatus()!.total_uptime_hours.toFixed(1)}<span class="text-[10px] text-gray-500">h</span></div>
+                            </div>
+                            <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-3 space-y-0.5">
+                                <div class="text-[8px] font-black text-gray-500 uppercase tracking-wider">Rank</div>
+                                <div class="text-base font-black text-purple-400">#{nodeStatus()!.network_rank} <span class="text-[10px] text-gray-500">/ {nodeStatus()!.total_nodes}</span></div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    {/* Storage Usage Bar */}
+                    <Show when={nodeQuality()}>
+                        <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+                            <div class="flex justify-between items-center">
+                                <div class="text-[9px] font-black text-gray-500 uppercase tracking-[0.15em]">Storage Usage</div>
+                                <div class="text-xs text-gray-400">{formatStorage(nodeQuality()!.usedGb)} / {formatStorage(nodeQuality()!.allocatedGb)}</div>
+                            </div>
+                            <div class="h-2.5 bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                    class={`h-full rounded-full transition-all duration-700 ${storagePct() > 80 ? 'bg-gradient-to-r from-amber-500 to-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
+                                    style={`width: ${Math.max(2, storagePct())}%`}
+                                />
+                            </div>
+                            <div class="text-[10px] text-gray-500">Rewards are based on actual storage used by the network</div>
+                        </div>
+                    </Show>
+
+                    {/* How You Earn - Collapsible */}
+                    <button
+                        onClick={() => setShowHowEarn(!showHowEarn())}
+                        class="w-full flex items-center justify-between px-4 py-3 bg-[#111113] border border-white/[0.06] rounded-2xl text-left hover:border-white/10 transition-all"
+                    >
+                        <span class="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">How You Earn</span>
+                        <svg class={`w-4 h-4 text-gray-500 transition-transform ${showHowEarn() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    <Show when={showHowEarn()}>
+                        <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-4 space-y-3 -mt-3">
+                            <div class="flex items-start gap-3">
+                                <div class="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-white">USDT</div>
+                                    <div class="text-[10px] text-gray-500 mt-0.5">Monthly reward proportional to actual storage used by the network. More storage used = higher payout.</div>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-white">VCN Token</div>
+                                    <div class="text-[10px] text-gray-500 mt-0.5">Earned continuously based on uptime and heartbeat activity. Keep your node running to maximize VCN rewards.</div>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-white">RP (Reward Points)</div>
+                                    <div class="text-[10px] text-gray-500 mt-0.5">Bonus points during testnet phase. Earned from daily streaks and participation. Convertible after mainnet launch.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    {/* Action Buttons */}
+                    <Show when={nodeStatus()}>
+                        <div class="flex gap-3">
+                            <button
+                                onClick={handleClaim}
+                                disabled={claiming() || parseFloat(nodeStatus()!.pending_reward) <= 0}
+                                class="flex-1 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-30 active:scale-[0.98]"
+                            >
+                                {claiming() ? 'Claiming...' : 'Claim Rewards'}
+                            </button>
+                            <button
+                                onClick={fetchStatus}
+                                disabled={statusLoading()}
+                                class="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/5 disabled:opacity-30"
+                            >
+                                {statusLoading() ? '...' : 'Refresh'}
+                            </button>
+                        </div>
+                        <Show when={claimResult()}>
+                            <div class={`text-xs text-center px-3 py-2 rounded-lg ${claimResult().startsWith('Claimed') ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                {claimResult()}
+                            </div>
+                        </Show>
+                    </Show>
+
+                    {/* Node Info Card */}
+                    <Show when={nodeStatus()}>
+                        <div class="bg-[#111113] border border-white/[0.06] rounded-2xl p-5 space-y-4">
+                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.15em]">Node Details</div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                                    <span class="text-gray-400">Node ID</span>
+                                    <span class="text-white font-mono text-xs">{nodeId()}</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                                    <span class="text-gray-400">Device</span>
+                                    <span class="text-white uppercase text-xs font-bold">{nodeStatus()!.device_type}</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                                    <span class="text-gray-400">Wallet</span>
+                                    <span class="text-white font-mono text-xs">{nodeStatus()!.wallet_address.slice(0, 6)}...{nodeStatus()!.wallet_address.slice(-4)}</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                                    <span class="text-gray-400">Referral Code</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-cyan-400 font-mono text-xs">{nodeStatus()!.referral_code}</span>
+                                        <button onClick={copyRef} class="p-1 hover:bg-white/10 rounded transition-colors">
+                                            <Show when={refCopied()} fallback={<CopyIcon class="w-3.5 h-3.5 text-gray-400" />}>
+                                                <CheckIcon class="w-3.5 h-3.5 text-green-400" />
+                                            </Show>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    {/* Leaderboard Toggle Button */}
+                    <button
+                        onClick={() => { setShowLeaderboard(!showLeaderboard()); if (!showLeaderboard()) fetchLeaderboard(); }}
+                        class={`w-full flex items-center justify-between px-4 py-3 bg-[#111113] border border-white/[0.06] rounded-2xl text-left hover:border-white/10 transition-all ${showLeaderboard() ? 'border-yellow-500/20' : ''}`}
+                    >
+                        <div class="flex items-center gap-2.5">
+                            <TrophyIcon class="w-4 h-4 text-yellow-400" />
+                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">Leaderboard</span>
+                        </div>
+                        <svg class={`w-4 h-4 text-gray-500 transition-transform ${showLeaderboard() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+
+                    {/* Leaderboard Content */}
+                    <Show when={showLeaderboard()}>
+                        <div class="bg-[#111113] border border-white/[0.06] rounded-[28px] overflow-hidden -mt-3">
+                            <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                                        <TrophyIcon class="w-4 h-4 text-yellow-400" />
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-white">Global Rankings</h4>
+                                        <p class="text-[10px] text-gray-500">by total uptime contribution</p>
+                                    </div>
+                                </div>
+                                <button onClick={fetchLeaderboard} class="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors uppercase tracking-widest">
+                                    {lbLoading() ? '...' : 'Refresh'}
+                                </button>
+                            </div>
+
+                            <Show when={leaderboard().length > 0} fallback={
+                                <div class="p-8 text-center text-gray-500 text-sm">
+                                    {lbLoading() ? 'Loading...' : 'No nodes in leaderboard yet'}
+                                </div>
+                            }>
+                                <div class="divide-y divide-white/[0.04]">
+                                    <For each={leaderboard()}>
+                                        {(entry) => (
+                                            <div class={`flex items-center gap-4 px-6 py-3.5 hover:bg-white/[0.02] transition-colors ${entry.node_id === nodeId() ? 'bg-cyan-500/5' : ''}`}>
+                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${entry.rank === 1 ? 'bg-yellow-500/10 text-yellow-400' :
+                                                    entry.rank === 2 ? 'bg-gray-400/10 text-gray-300' :
+                                                        entry.rank === 3 ? 'bg-amber-600/10 text-amber-500' :
+                                                            'bg-white/[0.03] text-gray-500'
+                                                    }`}>
+                                                    {entry.rank}
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-sm font-bold text-white truncate font-mono">{entry.node_id}</span>
+                                                        <Show when={entry.node_id === nodeId()}>
+                                                            <span class="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 text-[9px] font-bold rounded uppercase tracking-wider">You</span>
+                                                        </Show>
+                                                    </div>
+                                                    <div class="text-[10px] text-gray-500 uppercase">{entry.device_type}</div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-sm font-bold text-white">{entry.total_uptime_hours.toFixed(1)}h</div>
+                                                    <div class="text-[10px] text-gray-500">{entry.heartbeat_count} HB</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </For>
+                                </div>
+                            </Show>
+                        </div>
+                    </Show>
+                </div>
             </Show>
         </div>
     );
