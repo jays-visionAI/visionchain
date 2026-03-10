@@ -256,6 +256,7 @@ const Wallet = (): JSX.Element => {
         }
     });
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
+    const [pendingQuestSub, setPendingQuestSub] = createSignal<string | null>(null);
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
     const [receiveNetwork, setReceiveNetwork] = createSignal('Ethereum');
@@ -4500,14 +4501,22 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             <Show when={activeView() === 'game'}>
                                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                                     <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                        <VCNGameCenter userProfile={userProfile} />
+                                        <VCNGameCenter userProfile={userProfile} onNavigate={(view: string) => {
+                                            if (view.startsWith('quest/')) {
+                                                const sub = view.replace('quest/', '');
+                                                setPendingQuestSub(sub);
+                                                navigate('/wallet/quest');
+                                            } else {
+                                                navigate(`/wallet/${view}`);
+                                            }
+                                        }} />
                                     </Suspense>
                                 </div>
                             </Show>
 
                             {/* Quest (formerly Campaign) View */}
                             <Show when={activeView() === 'campaign' || activeView() === 'quest'}>
-                                <WalletCampaign userProfile={userProfile} onNavigate={(view: string) => navigate(`/wallet/${view}`)} />
+                                <WalletCampaign userProfile={userProfile} initialQuest={pendingQuestSub()} onNavigate={(view: string) => { setPendingQuestSub(null); navigate(`/wallet/${view}`); }} />
                             </Show>
 
                             {/* History View */}

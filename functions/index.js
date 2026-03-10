@@ -16593,7 +16593,7 @@ async function getApiKeyFromFirestore(provider) {
     const key = _cachedApiKeys.find(
       (k) => k.provider === provider && k.isActive !== false,
     );
-    if (key) return key.value;
+    if (key) return key.value || key.apiKey || key.key;
   }
 
   try {
@@ -16607,7 +16607,7 @@ async function getApiKeyFromFirestore(provider) {
     const key = _cachedApiKeys.find(
       (k) => k.provider === provider && k.isActive !== false,
     );
-    return key ? key.value : null;
+    return key ? (key.value || key.apiKey || key.key) : null;
   } catch (err) {
     console.warn(`[callLLM] Failed to read API keys from Firestore:`, err.message);
     return null;
@@ -25581,7 +25581,20 @@ Generate the following as a JSON object with these exact keys:
   "summary": "One-line summary of the update in English (max 100 chars)"
 }`;
 
-    const rawResponse = await callLLM("gemini-2.0-flash", systemPrompt, userPrompt);
+    if (!axios) axios = require("axios");
+    const GEMINI_KEY = (await getApiKeyFromFirestore("gemini")) || process.env.GEMINI_API_KEY || "";
+    if (!GEMINI_KEY) { console.warn("[autoGenerateReleaseContent] No Gemini key"); return; }
+
+    const geminiRes = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+      },
+      { timeout: 45000 },
+    );
+    const rawResponse = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const jsonStr = rawResponse.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     const content = JSON.parse(jsonStr);
 
@@ -26609,7 +26622,38 @@ Generate the following as a JSON object with these exact keys:
 }`;
 
   try {
-    const rawResponse = await callLLM("gemini-2.0-flash", systemPrompt, userPrompt);
+    // Use direct Gemini API call with higher token limit for content generation
+    if (!axios) axios = require("axios");
+
+    const GEMINI_KEY = (await getApiKeyFromFirestore("gemini")) || process.env.GEMINI_API_KEY || "";
+    if (!GEMINI_KEY) {
+      throw new HttpsError("internal", "Gemini API key not configured");
+    }
+
+    // Gemini API call with retry for rate limits
+    let geminiRes;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        geminiRes = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+          {
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+          },
+          { timeout: 45000 },
+        );
+        break;
+      } catch (apiErr) {
+        if (apiErr.response?.status === 429 && attempt === 0) {
+          console.log("[generateReleaseContent] Rate limited, waiting 5s before retry...");
+          await new Promise(r => setTimeout(r, 5000));
+          continue;
+        }
+        throw apiErr;
+      }
+    }
+    const rawResponse = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // Parse JSON from response (strip markdown fences if present)
     let content;

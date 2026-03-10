@@ -24,9 +24,9 @@ import { GameDailyLeaderboard } from './GameDailyLeaderboard';
 import { useI18n } from '../../i18n/i18nContext';
 import { getRPConfig, RPConfig } from '../../services/firebaseService';
 
-export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (view: string) => void }) => {
+export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (view: string) => void; initialQuest?: string | null }) => {
     const { t } = useI18n();
-    const [selectedQuest, setSelectedQuest] = createSignal<string | null>(null);
+    const [selectedQuest, setSelectedQuest] = createSignal<string | null>(props.initialQuest || null);
     const [totalStaked, setTotalStaked] = createSignal('Loading...');
     const [myRank, setMyRank] = createSignal<number | null>(null);
     const [myReward, setMyReward] = createSignal(0);

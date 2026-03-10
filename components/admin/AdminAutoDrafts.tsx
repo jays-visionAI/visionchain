@@ -83,7 +83,7 @@ export function AdminAutoDrafts(): JSX.Element {
     const [genType, setGenType] = createSignal<string>('feature');
     const [genVersion, setGenVersion] = createSignal('');
 
-    const functions = getFunctions(getFirebaseApp());
+    const functions = getFunctions(getFirebaseApp(), 'us-central1');
 
     const filteredDrafts = createMemo(() => {
         const filter = statusFilter();

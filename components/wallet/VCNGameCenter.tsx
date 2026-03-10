@@ -9,6 +9,7 @@ import { doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface GameCenterProps {
     userProfile: Accessor<{ referralCode: string; email: string; referralCount?: number;[k: string]: any }>;
+    onNavigate?: (view: string) => void;
 }
 
 // ─── Sound Engine (Web Audio API) ───────────────────────────────────────────
@@ -583,6 +584,41 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Daily Leaderboard Banner */}
+                <Show when={activeGame() === null}>
+                    <button
+                        onClick={() => props.onNavigate?.('quest/game_daily')}
+                        class="group w-full relative overflow-hidden rounded-2xl border border-amber-500/20 hover:border-amber-500/40 transition-all duration-300 text-left"
+                    >
+                        <div class="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-orange-500/8 to-amber-500/5 group-hover:from-amber-500/10 group-hover:via-orange-500/15 group-hover:to-amber-500/10 transition-all duration-500" />
+                        <div class="absolute -top-10 -right-10 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl group-hover:bg-amber-500/20 transition-all" />
+                        <div class="relative p-4 sm:p-5 flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                        <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="text-sm sm:text-base font-black text-white uppercase italic tracking-tight">Daily Game Leaderboard</div>
+                                    <div class="text-[10px] sm:text-xs text-gray-500 font-medium">See how you rank among today's players</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-amber-400" fill="currentColor"><polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" /></svg>
+                                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Live</span>
+                                </div>
+                                <svg viewBox="0 0 24 24" class="w-5 h-5 text-gray-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </button>
+                </Show>
 
                 {/* Game Cards */}
                 <Show when={activeGame() === null}>
