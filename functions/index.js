@@ -25385,3 +25385,142 @@ exports.adminSetNodeRelease = onCall({
     return { success: false, error: err.message };
   }
 });
+
+/**
+ * adminGetUploadUrl - Generate signed upload URLs for node release files
+ * Returns pre-signed URLs that can be used to upload directly to Storage
+ */
+exports.adminGetUploadUrl = onCall({
+  region: "us-central1",
+  memory: "256MiB",
+  timeoutSeconds: 60,
+}, async (request) => {
+  try {
+    const { adminKey, version, platform, filename } = request.data;
+
+    if (adminKey !== "vcn-admin-2026") {
+      throw new HttpsError("permission-denied", "Unauthorized");
+    }
+    if (!version || !platform || !filename) {
+      throw new HttpsError("invalid-argument", "version, platform, filename required");
+    }
+
+    const bucket = admin.storage().bucket();
+    const filePath = `node-releases/v${version}/${filename}`;
+    const file = bucket.file(filePath);
+
+    const [url] = await file.getSignedUrl({
+      version: "v4",
+      action: "write",
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+      contentType: "application/octet-stream",
+    });
+
+    return {
+      success: true,
+      uploadUrl: url,
+      filePath,
+      expiresIn: "1 hour",
+    };
+  } catch (err) {
+    console.error("[adminGetUploadUrl] Error:", err);
+    if (err instanceof HttpsError) throw err;
+    return { success: false, error: err.message };
+  }
+});
+
+/**
+ * adminFinalizeRelease - Finalize a release after files are uploaded
+ * 1. Marks new version as latest
+ * 2. Updates Firestore with public download URLs
+ * 3. DELETES all files from previous versions in Storage
+ */
+exports.adminFinalizeRelease = onCall({
+  region: "us-central1",
+  memory: "512MiB",
+  timeoutSeconds: 120,
+}, async (request) => {
+  try {
+    const { adminKey, version, releaseNotes, platforms } = request.data;
+    // platforms: { mac_arm64: "filename.dmg", mac_x64: "filename.dmg", windows: "filename.exe" }
+
+    if (adminKey !== "vcn-admin-2026") {
+      throw new HttpsError("permission-denied", "Unauthorized");
+    }
+    if (!version || !platforms) {
+      throw new HttpsError("invalid-argument", "version and platforms required");
+    }
+
+    const bucket = admin.storage().bucket();
+    const bucketName = bucket.name;
+
+    // Build download URLs from uploaded files
+    const downloads = {};
+    for (const [platform, filename] of Object.entries(platforms)) {
+      const filePath = `node-releases/v${version}/${filename}`;
+      // Make the file public
+      try {
+        await bucket.file(filePath).makePublic();
+      } catch (e) {
+        console.warn(`[adminFinalizeRelease] Could not make public: ${filePath}`, e.message);
+      }
+      downloads[platform] = `https://storage.googleapis.com/${bucketName}/${filePath}`;
+    }
+
+    // Get previous latest version(s) to delete their files
+    const prevLatest = await db.collection("nodeReleases")
+      .where("isLatest", "==", true).get();
+
+    const oldVersions = [];
+    const batch = db.batch();
+
+    for (const doc of prevLatest.docs) {
+      const oldData = doc.data();
+      if (oldData.version !== version) {
+        oldVersions.push(oldData.version);
+        batch.update(doc.ref, { isLatest: false, deletedAt: admin.firestore.Timestamp.now() });
+      }
+    }
+
+    // Set new release as latest
+    const releaseRef = db.collection("nodeReleases").doc(`v${version}`);
+    batch.set(releaseRef, {
+      version,
+      isLatest: true,
+      releaseDate: admin.firestore.Timestamp.now(),
+      releaseNotes: releaseNotes || "",
+      downloads,
+      updatedAt: admin.firestore.Timestamp.now(),
+    }, { merge: true });
+
+    await batch.commit();
+
+    // DELETE old version files from Storage
+    const deletedFiles = [];
+    for (const oldVer of oldVersions) {
+      const prefix = `node-releases/v${oldVer}/`;
+      try {
+        const [files] = await bucket.getFiles({ prefix });
+        for (const file of files) {
+          await file.delete();
+          deletedFiles.push(file.name);
+          console.log(`[adminFinalizeRelease] Deleted: ${file.name}`);
+        }
+      } catch (e) {
+        console.warn(`[adminFinalizeRelease] Could not delete files for ${oldVer}:`, e.message);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Release v${version} is now live`,
+      downloads,
+      deletedOldVersions: oldVersions,
+      deletedFiles,
+    };
+  } catch (err) {
+    console.error("[adminFinalizeRelease] Error:", err);
+    if (err instanceof HttpsError) throw err;
+    return { success: false, error: err.message };
+  }
+});

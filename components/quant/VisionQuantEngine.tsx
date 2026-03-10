@@ -50,9 +50,9 @@ import {
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, Competition } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, getActiveCompetition, joinCompetition } from '../../services/quant/paperTradingService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
 
@@ -139,6 +139,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [agentsLoading, setAgentsLoading] = createSignal(true);
     const [creatingAgent, setCreatingAgent] = createSignal(false);
     const [successToast, setSuccessToast] = createSignal<string | null>(null);
+    const [activeCompetition, setActiveCompetition] = createSignal<Competition | null>(null);
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
@@ -257,6 +258,11 @@ const VisionQuantEngine = (): JSX.Element => {
             setAgentsLoading(false);
         });
         onCleanup(unsub);
+
+        // Load active competition
+        getActiveCompetition().then(comp => {
+            setActiveCompetition(comp);
+        }).catch(() => { /* silent */ });
     });
 
     // === Setup Helpers ===
@@ -970,9 +976,52 @@ const VisionQuantEngine = (): JSX.Element => {
                                         </button>
                                     </div>
                                     <Show when={tradingMode() === 'paper'}>
-                                        <div class="flex items-center gap-1.5 mt-2 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
-                                            <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
-                                            <span class="text-[10px] text-amber-400">모의 거래는 실제 주문을 실행하지 않으며, 시장 가격 기반으로 시뮬레이션됩니다.</span>
+                                        <div class="mt-2 space-y-2">
+                                            {/* Fixed Seed Info */}
+                                            <div class="p-3 bg-amber-500/[0.06] rounded-xl border border-amber-500/15">
+                                                <div class="flex items-center gap-2 mb-1.5">
+                                                    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
+                                                    </svg>
+                                                    <span class="text-[11px] font-bold text-amber-400">Fixed Seed Capital</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <div class="flex-1 p-2 bg-black/30 rounded-lg">
+                                                        <div class="text-[9px] text-gray-500 mb-0.5">KRW Exchanges</div>
+                                                        <div class="text-sm font-black text-white">10,000,000 <span class="text-[9px] text-gray-400 font-normal">KRW</span></div>
+                                                    </div>
+                                                    <div class="flex-1 p-2 bg-black/30 rounded-lg">
+                                                        <div class="text-[9px] text-gray-500 mb-0.5">USDT Exchanges</div>
+                                                        <div class="text-sm font-black text-white">10,000 <span class="text-[9px] text-gray-400 font-normal">USDT</span></div>
+                                                    </div>
+                                                </div>
+                                                <div class="text-[9px] text-amber-400/60 mt-1.5">All participants start with the same seed capital for fair competition.</div>
+                                            </div>
+
+                                            {/* Competition Auto-Join Banner */}
+                                            <Show when={activeCompetition()}>
+                                                <div class="p-3 bg-cyan-500/[0.06] rounded-xl border border-cyan-500/15">
+                                                    <div class="flex items-center gap-2 mb-1">
+                                                        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                                            <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                                        </svg>
+                                                        <span class="text-[11px] font-bold text-cyan-400">{activeCompetition()!.title}</span>
+                                                        <span class="ml-auto text-[9px] font-bold text-cyan-400/70 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                                                            ~{new Date(activeCompetition()!.endDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-[10px] text-gray-400 leading-relaxed">
+                                                        Creating a paper agent will automatically enroll you in the current competition. Compete with other traders for VCN + RP prizes!
+                                                    </p>
+                                                </div>
+                                            </Show>
+
+                                            <div class="flex items-center gap-1.5 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                                                <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                                <span class="text-[10px] text-amber-400">모의 거래는 실제 주문을 실행하지 않으며, 시장 가격 기반으로 시뮬레이션됩니다.</span>
+                                            </div>
                                         </div>
                                     </Show>
                                 </div>
@@ -1087,206 +1136,208 @@ const VisionQuantEngine = (): JSX.Element => {
                                 </Show>
 
                                 {/* ═══ BUDGET ALLOCATION SECTION ═══ */}
-                                <div>
-                                    <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" /><path d="M6 16h4" />
-                                        </svg>
-                                        Budget Allocation
-                                        <span class="text-[9px] font-normal text-gray-600 ml-auto">
-                                            총 자산: {budgetConfig().currency === 'KRW' ? formatKrw(totalPortfolioValue()) : formatUsd(totalPortfolioValueUsd())}
-                                        </span>
-                                    </h4>
+                                <Show when={tradingMode() !== 'paper'}>
+                                    <div>
+                                        <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" /><path d="M6 16h4" />
+                                            </svg>
+                                            Budget Allocation
+                                            <span class="text-[9px] font-normal text-gray-600 ml-auto">
+                                                총 자산: {budgetConfig().currency === 'KRW' ? formatKrw(totalPortfolioValue()) : formatUsd(totalPortfolioValueUsd())}
+                                            </span>
+                                        </h4>
 
-                                    {/* Currency Toggle */}
-                                    <div class="flex items-center gap-1 mb-4 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] w-fit">
-                                        <button
-                                            onClick={() => updateBudgetField('currency', 'KRW')}
-                                            class={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${budgetConfig().currency === 'KRW' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                                        >KRW (원)</button>
-                                        <button
-                                            onClick={() => updateBudgetField('currency', 'USD')}
-                                            class={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${budgetConfig().currency === 'USD' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                                        >USD ($)</button>
-                                    </div>
-
-                                    <div class="space-y-4">
-                                        {/* Total Budget */}
-                                        <div class={`p-4 rounded-xl border transition-all ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
-                                            <div class="flex items-center justify-between mb-2">
-                                                <div>
-                                                    <div class="text-xs font-bold text-white">전체 운용 한도</div>
-                                                    <div class="text-[10px] text-gray-500">에이전트가 사용할 최대 총 금액</div>
-                                                </div>
-                                                <button
-                                                    onClick={() => updateBudgetField('totalBudgetEnabled', !budgetConfig().totalBudgetEnabled)}
-                                                    class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500' : 'bg-gray-700'}`}
-                                                >
-                                                    <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().totalBudgetEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                </button>
-                                            </div>
-                                            <Show when={budgetConfig().totalBudgetEnabled}>
-                                                <div class="mt-3 space-y-2">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            value={budgetConfig().totalBudget || ''}
-                                                            onInput={(e) => updateBudgetField('totalBudget', Number(e.currentTarget.value) || 0)}
-                                                            placeholder="금액 입력"
-                                                            class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
-                                                        />
-                                                        <Show when={budgetConfig().totalBudget > 0}>
-                                                            <span class="text-[10px] text-cyan-400 font-bold whitespace-nowrap">
-                                                                {budgetPctOfTotal(budgetConfig().totalBudget).toFixed(1)}%
-                                                            </span>
-                                                        </Show>
-                                                    </div>
-                                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                                        <For each={budgetPresets()}>
-                                                            {(preset) => (
-                                                                <button
-                                                                    onClick={() => updateBudgetField('totalBudget', preset)}
-                                                                    class={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${budgetConfig().totalBudget === preset ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white'}`}
-                                                                >
-                                                                    {formatBudgetValue(preset)}
-                                                                </button>
-                                                            )}
-                                                        </For>
-                                                    </div>
-                                                </div>
-                                            </Show>
+                                        {/* Currency Toggle */}
+                                        <div class="flex items-center gap-1 mb-4 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] w-fit">
+                                            <button
+                                                onClick={() => updateBudgetField('currency', 'KRW')}
+                                                class={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${budgetConfig().currency === 'KRW' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                            >KRW (원)</button>
+                                            <button
+                                                onClick={() => updateBudgetField('currency', 'USD')}
+                                                class={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${budgetConfig().currency === 'USD' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                            >USD ($)</button>
                                         </div>
 
-                                        {/* Per Asset Budget */}
-                                        <div class={`p-4 rounded-xl border transition-all ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
-                                            <div class="flex items-center justify-between mb-2">
-                                                <div>
-                                                    <div class="text-xs font-bold text-white">종목당 운용 한도</div>
-                                                    <div class="text-[10px] text-gray-500">개별 코인에 투입할 최대 금액</div>
-                                                </div>
-                                                <button
-                                                    onClick={() => updateBudgetField('perAssetBudgetEnabled', !budgetConfig().perAssetBudgetEnabled)}
-                                                    class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500' : 'bg-gray-700'}`}
-                                                >
-                                                    <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().perAssetBudgetEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                </button>
-                                            </div>
-                                            <Show when={budgetConfig().perAssetBudgetEnabled}>
-                                                <div class="mt-3 space-y-2">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            value={budgetConfig().perAssetBudget || ''}
-                                                            onInput={(e) => updateBudgetField('perAssetBudget', Number(e.currentTarget.value) || 0)}
-                                                            placeholder="금액 입력"
-                                                            class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
-                                                        />
-                                                        <Show when={budgetConfig().perAssetBudget > 0 && budgetConfig().totalBudgetEnabled && budgetConfig().totalBudget > 0}>
-                                                            <span class="text-[10px] text-gray-400 font-bold whitespace-nowrap">
-                                                                전체의 {((budgetConfig().perAssetBudget / budgetConfig().totalBudget) * 100).toFixed(0)}%
-                                                            </span>
-                                                        </Show>
-                                                    </div>
-                                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                                        <For each={budgetPresets().map(p => Math.round(p / 5))}>
-                                                            {(preset) => (
-                                                                <button
-                                                                    onClick={() => updateBudgetField('perAssetBudget', preset)}
-                                                                    class={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${budgetConfig().perAssetBudget === preset ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white'}`}
-                                                                >
-                                                                    {formatBudgetValue(preset)}
-                                                                </button>
-                                                            )}
-                                                        </For>
-                                                    </div>
-                                                </div>
-                                            </Show>
-                                        </div>
-
-                                        {/* Advanced-only: Max Order Size & Daily Limit */}
-                                        <Show when={setupMode() === 'advanced'}>
-                                            {/* Max Order Size */}
-                                            <div class={`p-4 rounded-xl border transition-all ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                        <div class="space-y-4">
+                                            {/* Total Budget */}
+                                            <div class={`p-4 rounded-xl border transition-all ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
                                                 <div class="flex items-center justify-between mb-2">
                                                     <div>
-                                                        <div class="text-xs font-bold text-white">1회 주문 최대 금액</div>
-                                                        <div class="text-[10px] text-gray-500">한 번 주문에 넣을 수 있는 최대 금액</div>
+                                                        <div class="text-xs font-bold text-white">전체 운용 한도</div>
+                                                        <div class="text-[10px] text-gray-500">에이전트가 사용할 최대 총 금액</div>
                                                     </div>
                                                     <button
-                                                        onClick={() => updateBudgetField('maxOrderSizeEnabled', !budgetConfig().maxOrderSizeEnabled)}
-                                                        class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500' : 'bg-gray-700'}`}
+                                                        onClick={() => updateBudgetField('totalBudgetEnabled', !budgetConfig().totalBudgetEnabled)}
+                                                        class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500' : 'bg-gray-700'}`}
                                                     >
-                                                        <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().maxOrderSizeEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                        <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().totalBudgetEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
                                                     </button>
                                                 </div>
-                                                <Show when={budgetConfig().maxOrderSizeEnabled}>
-                                                    <div class="mt-3">
+                                                <Show when={budgetConfig().totalBudgetEnabled}>
+                                                    <div class="mt-3 space-y-2">
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
                                                             <input
                                                                 type="number"
                                                                 min="0"
-                                                                value={budgetConfig().maxOrderSize || ''}
-                                                                onInput={(e) => updateBudgetField('maxOrderSize', Number(e.currentTarget.value) || 0)}
+                                                                value={budgetConfig().totalBudget || ''}
+                                                                onInput={(e) => updateBudgetField('totalBudget', Number(e.currentTarget.value) || 0)}
                                                                 placeholder="금액 입력"
                                                                 class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
                                                             />
+                                                            <Show when={budgetConfig().totalBudget > 0}>
+                                                                <span class="text-[10px] text-cyan-400 font-bold whitespace-nowrap">
+                                                                    {budgetPctOfTotal(budgetConfig().totalBudget).toFixed(1)}%
+                                                                </span>
+                                                            </Show>
+                                                        </div>
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <For each={budgetPresets()}>
+                                                                {(preset) => (
+                                                                    <button
+                                                                        onClick={() => updateBudgetField('totalBudget', preset)}
+                                                                        class={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${budgetConfig().totalBudget === preset ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white'}`}
+                                                                    >
+                                                                        {formatBudgetValue(preset)}
+                                                                    </button>
+                                                                )}
+                                                            </For>
                                                         </div>
                                                     </div>
                                                 </Show>
                                             </div>
 
-                                            {/* Daily Trading Limit */}
-                                            <div class={`p-4 rounded-xl border transition-all ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                            {/* Per Asset Budget */}
+                                            <div class={`p-4 rounded-xl border transition-all ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
                                                 <div class="flex items-center justify-between mb-2">
                                                     <div>
-                                                        <div class="text-xs font-bold text-white">일일 거래 한도</div>
-                                                        <div class="text-[10px] text-gray-500">하루 총 거래 금액 상한</div>
+                                                        <div class="text-xs font-bold text-white">종목당 운용 한도</div>
+                                                        <div class="text-[10px] text-gray-500">개별 코인에 투입할 최대 금액</div>
                                                     </div>
                                                     <button
-                                                        onClick={() => updateBudgetField('dailyTradingLimitEnabled', !budgetConfig().dailyTradingLimitEnabled)}
-                                                        class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500' : 'bg-gray-700'}`}
+                                                        onClick={() => updateBudgetField('perAssetBudgetEnabled', !budgetConfig().perAssetBudgetEnabled)}
+                                                        class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500' : 'bg-gray-700'}`}
                                                     >
-                                                        <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().dailyTradingLimitEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                        <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().perAssetBudgetEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
                                                     </button>
                                                 </div>
-                                                <Show when={budgetConfig().dailyTradingLimitEnabled}>
-                                                    <div class="mt-3">
+                                                <Show when={budgetConfig().perAssetBudgetEnabled}>
+                                                    <div class="mt-3 space-y-2">
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
                                                             <input
                                                                 type="number"
                                                                 min="0"
-                                                                value={budgetConfig().dailyTradingLimit || ''}
-                                                                onInput={(e) => updateBudgetField('dailyTradingLimit', Number(e.currentTarget.value) || 0)}
+                                                                value={budgetConfig().perAssetBudget || ''}
+                                                                onInput={(e) => updateBudgetField('perAssetBudget', Number(e.currentTarget.value) || 0)}
                                                                 placeholder="금액 입력"
                                                                 class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
                                                             />
+                                                            <Show when={budgetConfig().perAssetBudget > 0 && budgetConfig().totalBudgetEnabled && budgetConfig().totalBudget > 0}>
+                                                                <span class="text-[10px] text-gray-400 font-bold whitespace-nowrap">
+                                                                    전체의 {((budgetConfig().perAssetBudget / budgetConfig().totalBudget) * 100).toFixed(0)}%
+                                                                </span>
+                                                            </Show>
+                                                        </div>
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <For each={budgetPresets().map(p => Math.round(p / 5))}>
+                                                                {(preset) => (
+                                                                    <button
+                                                                        onClick={() => updateBudgetField('perAssetBudget', preset)}
+                                                                        class={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${budgetConfig().perAssetBudget === preset ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white'}`}
+                                                                    >
+                                                                        {formatBudgetValue(preset)}
+                                                                    </button>
+                                                                )}
+                                                            </For>
                                                         </div>
                                                     </div>
                                                 </Show>
                                             </div>
-                                        </Show>
 
-                                        {/* Validation Warnings */}
-                                        <Show when={budgetValidationWarnings().length > 0}>
-                                            <div class="space-y-1.5">
-                                                <For each={budgetValidationWarnings()}>
-                                                    {(warning) => (
-                                                        <div class="flex items-center gap-1.5 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
-                                                            <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
-                                                            <span class="text-[10px] text-amber-400">{warning}</span>
+                                            {/* Advanced-only: Max Order Size & Daily Limit */}
+                                            <Show when={setupMode() === 'advanced'}>
+                                                {/* Max Order Size */}
+                                                <div class={`p-4 rounded-xl border transition-all ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div>
+                                                            <div class="text-xs font-bold text-white">1회 주문 최대 금액</div>
+                                                            <div class="text-[10px] text-gray-500">한 번 주문에 넣을 수 있는 최대 금액</div>
                                                         </div>
-                                                    )}
-                                                </For>
-                                            </div>
-                                        </Show>
+                                                        <button
+                                                            onClick={() => updateBudgetField('maxOrderSizeEnabled', !budgetConfig().maxOrderSizeEnabled)}
+                                                            class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500' : 'bg-gray-700'}`}
+                                                        >
+                                                            <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().maxOrderSizeEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                        </button>
+                                                    </div>
+                                                    <Show when={budgetConfig().maxOrderSizeEnabled}>
+                                                        <div class="mt-3">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={budgetConfig().maxOrderSize || ''}
+                                                                    onInput={(e) => updateBudgetField('maxOrderSize', Number(e.currentTarget.value) || 0)}
+                                                                    placeholder="금액 입력"
+                                                                    class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+
+                                                {/* Daily Trading Limit */}
+                                                <div class={`p-4 rounded-xl border transition-all ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div>
+                                                            <div class="text-xs font-bold text-white">일일 거래 한도</div>
+                                                            <div class="text-[10px] text-gray-500">하루 총 거래 금액 상한</div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => updateBudgetField('dailyTradingLimitEnabled', !budgetConfig().dailyTradingLimitEnabled)}
+                                                            class={`relative w-10 h-5 rounded-full transition-colors ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500' : 'bg-gray-700'}`}
+                                                        >
+                                                            <div class={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${budgetConfig().dailyTradingLimitEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                        </button>
+                                                    </div>
+                                                    <Show when={budgetConfig().dailyTradingLimitEnabled}>
+                                                        <div class="mt-3">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-xs text-gray-500 w-4 flex-shrink-0">{budgetCurrencySymbol()}</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={budgetConfig().dailyTradingLimit || ''}
+                                                                    onInput={(e) => updateBudgetField('dailyTradingLimit', Number(e.currentTarget.value) || 0)}
+                                                                    placeholder="금액 입력"
+                                                                    class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                            </Show>
+
+                                            {/* Validation Warnings */}
+                                            <Show when={budgetValidationWarnings().length > 0}>
+                                                <div class="space-y-1.5">
+                                                    <For each={budgetValidationWarnings()}>
+                                                        {(warning) => (
+                                                            <div class="flex items-center gap-1.5 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                                                                <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                                                <span class="text-[10px] text-amber-400">{warning}</span>
+                                                            </div>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                            </Show>
+                                        </div>
                                     </div>
-                                </div>
+                                </Show>
 
                                 {/* Risk Summary Panel */}
                                 <div class="p-4 bg-white/[0.02] rounded-2xl border border-white/[0.04]">
@@ -1428,6 +1479,39 @@ const VisionQuantEngine = (): JSX.Element => {
                                             <span class="text-xs font-bold text-white">{budgetCurrencySymbol()}{budgetConfig().dailyTradingLimit.toLocaleString()}</span>
                                         </div>
                                     </Show>
+
+                                    {/* Paper Trading Seed & Competition Info */}
+                                    <Show when={tradingMode() === 'paper'}>
+                                        {(() => {
+                                            const creds = credentials();
+                                            const firstCred = creds[0];
+                                            const isKrw = !firstCred || firstCred.exchange === 'upbit' || firstCred.exchange === 'bithumb';
+                                            const seedAmount = isKrw ? '10,000,000 KRW' : '10,000 USDT';
+                                            return (
+                                                <div class="flex items-center justify-between p-3 bg-amber-500/[0.05] rounded-xl border border-amber-500/15">
+                                                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">Seed Capital (Fixed)</span>
+                                                    <span class="text-xs font-black text-amber-400">{seedAmount}</span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </Show>
+
+                                    {/* Competition Auto-Join Banner in Confirm */}
+                                    <Show when={tradingMode() === 'paper' && activeCompetition()}>
+                                        <div class="p-3 bg-cyan-500/[0.04] rounded-xl border border-cyan-500/15">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                                    <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                                </svg>
+                                                <span class="text-[10px] font-bold text-cyan-400">Auto-enrolled: {activeCompetition()!.title}</span>
+                                            </div>
+                                            <p class="text-[9px] text-gray-500">
+                                                Prize Pool: {activeCompetition()!.prizes.map(p => p.reward).join(' / ')} | Ends {new Date(activeCompetition()!.endDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                                            </p>
+                                        </div>
+                                    </Show>
                                 </div>
 
                                 {/* Legal Checkboxes */}
@@ -1489,7 +1573,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 const isKrw = !firstCred || firstCred.exchange === 'upbit' || firstCred.exchange === 'bithumb';
                                                 const seedCurrency = isKrw ? 'KRW' as const : 'USDT' as const;
 
-                                                await createPaperAgent({
+                                                const comp = activeCompetition();
+                                                const agent = await createPaperAgent({
                                                     strategyId: strategy.id,
                                                     strategyName: strategy.name,
                                                     selectedAssets: selectedAssets(),
@@ -1497,7 +1582,18 @@ const VisionQuantEngine = (): JSX.Element => {
                                                     budgetConfig: budgetConfig(),
                                                     riskProfile: riskProfile(),
                                                     seedCurrency,
+                                                    competitionId: comp?.id,
                                                 });
+
+                                                // Auto-join competition if active
+                                                if (comp) {
+                                                    try {
+                                                        await joinCompetition(comp.id, agent);
+                                                        console.log('[Quant] Auto-joined competition:', comp.id);
+                                                    } catch (joinErr) {
+                                                        console.warn('[Quant] Failed to join competition:', joinErr);
+                                                    }
+                                                }
 
                                                 console.log('[Quant] Paper agent created successfully');
                                                 setSuccessToast(`Trading Agent "${strategy.name}" has been created and deployed.`);
