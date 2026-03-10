@@ -12,7 +12,8 @@ import {
     ArrowLeft,
     Trophy,
     Search,
-    Award
+    Award,
+    BarChart3
 } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
 
@@ -121,6 +122,23 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             ],
             footerTag: t('campaign.limited'),
             footerIcon: Award
+        },
+        {
+            id: 'quant_arena',
+            title: t('campaign.quantArenaTitle'),
+            tag: t('campaign.quantArenaTag'),
+            tagColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+            description: t('campaign.quantArenaDesc'),
+            icon: BarChart3,
+            accent: 'blue',
+            btnText: t('campaign.quantArenaBtn'),
+            stats: [
+                { label: t('campaign.quantArenaPrize'), value: '9,000 VCN' },
+                { label: t('campaign.quantArenaSeed'), value: '10M KRW' },
+                { label: t('campaign.quantArenaEnds'), value: 'Mar 20' }
+            ],
+            footerTag: 'Round 1',
+            footerIcon: Trophy
         }
     ];
 
@@ -249,6 +267,8 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                         onClick={() => {
                                             if (quest.id === 'staking' && props.onNavigate) {
                                                 props.onNavigate('staking');
+                                            } else if (quest.id === 'quant_arena' && props.onNavigate) {
+                                                props.onNavigate('quant');
                                             } else {
                                                 setSelectedQuest(quest.id);
                                             }

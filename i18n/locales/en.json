@@ -726,7 +726,14 @@
         "startHunting": "Start Hunting",
         "handlesClaimed": "Handles Claimed",
         "rarityBonus": "Rarity Bonus",
-        "limited": "Limited"
+        "limited": "Limited",
+        "quantArenaTitle": "Quant Arena",
+        "quantArenaTag": "Round 1 Live",
+        "quantArenaDesc": "Compete with 10M KRW seed capital using Vision Quant strategies. Top 3 traders win VCN + RP prizes. Round 1 ends Mar 20.",
+        "quantArenaBtn": "Join Arena",
+        "quantArenaPrize": "Prize Pool",
+        "quantArenaSeed": "Seed Capital",
+        "quantArenaEnds": "Ends"
     },
     "navbar": {
         "home": "Home",

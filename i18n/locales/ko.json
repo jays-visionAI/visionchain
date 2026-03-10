@@ -726,7 +726,14 @@
         "startHunting": "헌팅 시작",
         "handlesClaimed": "확보된 핸들",
         "rarityBonus": "레어리티 보너스",
-        "limited": "한정"
+        "limited": "한정",
+        "quantArenaTitle": "퀀트 아레나",
+        "quantArenaTag": "라운드 1 진행 중",
+        "quantArenaDesc": "1,000만원 시드 자본으로 Vision Quant 전략을 활용해 경쟁하세요. 상위 3명에게 VCN + RP 상금을 지급합니다. 라운드 1 마감: 3월 20일.",
+        "quantArenaBtn": "아레나 참가",
+        "quantArenaPrize": "상금 풀",
+        "quantArenaSeed": "시드 자본",
+        "quantArenaEnds": "마감일"
     },
     "navbar": {
         "home": "홈",
