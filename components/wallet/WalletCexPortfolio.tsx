@@ -898,7 +898,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                             </div>
 
                             {/* Body */}
-                            <div class="p-5 space-y-4 overflow-y-auto min-h-0">
+                            <div class="p-5 space-y-4 overflow-y-auto min-h-0 min-w-0">
                                 {/* Exchange Selection */}
                                 <div>
                                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">{t('cex.exchange')}</label>
