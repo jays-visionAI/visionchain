@@ -15,7 +15,9 @@ type SFXType =
     | 'coinCatch' | 'starCatch' | 'diamondCatch' | 'bombHit'
     | 'feverStart' | 'feverEnd' | 'timeWarning'
     // Price Predict  
-    | 'heartbeat' | 'selectUp' | 'selectDown' | 'correct' | 'wrong' | 'streakFire';
+    | 'heartbeat' | 'selectUp' | 'selectDown' | 'correct' | 'wrong' | 'streakFire'
+    // Dice Bet
+    | 'diceRoll' | 'diceWin' | 'diceLose';
 
 type BGMTheme = 'lobby' | 'memory' | 'falling' | 'predict' | 'fever';
 
@@ -400,6 +402,72 @@ class GameAudioEngine {
                     o.frequency.value = 1000; g.gain.setValueAtTime(vol * 0.8, now);
                     g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                     o.start(now); o.stop(now + 0.15);
+                    break;
+                }
+
+                // ── Dice Bet ──
+                case 'diceRoll': {
+                    // Rapid clicking noise simulating dice rattling
+                    for (let i = 0; i < 12; i++) {
+                        const delay = i * 0.07 + Math.random() * 0.03;
+                        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.02, ctx.sampleRate);
+                        const d = buf.getChannelData(0);
+                        for (let j = 0; j < d.length; j++) d[j] = (Math.random() * 2 - 1);
+                        const src = ctx.createBufferSource(); src.buffer = buf;
+                        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+                        bp.frequency.value = 1500 + Math.random() * 2000; bp.Q.value = 3;
+                        const g = ctx.createGain();
+                        src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+                        const dv = vol * (0.4 + (i / 12) * 0.6);
+                        g.gain.setValueAtTime(dv, now + delay);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.03);
+                        src.start(now + delay); src.stop(now + delay + 0.04);
+                    }
+                    // Final impact thud
+                    const thud = ctx.createOscillator(); const tg = ctx.createGain();
+                    thud.connect(tg); tg.connect(ctx.destination); thud.type = 'sine';
+                    thud.frequency.setValueAtTime(120, now + 0.85);
+                    thud.frequency.exponentialRampToValueAtTime(50, now + 1.0);
+                    tg.gain.setValueAtTime(vol * 1.5, now + 0.85);
+                    tg.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+                    thud.start(now + 0.85); thud.stop(now + 1.1);
+                    break;
+                }
+                case 'diceWin': {
+                    // Triumphant ascending fanfare
+                    const fanfare = [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6, NOTE.E6, NOTE.C6, NOTE.E6];
+                    fanfare.forEach((f, i) => {
+                        const ow = ctx.createOscillator(); const gw = ctx.createGain();
+                        ow.connect(gw); gw.connect(ctx.destination);
+                        ow.type = i < 4 ? 'sine' : 'triangle';
+                        ow.frequency.value = f;
+                        gw.gain.setValueAtTime(vol * 1.5, now + i * 0.1);
+                        gw.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.3);
+                        ow.start(now + i * 0.1); ow.stop(now + i * 0.1 + 0.3);
+                    });
+                    // Shimmer noise
+                    const shimBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+                    const sd = shimBuf.getChannelData(0);
+                    for (let i = 0; i < sd.length; i++) sd[i] = (Math.random() * 2 - 1) * 0.15;
+                    const shim = ctx.createBufferSource(); shim.buffer = shimBuf;
+                    const shp = ctx.createBiquadFilter(); shp.type = 'highpass'; shp.frequency.value = 6000;
+                    const sg = ctx.createGain();
+                    shim.connect(shp); shp.connect(sg); sg.connect(ctx.destination);
+                    sg.gain.setValueAtTime(vol, now + 0.3);
+                    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                    shim.start(now + 0.3); shim.stop(now + 0.8);
+                    break;
+                }
+                case 'diceLose': {
+                    // Sad descending tone
+                    [NOTE.G4, NOTE.E4, NOTE.C4, NOTE.A3].forEach((f, i) => {
+                        const ol = ctx.createOscillator(); const gl = ctx.createGain();
+                        ol.connect(gl); gl.connect(ctx.destination); ol.type = 'sine';
+                        ol.frequency.value = f;
+                        gl.gain.setValueAtTime(vol * 0.8, now + i * 0.15);
+                        gl.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.3);
+                        ol.start(now + i * 0.15); ol.stop(now + i * 0.15 + 0.3);
+                    });
                     break;
                 }
             }

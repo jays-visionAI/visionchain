@@ -4,6 +4,7 @@ import { WalletViewHeader } from './WalletViewHeader';
 import { MemoryMatchGame } from './MemoryMatchGame';
 import { FallingCoinsGame } from './FallingCoinsGame';
 import { PricePredictGame } from './PricePredictGame';
+import { DiceBetGame } from './DiceBetGame';
 import { useI18n } from '../../i18n/i18nContext';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 import { getFirebaseDb } from '../../services/firebaseService';
@@ -246,6 +247,9 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     const [isNewRecord, setIsNewRecord] = createSignal(false);
     const [combo, setCombo] = createSignal(0);
     const [lastTapTime, setLastTapTime] = createSignal(0);
+
+    // Dice Bet state
+    const [diceBetPending, setDiceBetPending] = createSignal<{ rpAmount: number; gameName: string } | null>(null);
 
     // RPConfig loaded values
     const [maxSpins, setMaxSpins] = createSignal(DEFAULT_DAILY_SPINS);
@@ -1161,7 +1165,10 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                             };
                             setDailyData(updated);
                             saveDailyData(updated);
-                            awardRewards(result.vcn, result.rp, `Memory Match (${result.grade})`);
+                            awardRewards(result.vcn, 0, `Memory Match (${result.grade})`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: `Memory Match (${result.grade})` });
+                            }
                         }}
                     />
                 </Show>
@@ -1188,7 +1195,10 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                             };
                             setDailyData(updated);
                             saveDailyData(updated);
-                            awardRewards(result.vcn, result.rp, `Falling Coins (${result.grade})`);
+                            awardRewards(result.vcn, 0, `Falling Coins (${result.grade})`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: `Falling Coins (${result.grade})` });
+                            }
                         }}
                     />
                 </Show>
@@ -1216,9 +1226,40 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                             };
                             setDailyData(updated);
                             saveDailyData(updated);
-                            awardRewards(result.vcn, result.rp, `Price Predict (${result.correct ? 'Correct' : 'Wrong'})`);
+                            awardRewards(result.vcn, 0, `Price Predict (${result.correct ? 'Correct' : 'Wrong'})`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: `Price Predict` });
+                            }
                         }}
                     />
+                </Show>
+
+                {/* ═══════════════════ DICE BET OVERLAY ═══════════════════ */}
+                <Show when={diceBetPending() !== null}>
+                    {(() => {
+                        const bet = diceBetPending()!;
+                        return (
+                            <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 px-4">
+                                <div class="w-full max-w-sm">
+                                    <DiceBetGame
+                                        rpAmount={bet.rpAmount}
+                                        onSkip={() => {
+                                            // Award original RP
+                                            awardRewards(0, bet.rpAmount, bet.gameName);
+                                            setDiceBetPending(null);
+                                        }}
+                                        onResult={(finalRP) => {
+                                            // Award modified RP (0 if lost, multiplied if won)
+                                            if (finalRP > 0) {
+                                                awardRewards(0, finalRP, `Dice Bet x${Math.round(finalRP / bet.rpAmount)} (${bet.gameName})`);
+                                            }
+                                            setDiceBetPending(null);
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </Show>
 
                 {/* Game History */}
