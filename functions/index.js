@@ -11236,7 +11236,7 @@ exports.agentGateway = onRequest({
       const selectedAction = body.selected_action || (allowedActions.length === 1 ? allowedActions[0] : "");
 
       // Validate model
-      const validModels = ["gemini-2.0-flash", "deepseek-chat"];
+      const validModels = ["gemini-2.0-flash", "gemini-3-flash-preview", "deepseek-chat"];
       if (!validModels.includes(llmModel)) {
         return res.status(400).json({ error: `Invalid LLM model. Available: ${validModels.join(", ")}` });
       }
@@ -16617,15 +16617,16 @@ async function getApiKeyFromFirestore(provider) {
 async function callLLM(model, systemPrompt, userPrompt, availableTools) {
   if (!axios) axios = require("axios");
 
-  if (model === "gemini-2.0-flash") {
+  if (model === "gemini-2.0-flash" || model === "gemini-3-flash-preview") {
     const GEMINI_KEY =
       (await getApiKeyFromFirestore("gemini")) ||
       process.env.GEMINI_API_KEY ||
       "";
     if (!GEMINI_KEY) throw new Error("LLM API key not configured");
 
+    const modelId = model === "gemini-3-flash-preview" ? "gemini-3-flash-preview" : "gemini-2.0-flash";
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_KEY}`,
       {
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -17607,7 +17608,7 @@ async function analyzeArticlesBatch(articles) {
 Output ONLY valid JSON array, no markdown fences.`;
 
     try {
-      const response = await callLLM("gemini-2.0-flash", systemPrompt, batchInput);
+      const response = await callLLM("deepseek-chat", systemPrompt, batchInput);
       // Parse JSON response - strip markdown fences if present
       const cleaned = response.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const parsed = JSON.parse(cleaned);
@@ -18033,7 +18034,7 @@ exports.generateInsightSnapshot = onSchedule({
     let marketBrief = null;
     try {
       const summaryPrompt = `Given crypto market ASI score ${asiScore}/100 (${asiLabel}), trend: ${asiTrend}, based on ${articles.length} recent articles. Write ONE sentence (max 15 words) summarizing the market mood for traders. No quotes.`;
-      asiSummary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
+      asiSummary = await callLLM("deepseek-chat", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
       asiSummary = asiSummary.replace(/^["']|["']$/g, "").trim();
     } catch (e) {
       asiSummary = `Market sentiment at ${asiScore}/100. ${asiLabel} conditions prevail.`;
@@ -18076,7 +18077,7 @@ Output ONLY a valid JSON object:
 Only include categories with actual news. Output ONLY valid JSON, no markdown.`;
 
       const briefRaw = await callLLM(
-        "gemini-2.0-flash",
+        "deepseek-chat",
         "You are a crypto market analyst AI. Output only valid JSON.",
         briefPrompt,
       );
@@ -18257,7 +18258,7 @@ exports.generateWeeklyTrendReport = onSchedule({
     try {
       const topHeadlines = highlights.map((h) => h.title).join("; ");
       const prompt = `Summarize this week's crypto market: Sentiment ${overallSentiment}/100 (${sentimentLabel}). ${articles.length} articles analyzed. Top categories: ${Object.entries(categoryBreakdown).map(([k, v]) => `${k}:${v}`).join(", ")}. Key headlines: ${topHeadlines}. Write 2-3 sentences max.`;
-      summary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst writing a weekly brief. Be concise.", prompt);
+      summary = await callLLM("deepseek-chat", "You are a crypto market analyst writing a weekly brief. Be concise.", prompt);
     } catch (e) {
       summary = `This week saw ${articles.length} articles with overall ${sentimentLabel} sentiment (${overallSentiment}/100).`;
     }
@@ -18556,7 +18557,7 @@ exports.triggerInsightRefresh = onCall({
     let asiSummary = `Market sentiment at ${asiScore}/100. ${asiLabel} conditions prevail.`;
     try {
       const summaryPrompt = `Given crypto market ASI score ${asiScore}/100 (${asiLabel}), trend: ${asiTrend}, based on ${articles.length} recent articles. Write ONE sentence (max 15 words) summarizing the market mood for traders. No quotes.`;
-      asiSummary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
+      asiSummary = await callLLM("deepseek-chat", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
       asiSummary = asiSummary.replace(/^["']|["']$/g, "").trim();
     } catch (e) {
       // keep fallback
@@ -18585,7 +18586,7 @@ exports.triggerInsightRefresh = onCall({
         "tradingBias (LONG/SHORT/NEUTRAL), confidenceScore (0-100). " +
         "Only include categories with news. No markdown.";
 
-      const briefRaw = await callLLM("gemini-2.0-flash", "You are a crypto market analyst AI. Output only valid JSON.", briefPrompt);
+      const briefRaw = await callLLM("deepseek-chat", "You are a crypto market analyst AI. Output only valid JSON.", briefPrompt);
       const cleaned = briefRaw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       marketBrief = JSON.parse(cleaned);
     } catch (e) {
@@ -18758,8 +18759,8 @@ async function generatePostImage(imagePrompt) {
     const apiKey = await getApiKeyFromFirestore("gemini");
     if (!apiKey) throw new Error("Gemini API key not configured");
 
-    // Use Gemini 2.0 Flash with image generation
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+    // Use Nano Banana Pro (gemini-3-pro-image-preview) for image generation
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -23997,7 +23998,7 @@ Output ONLY valid JSON array, no markdown, no explanation.`;
     const userInput = JSON.stringify(tipsJson);
 
     try {
-      const translated = await callLLM("gemini-2.0-flash", systemPrompt, userInput);
+      const translated = await callLLM("deepseek-chat", systemPrompt, userInput);
 
       // Parse response
       let parsed;
@@ -25586,7 +25587,7 @@ Generate the following as a JSON object with these exact keys:
     if (!GEMINI_KEY) { console.warn("[autoGenerateReleaseContent] No Gemini key"); return; }
 
     const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
       {
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -26635,7 +26636,7 @@ Generate the following as a JSON object with these exact keys:
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         geminiRes = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
           {
             contents: [{ role: "user", parts: [{ text: userPrompt }] }],
             systemInstruction: { parts: [{ text: systemPrompt }] },
