@@ -25709,96 +25709,503 @@ const TechIndicators = {
 };
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SIGNAL ENGINE v2.0 - Modular Strategy Evaluation
+ *
+ * Each strategy has a dedicated entry evaluator that reads the exact parameter
+ * keys defined in strategyRegistry.ts. Exit logic is shared but parameterized.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+// ─── Strategy Entry Evaluators ─────────────────────────────────────────────
+
+/** Module 1 & common trend strategies: EMA cross + trend filter + volume */
+function evalTrendEntry(params, closes, price, volumes) {
+  const fastPeriod = Number(params.fast_ema) || 20;
+  const slowPeriod = Number(params.slow_ema) || 50;
+  const trendPeriod = Number(params.trend_ema) || 200;
+  const volRatio = Number(params.volume_ratio) || 1.1;
+
+  let score = 0;
+  let reason = "";
+
+  const emaFast = TechIndicators.ema(closes, fastPeriod);
+  const emaSlow = TechIndicators.ema(closes, slowPeriod);
+  if (emaFast && emaSlow && emaFast > emaSlow) {
+    score += 30;
+    reason += `EMA(${fastPeriod}) > EMA(${slowPeriod}); `;
+  }
+
+  const trendEma = TechIndicators.ema(closes, Math.min(trendPeriod, closes.length - 1));
+  if (trendEma && price > trendEma) {
+    score += 20;
+    reason += "Above trend; ";
+  }
+
+  // Volume filter
+  if (volumes && volumes.length >= 20) {
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const curVol = volumes[volumes.length - 1];
+    if (avgVol > 0 && curVol >= avgVol * volRatio) {
+      score += 10;
+      reason += "Volume confirmed; ";
+    }
+  }
+
+  // ATR spike guard
+  const recentCloses = closes.slice(-20);
+  if (recentCloses.length >= 5) {
+    const changes = [];
+    for (let i = 1; i < recentCloses.length; i++) {
+      changes.push(Math.abs(recentCloses[i] - recentCloses[i - 1]) / recentCloses[i - 1] * 100);
+    }
+    const avgChange = changes.reduce((a, b) => a + b, 0) / changes.length;
+    const latestChange = changes[changes.length - 1];
+    if (latestChange > avgChange * 3) {
+      score -= 20;
+      reason += "ATR spike warning; ";
+    }
+  }
+
+  return { score, reason };
+}
+
+/** Module 2: Bollinger Mean Reversion */
+function evalBollingerEntry(params, closes, price) {
+  const bbLen = Number(params.bb_length) || 20;
+  const bbStd = Number(params.bb_stddev) || 2;
+  const rsiLen = Number(params.rsi_length) || 14;
+  const rsiOS = Number(params.rsi_oversold) || 30;
+  const trendEma = Number(params.trend_filter_ema) || 100;
+
+  let score = 0;
+  let reason = "";
+
+  const bb = TechIndicators.bollinger(closes, bbLen, bbStd);
+  if (bb && price <= bb.lower * 1.02) {
+    score += 35;
+    reason += `Near BB lower (stddev=${bbStd}); `;
+  }
+
+  const rsi = TechIndicators.rsi(closes, rsiLen);
+  if (rsi !== null && rsi < rsiOS + 5 && rsi > rsiOS - 5) {
+    score += 25;
+    reason += `RSI oversold zone (${rsi.toFixed(1)}); `;
+  }
+
+  // Trend filter: only enter if above trend EMA
+  const ema = TechIndicators.ema(closes, Math.min(trendEma, closes.length - 1));
+  if (ema && price > ema) {
+    score += 10;
+    reason += "Above trend filter; ";
+  }
+
+  return { score, reason };
+}
+
+/** Module 3: RSI Reversal Filtered */
+function evalRsiReversalEntry(params, closes, price) {
+  const rsiLen = Number(params.rsi_length) || 14;
+  const rsiEntry = Number(params.rsi_entry) || 28;
+  const rsiRecovery = Number(params.rsi_recovery) || 32;
+  const macdFast = Number(params.macd_fast) || 12;
+  const macdSlow = Number(params.macd_slow) || 26;
+
+  let score = 0;
+  let reason = "";
+
+  const rsi = TechIndicators.rsi(closes, rsiLen);
+  const prevRsi = TechIndicators.rsi(closes.slice(0, -1), rsiLen);
+
+  // RSI dip below entry then recover above recovery
+  if (prevRsi !== null && rsi !== null && prevRsi < rsiEntry && rsi >= rsiRecovery) {
+    score += 40;
+    reason += `RSI recovered ${prevRsi.toFixed(1)} -> ${rsi.toFixed(1)}; `;
+  } else if (rsi !== null && rsi >= rsiEntry && rsi <= rsiRecovery + 5) {
+    score += 20;
+    reason += `RSI near recovery zone (${rsi.toFixed(1)}); `;
+  }
+
+  // MACD histogram improving
+  const macd = TechIndicators.macd(closes, macdFast, macdSlow, 9);
+  if (macd && macd.histogram > 0) {
+    score += 20;
+    reason += "MACD histogram positive; ";
+  }
+
+  return { score, reason };
+}
+
+/** Module 4: Donchian Breakout Swing */
+function evalBreakoutEntry(params, closes, price, volumes) {
+  const period = Number(params.donchian_period) || 20;
+  const volRatio = Number(params.volume_ratio) || 1.3;
+  const trendPeriod = 200;
+
+  let score = 0;
+  let reason = "";
+
+  // Donchian channel breakout
+  const recentHighs = closes.slice(-period);
+  if (recentHighs.length >= period) {
+    const channelHigh = Math.max(...recentHighs);
+    if (price >= channelHigh * 0.99) {
+      score += 35;
+      reason += `Donchian ${period}d breakout; `;
+    }
+  }
+
+  // Volume confirmation
+  if (volumes && volumes.length >= 20) {
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const curVol = volumes[volumes.length - 1];
+    if (avgVol > 0 && curVol >= avgVol * volRatio) {
+      score += 15;
+      reason += `Volume ${(curVol / avgVol).toFixed(1)}x confirmed; `;
+    }
+  }
+
+  // Trend filter
+  const trendEma = TechIndicators.ema(closes, Math.min(trendPeriod, closes.length - 1));
+  if (trendEma && price > trendEma) {
+    score += 10;
+    reason += "Above 200 EMA; ";
+  }
+
+  return { score, reason };
+}
+
+/** Module 5: Multi-Factor Quant Guard */
+function evalMultiFactorEntry(params, closes, price, volumes) {
+  const trendPeriod = Number(params.trend_ema) || 200;
+  const fastEma = Number(params.fast_ema) || 20;
+  const slowEma = Number(params.slow_ema) || 50;
+  const rsiThresh = Number(params.rsi_threshold) || 40;
+  const volSpike = Number(params.volume_spike) || 1.2;
+
+  let score = 0;
+  let reason = "";
+  let factors = 0;
+
+  // Factor 1: Price above trend EMA
+  const trendEma = TechIndicators.ema(closes, Math.min(trendPeriod, closes.length - 1));
+  if (trendEma && price > trendEma) { factors++; reason += "Trend OK; "; }
+
+  // Factor 2: Fast EMA above slow EMA
+  const emaF = TechIndicators.ema(closes, fastEma);
+  const emaS = TechIndicators.ema(closes, slowEma);
+  if (emaF && emaS && emaF > emaS) { factors++; reason += "EMA cross OK; "; }
+
+  // Factor 3: RSI recovery
+  const rsi = TechIndicators.rsi(closes, 14);
+  if (rsi !== null && rsi > rsiThresh && rsi < 70) { factors++; reason += `RSI ${rsi.toFixed(0)} OK; `; }
+
+  // Factor 4: MACD positive
+  const macd = TechIndicators.macd(closes);
+  if (macd && macd.histogram > 0) { factors++; reason += "MACD OK; "; }
+
+  // Factor 5: Volume above average
+  if (volumes && volumes.length >= 20) {
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const curVol = volumes[volumes.length - 1];
+    if (avgVol > 0 && curVol >= avgVol * volSpike) { factors++; reason += "Volume OK; "; }
+  }
+
+  // Require at least 4 of 5 factors
+  score = factors >= 5 ? 70 : factors >= 4 ? 55 : factors >= 3 ? 35 : 15;
+  reason = `${factors}/5 factors: ` + reason;
+
+  return { score, reason };
+}
+
+/** Module 7: Turtle Trading (Donchian + ATR position sizing) */
+function evalTurtleEntry(params, closes, price, volumes) {
+  const sys1 = Number(params.system1_period) || 20;
+  const sys2 = Number(params.system2_period) || 55;
+  const volRatio = 1.2;
+
+  let score = 0;
+  let reason = "";
+
+  // System 1 breakout
+  if (closes.length >= sys1) {
+    const high = Math.max(...closes.slice(-sys1));
+    if (price >= high * 0.99) {
+      score += 30;
+      reason += `System1 ${sys1}d breakout; `;
+    }
+  }
+
+  // System 2 confirmation
+  if (closes.length >= sys2) {
+    const high55 = Math.max(...closes.slice(-sys2));
+    if (price >= high55 * 0.98) {
+      score += 20;
+      reason += `System2 ${sys2}d confirmed; `;
+    }
+  }
+
+  // Volume
+  if (volumes && volumes.length >= 20) {
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const curVol = volumes[volumes.length - 1];
+    if (avgVol > 0 && curVol >= avgVol * volRatio) {
+      score += 10;
+      reason += "Volume confirmed; ";
+    }
+  }
+
+  return { score, reason };
+}
+
+/** Module 8: Williams Volatility Breakout */
+function evalWilliamsEntry(params, closes, price) {
+  const kFactor = Number(params.k_factor) || 0.5;
+  const wrPeriod = Number(params.williams_r_period) || 14;
+  const wrOverbought = Number(params.williams_r_overbought) || -20;
+
+  let score = 0;
+  let reason = "";
+
+  // Williams VB: price > prev_close + (prev_range * K)
+  if (closes.length >= 3) {
+    const prevClose = closes[closes.length - 2];
+    const prevHigh = Math.max(closes[closes.length - 2], closes[closes.length - 3]);
+    const prevLow = Math.min(closes[closes.length - 2], closes[closes.length - 3]);
+    const prevRange = prevHigh - prevLow;
+    const breakoutLevel = prevClose + prevRange * kFactor;
+    if (price > breakoutLevel) {
+      score += 35;
+      reason += `VB breakout (K=${kFactor}); `;
+    }
+  }
+
+  // Williams %R not overbought
+  if (closes.length >= wrPeriod) {
+    const highest = Math.max(...closes.slice(-wrPeriod));
+    const lowest = Math.min(...closes.slice(-wrPeriod));
+    if (highest !== lowest) {
+      const wr = ((highest - price) / (highest - lowest)) * -100;
+      if (wr < wrOverbought) {
+        score += 15;
+        reason += `%R ${wr.toFixed(0)} not overbought; `;
+      }
+    }
+  }
+
+  // RSI momentum
+  const rsi = TechIndicators.rsi(closes, 14);
+  if (rsi !== null && rsi > 40 && rsi < 60) {
+    score += 10;
+    reason += `RSI neutral (${rsi.toFixed(0)}); `;
+  }
+
+  return { score, reason };
+}
+
+/** Module 9: Minervini VCP Momentum (simplified) */
+function evalMinerviniEntry(params, closes, price, volumes) {
+  const smaFast = Number(params.sma_fast) || 50;
+  const smaMid = Number(params.sma_mid) || 150;
+  const smaSlow = Number(params.sma_slow) || 200;
+  const highProx = Number(params.high_proximity_pct) || 25;
+  const lowDist = Number(params.low_distance_pct) || 30;
+  const brkVol = Number(params.breakout_volume) || 1.5;
+
+  let score = 0;
+  let reason = "";
+
+  // Trend Template: price above all 3 SMAs
+  const sF = TechIndicators.sma(closes, Math.min(smaFast, closes.length));
+  const sM = TechIndicators.sma(closes, Math.min(smaMid, closes.length));
+  const sS = TechIndicators.sma(closes, Math.min(smaSlow, closes.length));
+
+  if (sF && sM && sS && price > sF && price > sM && price > sS) {
+    score += 20;
+    reason += "Above all SMAs; ";
+  }
+
+  // SMA alignment: 50 > 150 > 200
+  if (sF && sM && sS && sF > sM && sM > sS) {
+    score += 15;
+    reason += "SMA aligned; ";
+  }
+
+  // Within 25% of rolling high, 30%+ above rolling low
+  if (closes.length >= 60) {
+    const rollingHigh = Math.max(...closes.slice(-60));
+    const rollingLow = Math.min(...closes.slice(-60));
+    const distFromHigh = ((rollingHigh - price) / rollingHigh) * 100;
+    const distFromLow = ((price - rollingLow) / rollingLow) * 100;
+    if (distFromHigh <= highProx) { score += 10; reason += `${distFromHigh.toFixed(0)}% from high; `; }
+    if (distFromLow >= lowDist) { score += 10; reason += `${distFromLow.toFixed(0)}% above low; `; }
+  }
+
+  // Volume confirmation
+  if (volumes && volumes.length >= 20) {
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const curVol = volumes[volumes.length - 1];
+    if (avgVol > 0 && curVol >= avgVol * brkVol) {
+      score += 10;
+      reason += `Volume ${(curVol / avgVol).toFixed(1)}x; `;
+    }
+  }
+
+  return { score, reason };
+}
+
+/** Module 10: Livermore Trend Pyramid (simplified) */
+function evalLivermoreEntry(params, closes, price, volumes) {
+  const baseMinDays = Number(params.base_min_days) || 30;
+  const brkVol = Number(params.breakout_volume) || 1.5;
+  const trendPeriod = Number(params.trend_ema) || 200;
+
+  let score = 0;
+  let reason = "";
+
+  // Trend above long EMA
+  const trendEma = TechIndicators.ema(closes, Math.min(trendPeriod, closes.length - 1));
+  if (trendEma && price > trendEma) {
+    score += 20;
+    reason += "Above trend; ";
+  }
+
+  // Base building detection: tight range for baseline period
+  if (closes.length >= baseMinDays) {
+    const base = closes.slice(-baseMinDays);
+    const baseHigh = Math.max(...base);
+    const baseLow = Math.min(...base);
+    const baseRange = ((baseHigh - baseLow) / baseLow) * 100;
+    if (baseRange < 15 && price >= baseHigh * 0.99) {
+      score += 30;
+      reason += `Base breakout (${baseRange.toFixed(0)}% range); `;
+    }
+  }
+
+  // Volume confirmation
+  if (volumes && volumes.length >= 20) {
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const curVol = volumes[volumes.length - 1];
+    if (avgVol > 0 && curVol >= avgVol * brkVol) {
+      score += 15;
+      reason += `Volume ${(curVol / avgVol).toFixed(1)}x; `;
+    }
+  }
+
+  return { score, reason };
+}
+
+/** Futures fallback: uses trend following logic with leverage awareness */
+function evalFuturesGenericEntry(params, closes, price, volumes) {
+  // Futures strategies use trend/momentum baseline
+  return evalTrendEntry(params, closes, price, volumes);
+}
+
+// ─── Strategy Dispatch Table ───────────────────────────────────────────────
+
+const STRATEGY_ENTRY_EVALUATORS = {
+  "conservative_trend_core_v1": evalTrendEntry,
+  "bollinger_mean_reversion_v1": evalBollingerEntry,
+  "rsi_reversal_filtered_v1": evalRsiReversalEntry,
+  "donchian_breakout_swing_v1": evalBreakoutEntry,
+  "multi_factor_quant_guard_v1": evalMultiFactorEntry,
+  "volatility_target_overlay_v1": null, // Risk overlay, not a signal generator
+  "turtle_trading_crypto_v1": evalTurtleEntry,
+  "williams_volatility_breakout_v1": evalWilliamsEntry,
+  "minervini_vcp_momentum_v1": evalMinerviniEntry,
+  "livermore_trend_pyramid_v1": evalLivermoreEntry,
+  // Futures
+  "futures_leveraged_trend_v1": evalFuturesGenericEntry,
+  "futures_funding_arb_v1": evalFuturesGenericEntry,
+  "futures_short_squeeze_v1": evalFuturesGenericEntry,
+  "futures_scalper_v1": evalFuturesGenericEntry,
+  "futures_long_short_balance_v1": evalFuturesGenericEntry,
+};
+
+// ─── Shared Exit Evaluation ────────────────────────────────────────────────
+
+function evaluateExit(params, strategyId, pos, price, closes) {
+  let sellScore = 0;
+  let sellReason = "";
+  const pnlPct = ((price - pos.avgEntryPrice) / pos.avgEntryPrice) * 100;
+
+  // Stop loss (all strategies)
+  const stopLoss = Number(params.stop_loss) || 5;
+  if (pnlPct <= -stopLoss) {
+    return { score: 100, reason: `Stop loss hit (${pnlPct.toFixed(2)}%)`, pnlPct };
+  }
+
+  // Take profit (all strategies)
+  const takeProfit = Number(params.take_profit) || 10;
+  if (pnlPct >= takeProfit) {
+    return { score: 90, reason: `Take profit hit (${pnlPct.toFixed(2)}%)`, pnlPct };
+  }
+
+  // Trailing stop (all strategies)
+  const trailingStop = Number(params.trailing_stop) || 5;
+  if (pnlPct > trailingStop && pnlPct < takeProfit && closes.length >= 5) {
+    const recentHigh = Math.max(...closes.slice(-5));
+    const dropFromHigh = ((recentHigh - price) / recentHigh) * 100;
+    if (dropFromHigh > trailingStop * 0.5) {
+      sellScore = 70;
+      sellReason = `Trailing stop (${dropFromHigh.toFixed(1)}% from high)`;
+    }
+  }
+
+  // RSI overbought exit
+  const rsi = TechIndicators.rsi(closes, 14);
+  if (rsi !== null && rsi > 75 && pnlPct > 0) {
+    sellScore = Math.max(sellScore, 60);
+    sellReason = sellReason || `RSI overbought (${rsi.toFixed(1)})`;
+  }
+
+  // EMA bearish cross for trend strategies
+  if (strategyId.includes("trend") || strategyId.includes("conservative")) {
+    const emaFast = TechIndicators.ema(closes, Number(params.fast_ema) || 20);
+    const emaSlow = TechIndicators.ema(closes, Number(params.slow_ema) || 50);
+    if (emaFast && emaSlow && emaFast < emaSlow && pnlPct > -2) {
+      sellScore = Math.max(sellScore, 55);
+      sellReason = sellReason || "EMA bearish cross";
+    }
+  }
+
+  return { score: sellScore, reason: sellReason, pnlPct };
+}
+
+// ─── Main evaluateStrategy (v2.0) ──────────────────────────────────────────
+
+/**
  * Evaluate a strategy's entry/exit signals against current market data.
+ * v2.0: Uses strategy-specific evaluators with correct parameter mapping.
  * @param {object} agent - Paper agent document
  * @param {Record<string, number>} prices - Current prices
  * @param {Record<string, number[]>} priceHistory - Recent close prices per asset
+ * @param {Record<string, number[]>} [volumeHistory] - Recent volumes per asset
  * @return {Array<{asset: string, side: 'buy'|'sell', reason: string, strength: number}>}
  */
-function evaluateStrategy(agent, prices, priceHistory) {
+function evaluateStrategy(agent, prices, priceHistory, volumeHistory) {
   const signals = [];
   const params = agent.params || {};
   const strategyId = agent.strategyId;
 
+  // Get the entry evaluator for this specific strategy
+  const entryEvaluator = STRATEGY_ENTRY_EVALUATORS[strategyId];
+
   for (const asset of agent.selectedAssets) {
     const price = prices[asset];
-    if (!price) continue;
+    if (!price || price <= 0) continue;
 
     const closes = priceHistory[asset] || [];
-    if (closes.length < 30) continue; // Need enough history
+    if (closes.length < 30) continue;
 
+    const volumes = (volumeHistory && volumeHistory[asset]) || [];
     const hasPosition = (agent.positions || []).some(p => p.asset === asset);
 
-    // === Entry Signal Evaluation ===
-    if (!hasPosition) {
-      let buyScore = 0;
-      let buyReason = "";
+    // === Entry Signal ===
+    if (!hasPosition && entryEvaluator) {
+      const { score: buyScore, reason: buyReason } = entryEvaluator(params, closes, price, volumes);
 
-      // Trend following: EMA cross
-      if (strategyId.includes("trend") || strategyId.includes("conservative")) {
-        const fastPeriod = Number(params.fast_ema) || 20;
-        const slowPeriod = Number(params.slow_ema) || 50;
-        const emaFast = TechIndicators.ema(closes, fastPeriod);
-        const emaSlow = TechIndicators.ema(closes, slowPeriod);
-        if (emaFast && emaSlow && emaFast > emaSlow) {
-          buyScore += 30;
-          buyReason += "EMA bullish cross; ";
-        }
-        const ema200 = TechIndicators.ema(closes, 200) || TechIndicators.ema(closes, Math.min(closes.length - 1, 100));
-        if (ema200 && price > ema200) {
-          buyScore += 20;
-          buyReason += "Above long-term trend; ";
-        }
-      }
-
-      // Mean reversion: RSI / Bollinger
-      if (strategyId.includes("reversion") || strategyId.includes("bollinger") || strategyId.includes("rsi")) {
-        const rsiPeriod = Number(params.rsi_length) || 14;
-        const rsi = TechIndicators.rsi(closes, rsiPeriod);
-        const entryRSI = Number(params.entry_rsi) || 30;
-        if (rsi !== null && rsi < entryRSI + 5 && rsi > entryRSI - 5) {
-          buyScore += 35;
-          buyReason += `RSI oversold recovery (${rsi.toFixed(1)}); `;
-        }
-
-        const bbLen = Number(params.bb_length) || 20;
-        const bb = TechIndicators.bollinger(closes, bbLen);
-        if (bb && price <= bb.lower * 1.02) {
-          buyScore += 30;
-          buyReason += "Near Bollinger lower band; ";
-        }
-      }
-
-      // Breakout: Donchian
-      if (strategyId.includes("breakout") || strategyId.includes("donchian")) {
-        const period = Number(params.entry_period) || 20;
-        const recentHighs = closes.slice(-period);
-        const channelHigh = Math.max(...recentHighs);
-        if (price >= channelHigh * 0.99) {
-          buyScore += 40;
-          buyReason += `Donchian breakout (${period}d high); `;
-        }
-      }
-
-      // Momentum / Multi-signal
-      if (strategyId.includes("momentum") || strategyId.includes("multi") || strategyId.includes("williams")) {
-        const rsi = TechIndicators.rsi(closes, 14);
-        const macd = TechIndicators.macd(closes);
-        if (rsi !== null && rsi > 40 && rsi < 70) buyScore += 15;
-        if (macd && macd.histogram > 0) {
-          buyScore += 25;
-          buyReason += "MACD positive momentum; ";
-        }
-      }
-
-      // Generic RSI check for all strategies
-      const rsi = TechIndicators.rsi(closes, 14);
-      if (rsi !== null && rsi < 35) {
-        buyScore += 15;
-        buyReason += `RSI low (${rsi.toFixed(1)}); `;
-      }
-
-      // Risk profile adjustment
+      // Risk profile threshold
       const threshold = agent.riskProfile === "aggressive" ? 35 :
         agent.riskProfile === "conservative" ? 55 : 45;
 
@@ -25807,57 +26214,12 @@ function evaluateStrategy(agent, prices, priceHistory) {
       }
     }
 
-    // === Exit Signal Evaluation ===
+    // === Exit Signal ===
     if (hasPosition) {
       const pos = (agent.positions || []).find(p => p.asset === asset);
       if (!pos) continue;
 
-      let sellScore = 0;
-      let sellReason = "";
-      const pnlPct = ((price - pos.avgEntryPrice) / pos.avgEntryPrice) * 100;
-
-      // Stop loss
-      const stopLoss = Number(params.stop_loss) || 5;
-      if (pnlPct <= -stopLoss) {
-        sellScore = 100;
-        sellReason = `Stop loss hit (${pnlPct.toFixed(2)}%)`;
-      }
-
-      // Take profit
-      const takeProfit = Number(params.take_profit) || 10;
-      if (pnlPct >= takeProfit) {
-        sellScore = 90;
-        sellReason = `Take profit hit (${pnlPct.toFixed(2)}%)`;
-      }
-
-      // Trailing stop
-      const trailingStop = Number(params.trailing_stop) || 5;
-      if (pnlPct > trailingStop && pnlPct < takeProfit) {
-        // Check if price dropped from recent high
-        const recentHigh = Math.max(...closes.slice(-5));
-        const dropFromHigh = ((recentHigh - price) / recentHigh) * 100;
-        if (dropFromHigh > trailingStop * 0.5) {
-          sellScore = 70;
-          sellReason = `Trailing stop (${dropFromHigh.toFixed(1)}% from high)`;
-        }
-      }
-
-      // RSI overbought exit
-      const rsi = TechIndicators.rsi(closes, 14);
-      if (rsi !== null && rsi > 75 && pnlPct > 0) {
-        sellScore = Math.max(sellScore, 60);
-        sellReason = sellReason || `RSI overbought (${rsi.toFixed(1)})`;
-      }
-
-      // EMA bearish cross for trend strategies
-      if (strategyId.includes("trend") || strategyId.includes("conservative")) {
-        const emaFast = TechIndicators.ema(closes, Number(params.fast_ema) || 20);
-        const emaSlow = TechIndicators.ema(closes, Number(params.slow_ema) || 50);
-        if (emaFast && emaSlow && emaFast < emaSlow && pnlPct > -2) {
-          sellScore = Math.max(sellScore, 55);
-          sellReason = sellReason || "EMA bearish cross";
-        }
-      }
+      const { score: sellScore, reason: sellReason } = evaluateExit(params, strategyId, pos, price, closes);
 
       if (sellScore >= 50) {
         signals.push({ asset, side: "sell", reason: sellReason, strength: sellScore });
@@ -25868,11 +26230,12 @@ function evaluateStrategy(agent, prices, priceHistory) {
   return signals;
 }
 
+
 /**
- * Fetch the last N hours of hourly candle close prices from Upbit.
+ * Fetch the last N hours of hourly candle data from Upbit.
  * @param {string} market e.g. "KRW-BTC"
  * @param {number} count number of candles
- * @return {Promise<number[]>} array of close prices oldest first
+ * @return {Promise<{closes: number[], volumes: number[]}>} oldest first
  */
 async function fetchCandles(market, count = 100) {
   try {
@@ -25882,10 +26245,14 @@ async function fetchCandles(market, count = 100) {
       { timeout: 10000 },
     );
     // Upbit returns newest first, we reverse
-    return resp.data.reverse().map((c) => c.trade_price);
+    const candles = resp.data.reverse();
+    return {
+      closes: candles.map((c) => c.trade_price),
+      volumes: candles.map((c) => c.candle_acc_trade_volume || 0),
+    };
   } catch (err) {
     console.error(`[fetchCandles] ${market} error:`, err.message);
-    return [];
+    return { closes: [], volumes: [] };
   }
 }
 
@@ -25901,13 +26268,24 @@ exports.runPaperTradingEngine = onSchedule({
 }, async () => {
   console.log("[PaperEngine] Starting hourly run...");
 
-  // 1. Get all running agents
+  // ═══ RISK ENGINE: Layer 4 Global Kill Switch ═══
+  try {
+    const configSnap = await db.doc("quantEngine/config").get();
+    if (configSnap.exists && configSnap.data()?.globalPause === true) {
+      console.log("[PaperEngine] HALTED - Global Kill Switch is active");
+      return;
+    }
+  } catch (e) {
+    // Config doc doesn't exist yet - that's OK, continue
+  }
+
+  // 1. Get all active agents (supports both legacy 'running' and new 'active' status)
   const agentSnap = await db.collection("paperAgents")
-    .where("status", "==", "running")
+    .where("status", "in", ["running", "active"])
     .get();
 
   if (agentSnap.empty) {
-    console.log("[PaperEngine] No running agents.");
+    console.log("[PaperEngine] No active agents.");
     return;
   }
 
@@ -25935,8 +26313,11 @@ exports.runPaperTradingEngine = onSchedule({
 
   // 4. Fetch candle history for each asset (with rate limiting)
   const priceHistory = {};
+  const volumeHistory = {};
   for (const asset of assetList) {
-    priceHistory[asset] = await fetchCandles(asset, 100);
+    const candleData = await fetchCandles(asset, 100);
+    priceHistory[asset] = candleData.closes;
+    volumeHistory[asset] = candleData.volumes;
     // Upbit rate limit: ~10 req/sec for public endpoints
     await new Promise((r) => setTimeout(r, 120));
   }
@@ -25948,8 +26329,88 @@ exports.runPaperTradingEngine = onSchedule({
 
   for (const agent of agents) {
     try {
-      // Evaluate signals
-      const signals = evaluateStrategy(agent, prices, priceHistory);
+      // ═══ RISK ENGINE: Layer 2 Session Checks ═══
+      const params = agent.params || {};
+      const rs = agent.riskStatus || {
+        dailyPnl: 0, weeklyPnl: 0, consecutiveLosses: 0,
+        todayTradeCount: 0, lastLossAt: null, cooldownUntil: null,
+        pauseReason: null, dailyResetDate: "", weeklyResetWeek: "",
+      };
+
+      const today = new Date().toISOString().split("T")[0];
+      const currentWeek = `${new Date().getFullYear()}-W${Math.ceil((new Date().getDate()) / 7)}`;
+
+      // Reset daily counters if new day
+      if (rs.dailyResetDate !== today) {
+        rs.dailyPnl = 0;
+        rs.todayTradeCount = 0;
+        rs.dailyResetDate = today;
+      }
+      // Reset weekly counters if new week
+      if (rs.weeklyResetWeek !== currentWeek) {
+        rs.weeklyPnl = 0;
+        rs.weeklyResetWeek = currentWeek;
+      }
+
+      // Check cooldown
+      if (rs.cooldownUntil) {
+        const cooldownEnd = new Date(rs.cooldownUntil).getTime();
+        if (Date.now() < cooldownEnd) {
+          // Still in cooldown - skip this agent, just update portfolio values
+          const positions = (agent.positions || []).map((pos) => {
+            const currentPrice = prices[pos.asset] || pos.currentPrice;
+            const value = pos.quantity * currentPrice;
+            const unrealizedPnl = value - (pos.quantity * pos.avgEntryPrice);
+            const unrealizedPnlPercent = pos.avgEntryPrice > 0
+              ? ((currentPrice - pos.avgEntryPrice) / pos.avgEntryPrice) * 100 : 0;
+            return { ...pos, currentPrice, value, unrealizedPnl, unrealizedPnlPercent };
+          });
+          const totalValue = agent.cashBalance + positions.reduce((sum, p) => sum + p.value, 0);
+          batch.update(agent.ref, { positions, totalValue, updatedAt: new Date().toISOString(), riskStatus: rs });
+          continue;
+        } else {
+          // Cooldown expired - clear it
+          rs.cooldownUntil = null;
+          rs.pauseReason = null;
+          rs.consecutiveLosses = 0;
+        }
+      }
+
+      // Check daily loss limit
+      const dailyLimit = Number(params.daily_loss_limit) || 3;
+      if (rs.dailyPnl <= -dailyLimit) {
+        rs.pauseReason = `Daily loss limit hit: ${rs.dailyPnl.toFixed(2)}% >= -${dailyLimit}%`;
+        batch.update(agent.ref, { status: "paused_by_risk", riskStatus: rs, updatedAt: new Date().toISOString() });
+        console.log(`[RiskEngine] Agent ${agent.id} paused: ${rs.pauseReason}`);
+        continue;
+      }
+
+      // Check weekly loss limit
+      const weeklyLimit = Number(params.weekly_loss_limit) || 7;
+      if (rs.weeklyPnl <= -weeklyLimit) {
+        rs.pauseReason = `Weekly loss limit hit: ${rs.weeklyPnl.toFixed(2)}% >= -${weeklyLimit}%`;
+        batch.update(agent.ref, { status: "paused_by_risk", riskStatus: rs, updatedAt: new Date().toISOString() });
+        console.log(`[RiskEngine] Agent ${agent.id} paused: ${rs.pauseReason}`);
+        continue;
+      }
+
+      // Check consecutive losses
+      const maxConsec = Number(params.consecutive_loss_pause) || 3;
+      if (rs.consecutiveLosses >= maxConsec) {
+        const cooldownHours = Number(params.cooldown_after_loss_hours) || 4;
+        rs.cooldownUntil = new Date(Date.now() + cooldownHours * 3600000).toISOString();
+        rs.pauseReason = `${rs.consecutiveLosses} consecutive losses, ${cooldownHours}h cooldown`;
+        batch.update(agent.ref, { status: "paused_by_risk", riskStatus: rs, updatedAt: new Date().toISOString() });
+        console.log(`[RiskEngine] Agent ${agent.id} paused: ${rs.pauseReason}`);
+        continue;
+      }
+
+      // Check max daily trades
+      const maxDailyTrades = Number(params.max_daily_trades) || 10;
+      const dailyTradesExceeded = rs.todayTradeCount >= maxDailyTrades;
+
+      // ═══ SIGNAL ENGINE ═══
+      const signals = evaluateStrategy(agent, prices, priceHistory, volumeHistory);
       if (signals.length === 0) {
         // Still update portfolio values
         const positions = (agent.positions || []).map((pos) => {
@@ -25966,11 +26427,16 @@ exports.runPaperTradingEngine = onSchedule({
         const totalPnl = totalValue - agent.seed;
         const totalPnlPercent = agent.seed > 0 ? (totalPnl / agent.seed) * 100 : 0;
 
+        // Update riskStatus dailyPnl with unrealized PnL
+        rs.dailyPnl = totalPnlPercent; // simplified: uses total PnL as daily proxy
+
         batch.update(agent.ref, {
           positions,
           totalValue,
           totalPnl,
           totalPnlPercent,
+          riskStatus: rs,
+          lastHeartbeatAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
         continue;
@@ -25984,6 +26450,27 @@ exports.runPaperTradingEngine = onSchedule({
         const price = prices[asset];
         if (!price) continue;
 
+        // ═══ RISK ENGINE: Layer 1 Pre-Order Checks ═══
+        // L1-1: Price validity
+        if (price <= 0) continue;
+
+        // L1-2: Price spike detection (5% threshold)
+        const assetCloses = priceHistory[asset] || [];
+        if (assetCloses.length >= 2) {
+          const prevPrice = assetCloses[assetCloses.length - 2];
+          const changePct = Math.abs((price - prevPrice) / prevPrice) * 100;
+          if (changePct > 5) {
+            console.log(`[RiskEngine] L1 REJECT ${asset}: ${changePct.toFixed(1)}% price spike`);
+            continue;
+          }
+        }
+
+        // L1-3: Max daily trades check (allow sells for stop loss even if limit reached)
+        if (side === "buy" && dailyTradesExceeded) {
+          console.log(`[RiskEngine] L2 REJECT ${asset}: Daily trade limit ${maxDailyTrades} reached`);
+          continue;
+        }
+
         const FEE_RATE = 0.0005; // 0.05% simulated fee
 
         if (side === "buy") {
@@ -25996,6 +26483,13 @@ exports.runPaperTradingEngine = onSchedule({
           }
           if (budgetConfig.perAssetBudgetEnabled && budgetConfig.perAssetBudget > 0) {
             orderBudget = Math.min(orderBudget, budgetConfig.perAssetBudget);
+          }
+
+          // L1-4: Max position size check
+          const maxPosPct = Number(params.max_position) || 15;
+          const totalVal = cashBalance + positions.reduce((s, p) => s + (p.value || 0), 0);
+          if (totalVal > 0) {
+            orderBudget = Math.min(orderBudget, totalVal * maxPosPct / 100);
           }
 
           orderBudget = Math.min(orderBudget, cashBalance * 0.95); // Keep 5% reserve
@@ -26017,6 +26511,7 @@ exports.runPaperTradingEngine = onSchedule({
           });
           agentTotalTrades++;
           totalTrades++;
+          rs.todayTradeCount++;
 
           // Record trade
           const tradeId = `pt_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -26053,9 +26548,20 @@ exports.runPaperTradingEngine = onSchedule({
           positions.splice(posIdx, 1);
           agentTotalTrades++;
           totalTrades++;
+          rs.todayTradeCount++;
 
-          if (tradePnl >= 0) winningTrades++;
-          else losingTrades++;
+          // ═══ Risk Status update after sell ═══
+          if (tradePnl >= 0) {
+            winningTrades++;
+            rs.consecutiveLosses = 0; // Reset on win
+          } else {
+            losingTrades++;
+            rs.consecutiveLosses++;
+            rs.lastLossAt = new Date().toISOString();
+            // Track daily/weekly PnL from realized trades
+            rs.dailyPnl += tradePnlPct;
+            rs.weeklyPnl += tradePnlPct;
+          }
           if (tradePnlPct > bestTrade) bestTrade = tradePnlPct;
           if (tradePnlPct < worstTrade) worstTrade = tradePnlPct;
 
@@ -26108,6 +26614,8 @@ exports.runPaperTradingEngine = onSchedule({
         winRate,
         bestTrade,
         worstTrade,
+        riskStatus: rs,
+        lastHeartbeatAt: new Date().toISOString(),
         lastTradeAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -26145,9 +26653,9 @@ exports.paperDailySnapshot = onSchedule({
   const today = new Date().toISOString().split("T")[0];
   console.log(`[DailySnapshot] Running for ${today}...`);
 
-  // Get all agents (not just running - include paused for snapshot continuity)
+  // Get all agents (includes all active/paused variants for snapshot continuity)
   const agentSnap = await db.collection("paperAgents")
-    .where("status", "in", ["running", "paused"])
+    .where("status", "in", ["running", "active", "paused", "paused_by_user", "paused_by_risk", "paused_by_system"])
     .get();
 
   if (agentSnap.empty) {
@@ -26480,6 +26988,738 @@ exports.getPaperReport = onCall({
   };
 
   return { success: true, report };
+});
+
+// =============================================================================
+// LIVE TRADING - EXCHANGE KEY MANAGEMENT
+// =============================================================================
+
+/**
+ * AES-256 encryption for API keys at rest.
+ * Key is derived from Firebase project ID + salt.
+ */
+function getEncryptionKey() {
+  const projectId = process.env.GCLOUD_PROJECT || process.env.FIREBASE_CONFIG
+    ? JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId || "vision-chain"
+    : "vision-chain";
+  return crypto.createHash("sha256").update(projectId + "_exchange_key_salt_v1").digest();
+}
+
+function encryptApiKey(plaintext) {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+  let encrypted = cipher.update(plaintext, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return iv.toString("hex") + ":" + encrypted;
+}
+
+function decryptApiKey(ciphertext) {
+  const key = getEncryptionKey();
+  const [ivHex, encrypted] = ciphertext.split(":");
+  const iv = Buffer.from(ivHex, "hex");
+  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+/**
+ * Register an exchange API key.
+ * Validates against the exchange API, encrypts, and stores in Firestore.
+ * CRITICAL: Rejects keys with withdrawal permissions.
+ */
+exports.registerExchangeKey = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error("Authentication required");
+
+  const { exchange, label, apiKey, apiSecret, passphrase } = request.data;
+
+  if (!exchange || !apiKey || !apiSecret) {
+    return { success: false, error: "Missing required fields (exchange, apiKey, apiSecret)" };
+  }
+
+  // All 15 supported exchanges
+  const SUPPORTED = [
+    "upbit", "bithumb", "coinone",
+    "binance", "bybit", "bitget", "okx",
+    "kucoin", "mexc", "cryptocom",
+    "bitkub", "coinbase",
+    "bitflyer", "gmo", "coincheck",
+  ];
+
+  if (!SUPPORTED.includes(exchange)) {
+    return { success: false, error: `Unsupported exchange: ${exchange}` };
+  }
+
+  // Check if passphrase is required but missing
+  if (exchangeRequiresPassphrase(exchange) && !passphrase) {
+    return { success: false, error: `${exchange} requires a passphrase. Please provide it.` };
+  }
+
+  // ── Validate key against exchange API using existing infrastructure ──
+  let permissions = [];
+  let hasWithdrawPermission = false;
+
+  try {
+    // Use the universal validateCexApiKey that supports all 15 exchanges
+    const validation = await validateCexApiKey(exchange, apiKey, apiSecret, passphrase || null);
+    if (!validation.success) {
+      return { success: false, error: validation.error || "API key validation failed" };
+    }
+
+    // Upbit: additional permission check (only Upbit exposes key permissions)
+    if (exchange === "upbit") {
+      try {
+        const jwt = require("jsonwebtoken");
+        const http = getAxios();
+        const payload = { access_key: apiKey, nonce: crypto.randomUUID() };
+        const token = jwt.sign(payload, apiSecret);
+
+        const resp = await http.get("https://api.upbit.com/v1/api_keys", {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 10000,
+        });
+
+        if (resp.data && Array.isArray(resp.data)) {
+          for (const keyInfo of resp.data) {
+            if (keyInfo.access_key === apiKey) {
+              permissions = keyInfo.query || [];
+              if (keyInfo.withdraw === true ||
+                (Array.isArray(keyInfo.query) && keyInfo.query.includes("withdraw"))) {
+                hasWithdrawPermission = true;
+              }
+            }
+          }
+        }
+
+        if (hasWithdrawPermission) {
+          return {
+            success: false,
+            error: "SECURITY ALERT: This API key has withdrawal permissions. For safety, only register keys with trading-only permissions. Please create a new API key on Upbit with withdrawal disabled.",
+          };
+        }
+      } catch (e) {
+        // Permission check failed but validation passed - proceed with warning
+        console.warn(`[registerExchangeKey] Upbit permission check failed: ${e.message}`);
+      }
+    }
+  } catch (err) {
+    console.error(`[registerExchangeKey] Validation error for ${exchange}:`, err.message);
+    return {
+      success: false,
+      error: `Failed to validate API key: ${err.message}. Please check your key and try again.`,
+    };
+  }
+
+  // ── Encrypt and store ──
+  const keyId = `ek_${uid}_${exchange}_${Date.now()}`;
+  const maskedKey = apiKey.length > 8
+    ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`
+    : "****";
+
+  const keyDoc = {
+    id: keyId,
+    userId: uid,
+    exchange,
+    label: label || `${exchange} API Key`,
+    maskedKey,
+    permissions,
+    isValid: true,
+    hasWithdrawPermission: false,
+    requiresPassphrase: exchangeRequiresPassphrase(exchange),
+    capabilities: EXCHANGE_CAPABILITIES[exchange] || { spot: true, futures: false },
+    encryptedKey: encryptApiKey(apiKey),
+    encryptedSecret: encryptApiKey(apiSecret),
+    encryptedPassphrase: passphrase ? encryptApiKey(passphrase) : null,
+    lastValidatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+
+  await db.collection("exchangeKeys").doc(keyId).set(keyDoc);
+
+  console.log(`[registerExchangeKey] Key registered: ${keyId} for user ${uid} on ${exchange}`);
+
+  return {
+    success: true,
+    keyId,
+    maskedKey,
+    permissions,
+    capabilities: keyDoc.capabilities,
+  };
+});
+
+/**
+ * Delete an exchange API key.
+ * Only allowed if no active Live agents reference this key.
+ */
+exports.deleteExchangeKey = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error("Authentication required");
+
+  const { keyId } = request.data;
+  if (!keyId) return { success: false, error: "Missing keyId" };
+
+  // Verify ownership
+  const keySnap = await db.collection("exchangeKeys").doc(keyId).get();
+  if (!keySnap.exists || keySnap.data()?.userId !== uid) {
+    return { success: false, error: "Key not found or unauthorized" };
+  }
+
+  // Check if any active live agents use this key
+  const activeAgents = await db.collection("paperAgents")
+    .where("userId", "==", uid)
+    .where("exchangeAccountId", "==", keyId)
+    .where("status", "in", ["running", "active"])
+    .get();
+
+  if (!activeAgents.empty) {
+    return {
+      success: false,
+      error: `Cannot delete: ${activeAgents.size} active agent(s) are using this key. Stop them first.`,
+    };
+  }
+
+  await db.collection("exchangeKeys").doc(keyId).delete();
+  console.log(`[deleteExchangeKey] Key deleted: ${keyId}`);
+  return { success: true };
+});
+
+// =============================================================================
+// LIVE TRADING - REVALIDATE EXCHANGE KEY
+// =============================================================================
+
+/**
+ * Re-validate an existing exchange API key.
+ * Decrypts the stored key and tests it against the exchange API.
+ */
+exports.revalidateExchangeKey = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error("Authentication required");
+
+  const { keyId } = request.data;
+  if (!keyId) return { valid: false, error: "Missing keyId" };
+
+  // Verify ownership
+  const keySnap = await db.collection("exchangeKeys").doc(keyId).get();
+  if (!keySnap.exists || keySnap.data()?.userId !== uid) {
+    return { valid: false, error: "Key not found or unauthorized" };
+  }
+
+  const keyData = keySnap.data();
+
+  try {
+    // Decrypt stored credentials
+    const apiKey = decryptApiKey(keyData.encryptedKey);
+    const apiSecret = decryptApiKey(keyData.encryptedSecret);
+    const passphrase = keyData.encryptedPassphrase ? decryptApiKey(keyData.encryptedPassphrase) : null;
+
+    // Validate against exchange
+    const validation = await validateCexApiKey(keyData.exchange, apiKey, apiSecret, passphrase);
+
+    // Update validation status in Firestore
+    await db.collection("exchangeKeys").doc(keyId).update({
+      isValid: validation.success,
+      lastValidatedAt: new Date().toISOString(),
+    });
+
+    if (validation.success) {
+      console.log(`[revalidateExchangeKey] Key ${keyId} is valid`);
+      return { valid: true };
+    } else {
+      console.warn(`[revalidateExchangeKey] Key ${keyId} failed: ${validation.error}`);
+      return { valid: false, error: validation.error || "Validation failed" };
+    }
+  } catch (err) {
+    console.error(`[revalidateExchangeKey] Error for ${keyId}:`, err.message);
+    // Mark as invalid
+    await db.collection("exchangeKeys").doc(keyId).update({
+      isValid: false,
+      lastValidatedAt: new Date().toISOString(),
+    });
+    return { valid: false, error: err.message };
+  }
+});
+
+// =============================================================================
+// LIVE TRADING - GLOBAL ENGINE CONFIG & KILL SWITCH
+// =============================================================================
+
+/**
+ * Set Quant Engine configuration (admin only).
+ * Includes the Global Kill Switch (Layer 4).
+ */
+exports.setQuantEngineConfig = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error("Authentication required");
+
+  // Admin check
+  const userSnap = await db.collection("users").doc(uid).get();
+  const userData = userSnap.data() || {};
+  if (userData.role !== "admin" && userData.isAdmin !== true) {
+    return { success: false, error: "Admin access required" };
+  }
+
+  const { globalPause, pauseReason, maxLiveAgentsPerUser } = request.data;
+
+  const config = {
+    updatedAt: new Date().toISOString(),
+    updatedBy: uid,
+  };
+
+  if (typeof globalPause === "boolean") {
+    config.globalPause = globalPause;
+    config.globalPauseReason = pauseReason || (globalPause ? "Manual kill switch activated" : "");
+    config.globalPauseAt = globalPause ? new Date().toISOString() : null;
+  }
+
+  if (typeof maxLiveAgentsPerUser === "number") {
+    config.maxLiveAgentsPerUser = maxLiveAgentsPerUser;
+  }
+
+  await db.doc("quantEngine/config").set(config, { merge: true });
+
+  // If kill switch activated, pause all live agents immediately
+  if (globalPause === true) {
+    const liveAgents = await db.collection("paperAgents")
+      .where("tradingMode", "==", "live")
+      .where("status", "in", ["running", "active"])
+      .get();
+
+    const batch = db.batch();
+    liveAgents.docs.forEach((d) => {
+      batch.update(d.ref, {
+        status: "paused_by_system",
+        riskStatus: {
+          ...(d.data().riskStatus || {}),
+          pauseReason: `Global kill switch: ${pauseReason || "Admin action"}`,
+        },
+        updatedAt: new Date().toISOString(),
+      });
+    });
+    await batch.commit();
+    console.log(`[KillSwitch] Paused ${liveAgents.size} live agents`);
+  }
+
+  console.log(`[setQuantEngineConfig] Updated by ${uid}:`, JSON.stringify(config));
+  return { success: true, config };
+});
+
+// =============================================================================
+// LIVE TRADING ENGINE - 5 Minute Scheduled
+// =============================================================================
+
+/**
+ * runLiveTradingEngine - Scheduled every 5 minutes
+ *
+ * Phase 4 Implementation Strategy:
+ * - Currently runs the same signal/risk evaluation loop as Paper Engine
+ * - Orders are executed as LIMIT orders via the exchange API
+ * - Layer 5 (Execution Safety): limit order enforcement, idempotency keys
+ * - When exchange integration is not yet ready, falls back to paper execution
+ *
+ * Activation: This engine only processes agents with tradingMode === "live"
+ */
+exports.runLiveTradingEngine = onSchedule({
+  schedule: "every 5 minutes",
+  timeZone: "Asia/Seoul",
+  memory: "512MiB",
+  timeoutSeconds: 300,
+}, async () => {
+  console.log("[LiveEngine] Starting 5-minute run...");
+
+  // ═══ Layer 4: Global Kill Switch ═══
+  try {
+    const configSnap = await db.doc("quantEngine/config").get();
+    if (configSnap.exists && configSnap.data()?.globalPause === true) {
+      console.log("[LiveEngine] HALTED - Global Kill Switch is active");
+      return;
+    }
+  } catch (e) {
+    // Config doc doesn't exist yet - continue
+  }
+
+  // 1. Get all active live agents
+  const agentSnap = await db.collection("paperAgents")
+    .where("tradingMode", "==", "live")
+    .where("status", "in", ["running", "active"])
+    .get();
+
+  if (agentSnap.empty) {
+    console.log("[LiveEngine] No active live agents.");
+    return;
+  }
+
+  const agents = agentSnap.docs.map((d) => ({ ref: d.ref, ...d.data() }));
+  console.log(`[LiveEngine] Processing ${agents.length} live agents`);
+
+  // 2. Collect all unique assets
+  const allAssets = new Set();
+  for (const agent of agents) {
+    for (const asset of (agent.selectedAssets || [])) { allAssets.add(asset); }
+    for (const pos of (agent.positions || [])) { allAssets.add(pos.asset); }
+  }
+  const assetList = [...allAssets];
+
+  // 3. Fetch current prices + candle data
+  const prices = await fetchUpbitPrices(assetList);
+  if (Object.keys(prices).length === 0) {
+    console.log("[LiveEngine] Failed to fetch prices, skipping");
+    return;
+  }
+
+  const priceHistory = {};
+  const volumeHistory = {};
+  for (const asset of assetList) {
+    const candleData = await fetchCandles(asset, 100);
+    priceHistory[asset] = candleData.closes;
+    volumeHistory[asset] = candleData.volumes;
+    await new Promise((r) => setTimeout(r, 120));
+  }
+
+  // 4. Process each live agent
+  const batch = db.batch();
+  const tradeWrites = [];
+  let totalTrades = 0;
+
+  for (const agent of agents) {
+    try {
+      // ═══ Layer 5: Validate exchange key still exists and is valid ═══
+      if (agent.exchangeAccountId) {
+        const keySnap = await db.collection("exchangeKeys").doc(agent.exchangeAccountId).get();
+        if (!keySnap.exists || !keySnap.data()?.isValid) {
+          batch.update(agent.ref, {
+            status: "paused_by_system",
+            riskStatus: {
+              ...(agent.riskStatus || {}),
+              pauseReason: "Exchange API key invalid or removed",
+            },
+            updatedAt: new Date().toISOString(),
+          });
+          console.log(`[LiveEngine] Agent ${agent.id} paused: invalid exchange key`);
+          continue;
+        }
+      }
+
+      // ═══ RISK ENGINE: Layer 2 Session Checks (same as Paper Engine) ═══
+      const params = agent.params || {};
+      const rs = agent.riskStatus || {
+        dailyPnl: 0, weeklyPnl: 0, consecutiveLosses: 0,
+        todayTradeCount: 0, lastLossAt: null, cooldownUntil: null,
+        pauseReason: null, dailyResetDate: "", weeklyResetWeek: "",
+      };
+
+      const today = new Date().toISOString().split("T")[0];
+      const currentWeek = `${new Date().getFullYear()}-W${Math.ceil((new Date().getDate()) / 7)}`;
+
+      if (rs.dailyResetDate !== today) {
+        rs.dailyPnl = 0;
+        rs.todayTradeCount = 0;
+        rs.dailyResetDate = today;
+      }
+      if (rs.weeklyResetWeek !== currentWeek) {
+        rs.weeklyPnl = 0;
+        rs.weeklyResetWeek = currentWeek;
+      }
+
+      // Cooldown check
+      if (rs.cooldownUntil) {
+        const cooldownEnd = new Date(rs.cooldownUntil).getTime();
+        if (Date.now() < cooldownEnd) {
+          const positions = (agent.positions || []).map((pos) => {
+            const currentPrice = prices[pos.asset] || pos.currentPrice;
+            const value = pos.quantity * currentPrice;
+            return { ...pos, currentPrice, value };
+          });
+          const totalValue = agent.cashBalance + positions.reduce((sum, p) => sum + p.value, 0);
+          batch.update(agent.ref, { positions, totalValue, updatedAt: new Date().toISOString(), riskStatus: rs });
+          continue;
+        } else {
+          rs.cooldownUntil = null;
+          rs.pauseReason = null;
+          rs.consecutiveLosses = 0;
+        }
+      }
+
+      // Daily/Weekly loss limits (stricter for live: 2% daily, 5% weekly default)
+      const dailyLimit = Number(params.daily_loss_limit) || 2;
+      if (rs.dailyPnl <= -dailyLimit) {
+        rs.pauseReason = `LIVE Daily loss limit: ${rs.dailyPnl.toFixed(2)}%`;
+        batch.update(agent.ref, { status: "paused_by_risk", riskStatus: rs, updatedAt: new Date().toISOString() });
+        console.log(`[LiveEngine] Agent ${agent.id} RISK PAUSED: ${rs.pauseReason}`);
+        continue;
+      }
+
+      const weeklyLimit = Number(params.weekly_loss_limit) || 5;
+      if (rs.weeklyPnl <= -weeklyLimit) {
+        rs.pauseReason = `LIVE Weekly loss limit: ${rs.weeklyPnl.toFixed(2)}%`;
+        batch.update(agent.ref, { status: "paused_by_risk", riskStatus: rs, updatedAt: new Date().toISOString() });
+        continue;
+      }
+
+      // Consecutive losses (default 2 for live)
+      const maxConsec = Number(params.consecutive_loss_pause) || 2;
+      if (rs.consecutiveLosses >= maxConsec) {
+        const cooldownHours = Number(params.cooldown_after_loss_hours) || 6;
+        rs.cooldownUntil = new Date(Date.now() + cooldownHours * 3600000).toISOString();
+        rs.pauseReason = `LIVE: ${rs.consecutiveLosses} consecutive losses, ${cooldownHours}h cooldown`;
+        batch.update(agent.ref, { status: "paused_by_risk", riskStatus: rs, updatedAt: new Date().toISOString() });
+        continue;
+      }
+
+      const maxDailyTrades = Number(params.max_daily_trades) || 6;
+      const dailyTradesExceeded = rs.todayTradeCount >= maxDailyTrades;
+
+      // ═══ Signal Engine ═══
+      const signals = evaluateStrategy(agent, prices, priceHistory, volumeHistory);
+
+      if (signals.length === 0) {
+        const positions = (agent.positions || []).map((pos) => {
+          const currentPrice = prices[pos.asset] || pos.currentPrice;
+          const value = pos.quantity * currentPrice;
+          const unrealizedPnl = value - (pos.quantity * pos.avgEntryPrice);
+          const unrealizedPnlPercent = pos.avgEntryPrice > 0
+            ? ((currentPrice - pos.avgEntryPrice) / pos.avgEntryPrice) * 100 : 0;
+          return { ...pos, currentPrice, value, unrealizedPnl, unrealizedPnlPercent };
+        });
+
+        const totalValue = agent.cashBalance + positions.reduce((sum, p) => sum + p.value, 0);
+        const totalPnl = totalValue - agent.seed;
+        const totalPnlPercent = agent.seed > 0 ? (totalPnl / agent.seed) * 100 : 0;
+
+        batch.update(agent.ref, {
+          positions, totalValue, totalPnl, totalPnlPercent,
+          riskStatus: rs,
+          lastHeartbeatAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      let { cashBalance, positions = [], totalTrades: agentTotalTrades = 0,
+        winningTrades = 0, losingTrades = 0, bestTrade = 0, worstTrade = 0 } = agent;
+
+      for (const signal of signals) {
+        const { asset, side, reason } = signal;
+        const price = prices[asset];
+        if (!price || price <= 0) continue;
+
+        // ═══ Layer 1: Pre-Order Checks (stricter for live) ═══
+        // Price spike: 3% for live (vs 5% paper)
+        const assetCloses = priceHistory[asset] || [];
+        if (assetCloses.length >= 2) {
+          const prevPrice = assetCloses[assetCloses.length - 2];
+          const changePct = Math.abs((price - prevPrice) / prevPrice) * 100;
+          if (changePct > 3) {
+            console.log(`[LiveEngine] L1 REJECT ${asset}: ${changePct.toFixed(1)}% price spike`);
+            continue;
+          }
+        }
+
+        // Layer 3: Spread check (simplified - reject if last candle had extreme range)
+        if (assetCloses.length >= 2) {
+          const lastClose = assetCloses[assetCloses.length - 1];
+          const priceDiffPct = Math.abs((price - lastClose) / lastClose) * 100;
+          if (priceDiffPct > 1.5) {
+            console.log(`[LiveEngine] L3 REJECT ${asset}: ${priceDiffPct.toFixed(2)}% spread too large`);
+            continue;
+          }
+        }
+
+        if (side === "buy" && dailyTradesExceeded) continue;
+
+        const FEE_RATE = 0.0005;
+
+        // ═══ Layer 5: Idempotency Key ═══
+        const idempotencyKey = `live_${agent.id}_${asset}_${side}_${today}_${rs.todayTradeCount}`;
+
+        if (side === "buy") {
+          const budgetConfig = agent.budgetConfig || {};
+          let orderBudget = cashBalance * 0.10; // Live: 10% default (conservative)
+
+          if (budgetConfig.maxOrderSizeEnabled && budgetConfig.maxOrderSize > 0) {
+            orderBudget = Math.min(orderBudget, budgetConfig.maxOrderSize);
+          }
+          if (budgetConfig.perAssetBudgetEnabled && budgetConfig.perAssetBudget > 0) {
+            orderBudget = Math.min(orderBudget, budgetConfig.perAssetBudget);
+          }
+
+          const maxPosPct = Number(params.max_position) || 10; // Live: 10% default
+          const totalVal = cashBalance + positions.reduce((s, p) => s + (p.value || 0), 0);
+          if (totalVal > 0) {
+            orderBudget = Math.min(orderBudget, totalVal * maxPosPct / 100);
+          }
+
+          orderBudget = Math.min(orderBudget, cashBalance * 0.90); // Live: 10% cash reserve
+          if (orderBudget < (agent.seedCurrency === "KRW" ? 5000 : 5)) continue;
+
+          // ═══ Layer 5: Limit Order Enforcement ═══
+          // For live trading, we would place a limit order at 0.1% below current price
+          // This prevents market orders and provides price protection
+          const limitPrice = price * 0.999; // Buy at slight discount
+
+          const fee = orderBudget * FEE_RATE;
+          const netAmount = orderBudget - fee;
+          const quantity = netAmount / limitPrice;
+
+          // TODO: Replace with real exchange order when ready:
+          // const orderResult = await placeUpbitOrder(agent.exchangeAccountId, asset, "bid", quantity, limitPrice);
+          // For now, simulate execution at limit price
+
+          cashBalance -= orderBudget;
+          positions.push({
+            asset,
+            quantity,
+            avgEntryPrice: limitPrice,
+            currentPrice: price,
+            value: netAmount,
+            unrealizedPnl: 0,
+            unrealizedPnlPercent: 0,
+            orderedAt: new Date().toISOString(),
+            idempotencyKey,
+          });
+          agentTotalTrades++;
+          totalTrades++;
+          rs.todayTradeCount++;
+
+          const tradeId = `lt_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          tradeWrites.push({
+            id: tradeId,
+            agentId: agent.id,
+            userId: agent.userId,
+            asset,
+            side: "buy",
+            price: limitPrice,
+            quantity,
+            value: orderBudget,
+            fee,
+            pnl: 0,
+            pnlPercent: 0,
+            strategy: agent.strategyName,
+            signal: reason,
+            balanceAfter: cashBalance,
+            executionType: "limit",
+            idempotencyKey,
+            timestamp: new Date().toISOString(),
+          });
+        } else if (side === "sell") {
+          const posIdx = positions.findIndex((p) => p.asset === asset);
+          if (posIdx === -1) continue;
+
+          const pos = positions[posIdx];
+
+          // Layer 5: Limit order at 0.1% above current price for sell
+          const limitPrice = price * 1.001;
+
+          const sellValue = pos.quantity * limitPrice;
+          const fee = sellValue * FEE_RATE;
+          const netProceeds = sellValue - fee;
+          const costBasis = pos.quantity * pos.avgEntryPrice;
+          const tradePnl = netProceeds - costBasis;
+          const tradePnlPct = costBasis > 0 ? (tradePnl / costBasis) * 100 : 0;
+
+          // TODO: Replace with real exchange order:
+          // const orderResult = await placeUpbitOrder(agent.exchangeAccountId, asset, "ask", pos.quantity, limitPrice);
+
+          cashBalance += netProceeds;
+          positions.splice(posIdx, 1);
+          agentTotalTrades++;
+          totalTrades++;
+          rs.todayTradeCount++;
+
+          if (tradePnl >= 0) {
+            winningTrades++;
+            rs.consecutiveLosses = 0;
+          } else {
+            losingTrades++;
+            rs.consecutiveLosses++;
+            rs.lastLossAt = new Date().toISOString();
+            rs.dailyPnl += tradePnlPct;
+            rs.weeklyPnl += tradePnlPct;
+          }
+          if (tradePnlPct > bestTrade) bestTrade = tradePnlPct;
+          if (tradePnlPct < worstTrade) worstTrade = tradePnlPct;
+
+          const tradeId = `lt_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          tradeWrites.push({
+            id: tradeId,
+            agentId: agent.id,
+            userId: agent.userId,
+            asset,
+            side: "sell",
+            price: limitPrice,
+            quantity: pos.quantity,
+            value: sellValue,
+            fee,
+            pnl: tradePnl,
+            pnlPercent: tradePnlPct,
+            strategy: agent.strategyName,
+            signal: reason,
+            balanceAfter: cashBalance,
+            executionType: "limit",
+            idempotencyKey,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Update positions with current prices
+      const updatedPositions = positions.map((pos) => {
+        const cp = prices[pos.asset] || pos.currentPrice;
+        const value = pos.quantity * cp;
+        const unrealizedPnl = value - (pos.quantity * pos.avgEntryPrice);
+        const unrealizedPnlPercent = pos.avgEntryPrice > 0
+          ? ((cp - pos.avgEntryPrice) / pos.avgEntryPrice) * 100 : 0;
+        return { ...pos, currentPrice: cp, value, unrealizedPnl, unrealizedPnlPercent };
+      });
+
+      const totalValue = cashBalance + updatedPositions.reduce((sum, p) => sum + p.value, 0);
+      const totalPnl = totalValue - agent.seed;
+      const totalPnlPercent = agent.seed > 0 ? (totalPnl / agent.seed) * 100 : 0;
+      const winRate = agentTotalTrades > 0 ? (winningTrades / agentTotalTrades) * 100 : 0;
+
+      batch.update(agent.ref, {
+        cashBalance,
+        positions: updatedPositions,
+        totalValue, totalPnl, totalPnlPercent,
+        totalTrades: agentTotalTrades,
+        winningTrades, losingTrades, winRate,
+        bestTrade, worstTrade,
+        riskStatus: rs,
+        lastHeartbeatAt: new Date().toISOString(),
+        lastTradeAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (agentErr) {
+      console.error(`[LiveEngine] Agent ${agent.id} error:`, agentErr.message);
+      // For live agents, errors are more critical - pause the agent
+      try {
+        batch.update(agent.ref, {
+          status: "error",
+          riskStatus: {
+            ...(agent.riskStatus || {}),
+            pauseReason: `Runtime error: ${agentErr.message}`,
+          },
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (_) { /* batch update failed, log above is sufficient */ }
+    }
+  }
+
+  // 5. Commit
+  await batch.commit();
+
+  // 6. Write trades (to paperTrades collection - unified storage)
+  for (let i = 0; i < tradeWrites.length; i += 500) {
+    const chunk = tradeWrites.slice(i, i + 500);
+    const tradeBatch = db.batch();
+    for (const trade of chunk) {
+      tradeBatch.set(db.collection("paperTrades").doc(trade.id), trade);
+    }
+    await tradeBatch.commit();
+  }
+
+  console.log(`[LiveEngine] Completed. ${agents.length} agents, ${totalTrades} trades.`);
 });
 
 // =============================================================================

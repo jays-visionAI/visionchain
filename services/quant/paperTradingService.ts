@@ -38,6 +38,8 @@ export async function createPaperAgent(config: {
     riskProfile: 'conservative' | 'balanced' | 'aggressive';
     seedCurrency: 'KRW' | 'USDT';
     tradingMode?: 'paper' | 'live';
+    exchange?: string;
+    exchangeAccountId?: string;
     competitionId?: string;
 }): Promise<PaperAgent> {
     const db = getFirebaseDb();
@@ -69,6 +71,10 @@ export async function createPaperAgent(config: {
 
         // Trading mode
         tradingMode: mode,
+
+        // Exchange (for live trading)
+        ...(mode === 'live' && config.exchange ? { exchange: config.exchange as any } : {}),
+        ...(mode === 'live' && config.exchangeAccountId ? { exchangeAccountId: config.exchangeAccountId } : {}),
 
         // Seed
         seed,

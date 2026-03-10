@@ -15,7 +15,7 @@ export type RiskLevel = 'low' | 'medium' | 'medium_high' | 'high';
 
 export type Timeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
 
-export type Exchange = 'upbit' | 'bithumb' | 'binance' | 'bybit' | 'bitget' | 'okx' | 'kucoin' | 'mexc' | 'bitkub';
+export type Exchange = 'upbit' | 'bithumb' | 'coinone' | 'binance' | 'bybit' | 'bitget' | 'okx' | 'kucoin' | 'mexc' | 'bitkub' | 'coinbase' | 'bitflyer' | 'gmo' | 'coincheck' | 'cryptocom';
 
 export interface EntryRule {
     indicator: string;
@@ -159,10 +159,130 @@ export interface StrategyTemplate {
     futuresConfig?: FuturesConfig;
 }
 
-// ─── Agent Types ───────────────────────────────────────────────────────────
+// ─── Unified Agent Status (10-State Lifecycle) ─────────────────────────────
 
-export type AgentStatus = 'draft' | 'pending_confirmation' | 'ready' | 'active' | 'paused' | 'stopped' | 'error';
+/**
+ * 10-State Agent Lifecycle
+ *
+ * draft              → 설정 중 (실행 불가)
+ * ready              → 설정 완료, 시작 대기
+ * active             → 정상 운영 중 (시장 감시 + 매매)
+ * paused_by_user     → 사용자 임의 일시정지
+ * paused_by_risk     → Risk Engine 강제 정지 (손실 한도 등)
+ * paused_by_system   → Kill Switch, API 에러, 잔고 부족
+ * stopping           → 포지션 청산 중 (종료 과정)
+ * stopped            → 포지션 0, 정상 종료
+ * error              → 복구 불가 시스템 에러
+ * terminated         → 파기/아카이브
+ */
+export type UnifiedAgentStatus =
+    | 'draft'
+    | 'ready'
+    | 'active'
+    | 'paused_by_user'
+    | 'paused_by_risk'
+    | 'paused_by_system'
+    | 'stopping'
+    | 'stopped'
+    | 'error'
+    | 'terminated';
 
+/** Backward-compat alias for legacy code that still references 'running' */
+export type LegacyAgentStatus = UnifiedAgentStatus | 'running' | 'paused' | 'completed';
+
+/** Alias kept for old QuantAgent references */
+export type AgentStatus = UnifiedAgentStatus;
+
+/** Execution mode - set at creation time, immutable */
+export type ExecutionMode = 'paper' | 'live';
+
+// ─── Risk Status (Real-time per-agent risk tracking) ───────────────────────
+
+/**
+ * Tracked per evaluation cycle, persisted in Firestore agent document.
+ * Risk Engine reads these values to enforce Layer 2 (Session Limits).
+ */
+export interface RiskStatus {
+    /** Today's realized + unrealized PnL as % of starting value */
+    dailyPnl: number;
+    /** This week's cumulative PnL as % */
+    weeklyPnl: number;
+    /** Current streak of consecutive losing trades */
+    consecutiveLosses: number;
+    /** Number of trades executed today */
+    todayTradeCount: number;
+    /** ISO timestamp of last losing trade */
+    lastLossAt: string | null;
+    /** ISO timestamp when cooldown expires (null if not in cooldown) */
+    cooldownUntil: string | null;
+    /** Reason for current pause (null if active) */
+    pauseReason: string | null;
+    /** Date string (YYYY-MM-DD) for daily reset tracking */
+    dailyResetDate: string;
+    /** ISO week string for weekly reset tracking */
+    weeklyResetWeek: string;
+}
+
+export const DEFAULT_RISK_STATUS: RiskStatus = {
+    dailyPnl: 0,
+    weeklyPnl: 0,
+    consecutiveLosses: 0,
+    todayTradeCount: 0,
+    lastLossAt: null,
+    cooldownUntil: null,
+    pauseReason: null,
+    dailyResetDate: new Date().toISOString().split('T')[0],
+    weeklyResetWeek: '',
+};
+
+// ─── Decision Log ──────────────────────────────────────────────────────────
+
+/** Logged for every evaluation cycle (including no-trade decisions) */
+export interface DecisionLogEntry {
+    id: string;
+    agentId: string;
+    userId: string;
+    timestamp: string;
+
+    /** Signal Engine output */
+    signal: {
+        side: 'buy' | 'sell' | 'none';
+        asset: string;
+        reason: string;
+        strength: number;
+        indicators?: Record<string, number>;
+    };
+
+    /** Risk Engine verdict */
+    risk: {
+        approved: boolean;
+        layer?: string;          // 'L1' | 'L2' | 'L3' | 'L4' | 'L5'
+        rejectReason?: string;
+    };
+
+    /** Execution result (only when risk approved and trade executed) */
+    execution?: {
+        orderId: string;
+        executedPrice: number;
+        executedQty: number;
+        fee: number;
+        slippage?: number;
+    };
+
+    /** Market snapshot at evaluation time */
+    marketSnapshot: {
+        price: number;
+        spread?: number;
+        volume24h?: number;
+    };
+}
+
+// ─── Legacy Agent Type (DEPRECATED) ────────────────────────────────────────
+
+/**
+ * @deprecated Use PaperAgent instead. This type was defined for frontend use
+ * but was never connected to the backend engine. Kept for reference only.
+ */
 export interface QuantAgent {
     id: string;
     userId: string;
@@ -182,7 +302,6 @@ export interface QuantAgent {
     betaWarningAck: boolean;
     createdAt: string;
     updatedAt: string;
-    // Performance
     todayPnl: number;
     todayPnlPercent: number;
     cumulativePnl: number;
@@ -194,9 +313,14 @@ export interface QuantAgent {
     skippedSignals: number;
 }
 
-// ─── Paper Trading Types ───────────────────────────────────────────────────
+// ─── Trading Agent Types ───────────────────────────────────────────────────
 
-export type PaperAgentStatus = 'running' | 'paused' | 'stopped' | 'completed';
+/**
+ * Backward-compatible status type.
+ * Includes legacy values ('running', 'paused', 'completed') for existing Firestore data
+ * plus all new UnifiedAgentStatus values.
+ */
+export type PaperAgentStatus = UnifiedAgentStatus | 'running' | 'paused' | 'completed';
 
 /** Fixed seed amounts for paper trading */
 export const PAPER_TRADING_SEED = {
@@ -214,6 +338,11 @@ export interface PaperPosition {
     unrealizedPnlPercent: number;
 }
 
+/**
+ * Primary Agent entity - stored in Firestore `paperAgents` collection.
+ * Extended with Risk Engine support (riskStatus) and Live mode fields.
+ * All new fields are optional to maintain backward compatibility with existing documents.
+ */
 export interface PaperAgent {
     id: string;
     userId: string;
@@ -230,6 +359,9 @@ export interface PaperAgent {
 
     // Trading mode
     tradingMode: 'paper' | 'live';
+
+    // Execution mode (immutable after creation)
+    executionMode?: ExecutionMode;
 
     // Seed
     seed: number;
@@ -250,9 +382,23 @@ export interface PaperAgent {
     bestTrade: number;
     worstTrade: number;
 
-    // Status
+    // Status (10-State Lifecycle)
     status: PaperAgentStatus;
     competitionId: string | null;
+
+    // ─── NEW: Risk Engine State ─────────────────────────────────
+    /** Real-time risk tracking, updated every evaluation cycle */
+    riskStatus?: RiskStatus;
+
+    // ─── NEW: Live Mode fields ──────────────────────────────────
+    /** Which exchange this agent trades on (defaults to 'upbit') */
+    exchange?: Exchange;
+    /** Reference to encrypted API key in exchangeKeys collection */
+    exchangeAccountId?: string;
+    /** Futures-specific config (leverage, margin type, etc.) */
+    futuresConfig?: FuturesConfig;
+    /** Last time the engine successfully processed this agent */
+    lastHeartbeatAt?: string;
 
     // Timestamps
     createdAt: string;
