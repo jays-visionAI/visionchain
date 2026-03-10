@@ -25238,12 +25238,13 @@ exports.weeklyRPSummary = onSchedule({
 /**
  * nodeDownload - HTTP redirect endpoint for node downloads
  * Usage: GET /nodeDownload?platform=mac_arm64
- * Reads latest release from Firestore and redirects to the download URL
+ * Reads latest release from Firestore, generates a signed download URL, redirects
  */
 exports.nodeDownload = onRequest({
   cors: true,
   region: "us-central1",
   memory: "256MiB",
+  timeoutSeconds: 30,
 }, async (req, res) => {
   try {
     const platform = req.query.platform || "mac_arm64";
@@ -25251,7 +25252,6 @@ exports.nodeDownload = onRequest({
 
     let releaseDoc;
     if (requestedVersion) {
-      // Get specific version
       const snap = await db.collection("nodeReleases")
         .where("version", "==", requestedVersion)
         .limit(1).get();
@@ -25259,14 +25259,12 @@ exports.nodeDownload = onRequest({
     }
 
     if (!releaseDoc) {
-      // Get latest release
       const snap = await db.collection("nodeReleases")
         .where("isLatest", "==", true)
         .limit(1).get();
       if (!snap.empty) {
         releaseDoc = snap.docs[0].data();
       } else {
-        // Fallback: get most recent by date
         const snap2 = await db.collection("nodeReleases")
           .orderBy("releaseDate", "desc")
           .limit(1).get();
@@ -25279,8 +25277,8 @@ exports.nodeDownload = onRequest({
       return;
     }
 
-    const downloadUrl = releaseDoc.downloads[platform];
-    if (!downloadUrl) {
+    const storedUrl = releaseDoc.downloads[platform];
+    if (!storedUrl) {
       res.status(400).json({
         error: `Platform "${platform}" not available`,
         available: Object.keys(releaseDoc.downloads),
@@ -25289,12 +25287,32 @@ exports.nodeDownload = onRequest({
       return;
     }
 
-    // Set download headers
-    res.setHeader("Content-Disposition", `attachment`);
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    // Extract the Storage file path from the stored URL
+    // URL format: https://storage.googleapis.com/BUCKET/path/to/file
+    const bucket = admin.storage().bucket();
+    let filePath = storedUrl;
+    const storagePrefix = `https://storage.googleapis.com/${bucket.name}/`;
+    if (filePath.startsWith(storagePrefix)) {
+      filePath = decodeURIComponent(filePath.replace(storagePrefix, ""));
+    }
 
-    // Redirect to the actual download URL
-    res.redirect(302, downloadUrl);
+    // Generate a signed download URL (valid for 6 hours)
+    const file = bucket.file(filePath);
+    const [exists] = await file.exists();
+    if (!exists) {
+      res.status(404).json({ error: "File not found in storage", path: filePath });
+      return;
+    }
+
+    const [signedUrl] = await file.getSignedUrl({
+      version: "v4",
+      action: "read",
+      expires: Date.now() + 6 * 60 * 60 * 1000, // 6 hours
+      responseDisposition: `attachment; filename="${filePath.split("/").pop()}"`,
+    });
+
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.redirect(302, signedUrl);
   } catch (err) {
     console.error("[nodeDownload] Error:", err);
     res.status(500).json({ error: "Internal server error" });

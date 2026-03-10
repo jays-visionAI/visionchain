@@ -198,6 +198,10 @@ export function generateUserMemoryContext(memory: UserMemory): string {
 
     let context = '\n\n[USER MEMORY]\n';
 
+    if (memory.language) {
+        context += `CONFIRMED_RESPONSE_LANGUAGE: ${memory.language} (This is the user's confirmed language preference from past conversations. ALWAYS respond in this language. This overrides browser locale.)\n`;
+    }
+
     if (memory.preferredName) {
         context += `Preferred Name: ${memory.preferredName} (ALWAYS use this name to address the user)\n`;
     }
@@ -238,6 +242,31 @@ export function generateUserMemoryContext(memory: UserMemory): string {
  * Parse AI response for memory-worthy information.
  * Call this after each AI response to extract and store learnings.
  */
+/**
+ * Detect the primary language of a user message.
+ * Returns ISO code: 'ko', 'en', 'ja', 'zh', etc. or null if ambiguous.
+ */
+function detectMessageLanguage(text: string): string | null {
+    const clean = text.replace(/[\s\d\p{P}\p{S}]/gu, '');
+    if (clean.length < 2) return null;
+
+    const koreanChars = (clean.match(/[가-힣ㄱ-ㅎㅏ-ㅣ]/g) || []).length;
+    const japaneseChars = (clean.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
+    const chineseChars = (clean.match(/[\u4E00-\u9FFF]/g) || []).length;
+    const latinChars = (clean.match(/[a-zA-Z]/g) || []).length;
+    const total = clean.length;
+
+    if (total === 0) return null;
+
+    // Require at least 30% of characters to be in a script to detect it
+    if (koreanChars / total > 0.3) return 'ko';
+    if (japaneseChars / total > 0.3) return 'ja';
+    if (chineseChars / total > 0.3) return 'zh';
+    if (latinChars / total > 0.5) return 'en';
+
+    return null;
+}
+
 export async function extractAndStoreMemory(
     userEmail: string,
     userMessage: string,
@@ -248,6 +277,36 @@ export async function extractAndStoreMemory(
     try {
         const lowerMsg = userMessage.toLowerCase();
         const memory = await getUserMemory(userEmail);
+
+        // Detect and store language preference
+        const detectedLang = detectMessageLanguage(userMessage);
+        if (detectedLang && detectedLang !== memory.language) {
+            // Only update language on 2+ consistent detections a row
+            // We track via a convention: store detected lang immediately
+            // The system prompt handles the "ask before switching" logic
+            // But we DO store the detected language to help future prompts
+            const browserLocale = typeof navigator !== 'undefined' ? navigator.language?.substring(0, 2) : 'en';
+
+            if (!memory.language) {
+                // First time: set to browser locale or detected language
+                const langToSet = detectedLang === browserLocale ? detectedLang : browserLocale;
+                await updateUserMemory(userEmail, { language: langToSet });
+                console.log(`[UserMemory] Initial language set: ${langToSet}`);
+            } else if (detectedLang !== memory.language) {
+                // Language mismatch: check if user explicitly requested a switch
+                const switchPatterns = [
+                    /(?:please|plz)?\s*(?:reply|respond|answer|speak|talk)\s+(?:in|to me in)\s+(english|korean|japanese|chinese|한국어|영어|일본어|중국어)/i,
+                    /(영어|한국어|일본어|중국어|english|korean|japanese|chinese)로\s*(?:대답|답변|말|응답)/i,
+                ];
+                const isExplicitSwitch = switchPatterns.some(p => p.test(userMessage));
+
+                if (isExplicitSwitch) {
+                    await updateUserMemory(userEmail, { language: detectedLang });
+                    console.log(`[UserMemory] Language switched explicitly: ${memory.language} -> ${detectedLang}`);
+                }
+                // If not explicit, the system prompt's "ask before switching" logic handles it
+            }
+        }
 
         // Detect name introduction
         const namePatterns = [

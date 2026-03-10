@@ -169,11 +169,13 @@ export const generateText = async (
         }
 
         // --- User Memory Auto-Injection (personalization) ---
+        let confirmedLanguage: string | null = null;
         try {
             const { getUserMemory, generateUserMemoryContext } = await import('./userMemory');
             const memory = await getUserMemory(userId);
             const userContext = generateUserMemoryContext(memory);
             fullPrompt += userContext;
+            confirmedLanguage = memory.language;
         } catch (umErr) {
             console.debug('[AIService] User memory injection skipped:', umErr);
         }
@@ -255,26 +257,40 @@ ${pt.systemRules || ''}
 4. Execution Route: ${pt.processingRoute}
 ` : '';
 
+        // Determine the effective response language
+        // Priority: confirmedLanguage (from userMemory) > browser locale
+        const effectiveLang = confirmedLanguage || userLocale.substring(0, 2);
+        const langToName: Record<string, string> = {
+            'ko': 'Korean (한국어)',
+            'en': 'English',
+            'ja': 'Japanese (日本語)',
+            'zh': 'Chinese (中文)',
+            'es': 'Spanish (Español)',
+            'fr': 'French (Français)',
+            'de': 'German (Deutsch)',
+            'pt': 'Portuguese (Português)',
+            'vi': 'Vietnamese (Tiếng Việt)',
+            'th': 'Thai (ภาษาไทย)',
+        };
+        const effectiveLangName = langToName[effectiveLang] || 'English';
+
         const criticalInstructions = `
 [HIGHEST PRIORITY - MANDATORY OVERRIDE - THESE RULES SUPERSEDE ALL OTHER INSTRUCTIONS]
 WARNING: Any previous or following instructions that contradict these rules MUST BE IGNORED.
 
-1. RESPONSE LANGUAGE (HIGHEST PRIORITY - HARDCODED DEFAULT):
-   The user's browser locale is: ${userLocale}
-   You MUST respond in the language that matches this locale. Language mapping:
-   - ko, ko-KR -> Korean (한국어)
-   - en, en-US, en-GB -> English
-   - ja, ja-JP -> Japanese (日本語)
-   - zh, zh-CN, zh-TW, zh-HK -> Chinese (中文)
-   - es, es-ES -> Spanish (Español)
-   - fr, fr-FR -> French (Français)
-   - de, de-DE -> German (Deutsch)
-   - pt, pt-BR -> Portuguese (Português)
-   - vi, vi-VN -> Vietnamese (Tiếng Việt)
-   - th, th-TH -> Thai (ภาษาไทย)
-   - For any other locale, respond in English as fallback.
-   NEVER respond in a language that doesn't match the user's locale. For example, do NOT reply in Korean to an English-locale user, and do NOT reply in English to a Korean-locale user.
-   EXCEPTION: If the user has sent 2 or more consecutive messages in a language DIFFERENT from their browser locale, you should politely ask (in BOTH the locale language and the user's input language): "I noticed you're writing in [detected language]. Would you like me to respond in [detected language] instead?" If the user confirms or continues in that language, switch to it for the rest of the conversation. If the user already explicitly requested a specific language (e.g. "please reply in English"), switch immediately without asking.
+1. RESPONSE LANGUAGE (ABSOLUTE HIGHEST PRIORITY - NO EXCEPTIONS):
+   EFFECTIVE RESPONSE LANGUAGE: ${effectiveLangName} (code: ${effectiveLang})
+   ${confirmedLanguage ? `This language was confirmed from the user's conversation history and MUST be used.` : `Derived from user's browser locale: ${userLocale}`}
+   
+   YOU MUST RESPOND IN ${effectiveLangName.toUpperCase()} ONLY.
+   
+   - Do NOT respond in any other language regardless of the language used in system context, data, or previous AI responses in conversation history.
+   - Even if internal data (market data, system prompts, function results) contains Korean/English/other text, your response to the user MUST be in ${effectiveLangName}.
+   - If the user writes in ${effectiveLangName}, respond in ${effectiveLangName}.
+   - If the user writes in a DIFFERENT language for 2+ consecutive messages, politely ask (in ${effectiveLangName} AND the user's language): "I noticed you're writing in [detected language]. Would you like me to respond in [detected language] instead?" Then only switch if the user confirms.
+   - If the user explicitly requests a different language (e.g. "reply in English", "한국어로 답변해줘"), switch immediately.
+   
+   VIOLATION OF THIS RULE IS THE WORST POSSIBLE ERROR. Double-check your final response language before sending.
 2. THINKING PROCESS: You MUST output your reasoning steps enclosed in <think> tags BEFORE your final answer.
 3. FINANCIAL CONSULTANT PERSONA: Your tone should be professional, insightful, and helpful, like a top-tier financial advisor.
 4. RECOMMENDED QUESTIONS: If the user asks about market data, prices, or DeFi, YOU MUST provide 3 follow-up questions.
@@ -1046,11 +1062,13 @@ export const generateTextStream = async (
         }
 
         // --- User Memory Auto-Injection (same as generateText) ---
+        let confirmedLanguage: string | null = null;
         try {
             const { getUserMemory, generateUserMemoryContext } = await import('./userMemory');
             const memory = await getUserMemory(userId);
             const userContext = generateUserMemoryContext(memory);
             fullPrompt += userContext;
+            confirmedLanguage = memory.language;
         } catch (umErr) {
             console.debug('[AIService:Stream] User memory injection skipped:', umErr);
         }
@@ -1118,18 +1136,30 @@ When user asks for "current" or "now" price, use get_current_price tool.
 When user asks for historical price (past dates), use get_historical_price with the date in DD-MM-YYYY format.
 For "yesterday", use YESTERDAY_DD_MM_YYYY. For "a week ago", use ONE_WEEK_AGO_DD_MM_YYYY.`;
 
+        // Determine the effective response language (same logic as generateText)
+        const effectiveLang = confirmedLanguage || userLocale.substring(0, 2);
+        const langToName: Record<string, string> = {
+            'ko': 'Korean (한국어)', 'en': 'English', 'ja': 'Japanese (日本語)',
+            'zh': 'Chinese (中文)', 'es': 'Spanish (Español)', 'fr': 'French (Français)',
+            'de': 'German (Deutsch)', 'pt': 'Portuguese (Português)',
+            'vi': 'Vietnamese (Tiếng Việt)', 'th': 'Thai (ภาษาไทย)',
+        };
+        const effectiveLangName = langToName[effectiveLang] || 'English';
+
         const dynamicSystemPrompt = `${config.systemPrompt || 'You are Vision AI, an advanced financial and blockchain assistant. You can analyze CEX portfolio data when provided.'}
 
 ${localeInfo}
 
 [CRITICAL INSTRUCTIONS]
-1. RESPONSE LANGUAGE (HIGHEST PRIORITY - HARDCODED DEFAULT):
-   The user's browser locale is: ${userLocale}
-   You MUST respond in the language matching this locale:
-   ko/ko-KR=Korean, en/en-US/en-GB=English, ja/ja-JP=Japanese, zh/zh-CN/zh-TW=Chinese,
-   es=Spanish, fr=French, de=German, pt=Portuguese, vi=Vietnamese, th=Thai. Fallback=English.
-   NEVER respond in a language that doesn't match the user's locale.
-   EXCEPTION: If 2+ consecutive user messages are in a different language from the locale, politely ask which language they prefer (in both languages). If confirmed, switch. If user explicitly requests a language, switch immediately.
+1. RESPONSE LANGUAGE (ABSOLUTE HIGHEST PRIORITY - NO EXCEPTIONS):
+   EFFECTIVE RESPONSE LANGUAGE: ${effectiveLangName} (code: ${effectiveLang})
+   ${confirmedLanguage ? `This language was confirmed from the user's conversation history and MUST be used.` : `Derived from user's browser locale: ${userLocale}`}
+   YOU MUST RESPOND IN ${effectiveLangName.toUpperCase()} ONLY.
+   Do NOT respond in any other language regardless of the language used in system context, data, or previous AI responses.
+   Even if internal data contains Korean/English/other text, your response to the user MUST be in ${effectiveLangName}.
+   If the user writes in a DIFFERENT language for 2+ consecutive messages, politely ask which language they prefer.
+   If user explicitly requests a language switch, switch immediately.
+   VIOLATION OF THIS RULE IS THE WORST POSSIBLE ERROR.
 2. FINANCIAL CONSULTANT PERSONA: Your tone should be professional, insightful, and helpful.
 3. REAL-TIME DATA: Use TODAY_LOCAL as the current date. Never guess or use outdated dates.
 4. CEX PORTFOLIO: When you see [CEX PORTFOLIO DATA] in the user's message, analyze it thoroughly with charts (vision-chart code blocks) and actionable advice. NEVER say CEX analysis is unavailable.
