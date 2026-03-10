@@ -335,6 +335,7 @@ export interface PerformanceReport {
     reportId: string;
     userId: string;
     period: ReportPeriod;
+    tradingMode: 'live' | 'paper';
     startDate: string;
     endDate: string;
     generatedAt: string;

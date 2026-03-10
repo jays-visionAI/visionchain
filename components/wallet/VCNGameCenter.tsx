@@ -212,13 +212,19 @@ export const VCNGameCenter = (props: GameCenterProps) => {
 
     // Block Breaker state
     const [blockHP, setBlockHP] = createSignal(0);
-    const [blockMaxHP, setBlockMaxHP] = createSignal(8);
+    const [blockMaxHP, setBlockMaxHP] = createSignal(50);
     const [blockType, setBlockType] = createSignal<'bronze' | 'silver' | 'gold'>('bronze');
     const [blockCracks, setBlockCracks] = createSignal(0);
     const [blockBroken, setBlockBroken] = createSignal(false);
     const [blockShake, setBlockShake] = createSignal(false);
     const [blockParticles, setBlockParticles] = createSignal<{ x: number; y: number; id: number }[]>([]);
     const [blockReward, setBlockReward] = createSignal<{ vcn: number; rp: number } | null>(null);
+    const [blockStartTime, setBlockStartTime] = createSignal(0);
+    const [blockElapsed, setBlockElapsed] = createSignal(0);
+    const [bestTime, setBestTime] = createSignal(0);
+    const [isNewRecord, setIsNewRecord] = createSignal(false);
+    const [combo, setCombo] = createSignal(0);
+    const [lastTapTime, setLastTapTime] = createSignal(0);
 
     // RPConfig loaded values
     const [maxSpins, setMaxSpins] = createSignal(DEFAULT_DAILY_SPINS);
@@ -401,9 +407,9 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     const startBlock = () => {
         if (blocksRemaining() <= 0) return;
         const types = [
-            { type: 'bronze' as const, hp: 6, prob: 0.6 },
-            { type: 'silver' as const, hp: 8, prob: 0.3 },
-            { type: 'gold' as const, hp: 10, prob: 0.1 },
+            { type: 'bronze' as const, hp: 40, prob: 0.6 },
+            { type: 'silver' as const, hp: 50, prob: 0.3 },
+            { type: 'gold' as const, hp: 60, prob: 0.1 },
         ];
         const r = Math.random();
         let cum = 0;
@@ -419,21 +425,55 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         setBlockBroken(false);
         setBlockReward(null);
         setBlockParticles([]);
+        setBlockStartTime(Date.now());
+        setBlockElapsed(0);
+        setIsNewRecord(false);
+        setCombo(0);
+        setLastTapTime(0);
         setActiveGame('block');
     };
 
     const handleBlockTap = () => {
         if (blockBroken() || blockHP() <= 0) return;
 
-        const newHP = blockHP() - 1;
-        setBlockHP(newHP);
-        setBlockCracks(prev => prev + 1);
-        setBlockShake(true);
-        SFX.play('tap');
-        setTimeout(() => setBlockShake(false), 150);
+        const now = Date.now();
+        // Combo: taps within 300ms count as combo
+        if (lastTapTime() > 0 && now - lastTapTime() < 300) {
+            setCombo(prev => Math.min(prev + 1, 20));
+        } else {
+            setCombo(0);
+        }
+        setLastTapTime(now);
 
-        // Particle effect on tap
-        const id = Date.now();
+        // Damage: 1 base + combo bonus every 5 combo
+        const damage = 1 + Math.floor(combo() / 5);
+        const newHP = Math.max(0, blockHP() - damage);
+        setBlockHP(newHP);
+        setBlockCracks(prev => prev + damage);
+        setBlockShake(true);
+
+        // Sound with rising pitch as HP decreases
+        const progress = 1 - (newHP / blockMaxHP());
+        try {
+            const ctx = SFX._getCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 150 + progress * 400 + combo() * 10;
+            osc.type = combo() >= 5 ? 'triangle' : 'square';
+            const t = ctx.currentTime;
+            gain.gain.setValueAtTime(0.06 + combo() * 0.005, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+            osc.start(t); osc.stop(t + 0.06);
+        } catch { }
+
+        // Haptic feedback on mobile
+        try { navigator.vibrate?.(combo() >= 5 ? [15, 5, 15] : [10]); } catch { }
+
+        setTimeout(() => setBlockShake(false), 80);
+
+        // Particle effect
+        const id = now + Math.random();
         const x = 50 + (Math.random() - 0.5) * 40;
         const y = 50 + (Math.random() - 0.5) * 40;
         setBlockParticles(prev => [...prev, { x, y, id }]);
@@ -443,16 +483,33 @@ export const VCNGameCenter = (props: GameCenterProps) => {
             // Block broken!
             setBlockBroken(true);
             SFX.play('break');
+            try { navigator.vibrate?.([30, 20, 50]); } catch { }
+
+            const elapsed = (Date.now() - blockStartTime()) / 1000;
+            setBlockElapsed(elapsed);
+
+            // Check daily best time
+            let recordBonus = false;
+            if (bestTime() === 0 || elapsed < bestTime()) {
+                setBestTime(elapsed);
+                setIsNewRecord(true);
+                recordBonus = true;
+            }
+
             const rewards = {
-                bronze: { vcn: 0.3 + Math.random() * 0.5, rp: 3 },
-                silver: { vcn: 1.0 + Math.random() * 1.5, rp: 7 },
-                gold: { vcn: 3.0 + Math.random() * 4.0, rp: 15 },
+                bronze: { vcn: 0.5 + Math.random() * 0.5, rp: 5 },
+                silver: { vcn: 1.5 + Math.random() * 1.5, rp: 10 },
+                gold: { vcn: 4.0 + Math.random() * 4.0, rp: 20 },
             };
-            const reward = { vcn: parseFloat(rewards[blockType()].vcn.toFixed(1)), rp: rewards[blockType()].rp };
+            let reward = { vcn: parseFloat(rewards[blockType()].vcn.toFixed(1)), rp: rewards[blockType()].rp };
+            // 10% bonus for new record
+            if (recordBonus) {
+                reward = { vcn: parseFloat((reward.vcn * 1.1).toFixed(1)), rp: Math.round(reward.rp * 1.1) };
+            }
             setBlockReward(reward);
 
             // Generate celebration particles
-            const particles = Array.from({ length: 12 }, (_, i) => ({
+            const particles = Array.from({ length: 20 }, (_, i) => ({
                 x: 50 + (Math.random() - 0.5) * 80,
                 y: 50 + (Math.random() - 0.5) * 80,
                 id: Date.now() + i,
@@ -774,25 +831,43 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                         </button>
 
                         <div class="flex flex-col items-center">
-                            {/* Block type indicator */}
-                            <div class="flex items-center gap-2 mb-4">
+                            {/* Block type + timer row */}
+                            <div class="flex items-center gap-3 mb-4">
                                 <span class={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-lg ${blockType() === 'gold' ? 'bg-amber-500/20 text-amber-400' : blockType() === 'silver' ? 'bg-gray-300/20 text-gray-300' : 'bg-orange-800/20 text-orange-400'}`}>
                                     {blockType()} block
                                 </span>
+                                <Show when={!blockBroken() && blockStartTime() > 0}>
+                                    <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg">
+                                        {((Date.now() - blockStartTime()) / 1000).toFixed(1)}s
+                                    </span>
+                                </Show>
+                                <Show when={combo() >= 3}>
+                                    <span class={`text-xs font-black px-2.5 py-1 rounded-lg animate-pulse ${combo() >= 10 ? 'bg-red-500/20 text-red-400' : combo() >= 5 ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/15 text-cyan-400'}`}>
+                                        COMBO x{combo()}
+                                    </span>
+                                </Show>
+                                <Show when={bestTime() > 0}>
+                                    <span class="text-[10px] font-bold text-gray-600 bg-white/5 px-2 py-1 rounded-lg">
+                                        Best: {bestTime().toFixed(1)}s
+                                    </span>
+                                </Show>
                             </div>
 
                             {/* HP Bar */}
-                            <div class="w-64 mb-6">
+                            <div class="w-72 mb-6">
                                 <div class="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
-                                    <span>HP</span>
+                                    <span>HP {Math.round((1 - blockHP() / blockMaxHP()) * 100)}%</span>
                                     <span>{blockHP()}/{blockMaxHP()}</span>
                                 </div>
-                                <div class="h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/[0.06]">
+                                <div class="h-3 bg-black/40 rounded-full overflow-hidden border border-white/[0.06]">
                                     <div
-                                        class={`h-full transition-all duration-200 rounded-full ${blockHP() / blockMaxHP() > 0.5 ? 'bg-gradient-to-r from-green-500 to-emerald-400' : blockHP() / blockMaxHP() > 0.25 ? 'bg-gradient-to-r from-amber-500 to-orange-400' : 'bg-gradient-to-r from-red-500 to-rose-400'}`}
+                                        class={`h-full transition-all duration-100 rounded-full ${blockHP() / blockMaxHP() > 0.5 ? 'bg-gradient-to-r from-green-500 to-emerald-400' : blockHP() / blockMaxHP() > 0.25 ? 'bg-gradient-to-r from-amber-500 to-orange-400' : 'bg-gradient-to-r from-red-500 to-rose-400'}`}
                                         style={{ width: `${(blockHP() / blockMaxHP()) * 100}%` }}
                                     />
                                 </div>
+                                <Show when={combo() >= 5}>
+                                    <div class="text-[9px] text-amber-400 mt-1 text-center font-bold">Combo x{combo()} = {1 + Math.floor(combo() / 5)}x damage!</div>
+                                </Show>
                             </div>
 
                             {/* Block - Larger tap area for mobile */}
@@ -825,18 +900,22 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                         }`}
                                     style={{ 'touch-action': 'manipulation', '-webkit-tap-highlight-color': 'transparent', transform: blockShake() ? `translate(${Math.random() > 0.5 ? 3 : -3}px, ${Math.random() > 0.5 ? 2 : -2}px)` : '' }}
                                 >
-                                    {/* Crack lines */}
+                                    {/* Crack lines - adjusted for 50HP */}
                                     <Show when={!blockBroken()}>
                                         <svg viewBox="0 0 100 100" class="w-full h-full absolute inset-0" fill="none" stroke="rgba(0,0,0,0.3)" stroke-width="1.5">
-                                            <Show when={blockCracks() >= 2}>
+                                            <Show when={blockCracks() >= 10}>
                                                 <path d="M50 20 L45 40 L55 50 L48 65" />
                                             </Show>
-                                            <Show when={blockCracks() >= 4}>
+                                            <Show when={blockCracks() >= 20}>
                                                 <path d="M30 50 L45 48 L55 55 L70 45" />
                                             </Show>
-                                            <Show when={blockCracks() >= 6}>
+                                            <Show when={blockCracks() >= 30}>
                                                 <path d="M40 80 L50 60 L60 70 L55 35 L65 25" />
                                                 <path d="M25 35 L40 45 L50 40" />
+                                            </Show>
+                                            <Show when={blockCracks() >= 40}>
+                                                <path d="M20 65 L35 55 L45 70 L55 45 L75 60" />
+                                                <path d="M60 80 L55 65 L65 55 L50 30" />
                                             </Show>
                                         </svg>
                                         <div class="relative z-10">
@@ -850,8 +929,15 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                             {/* Block Result */}
                             <Show when={blockBroken() && blockReward()}>
                                 <div class="p-6 bg-[#111113]/80 border border-white/[0.08] rounded-2xl text-center animate-in fade-in zoom-in-95 duration-500 w-full max-w-sm">
-                                    <div class={`text-xs font-black uppercase tracking-widest mb-3 ${blockType() === 'gold' ? 'text-amber-400' : blockType() === 'silver' ? 'text-gray-300' : 'text-orange-400'}`}>
+                                    <div class={`text-xs font-black uppercase tracking-widest mb-2 ${blockType() === 'gold' ? 'text-amber-400' : blockType() === 'silver' ? 'text-gray-300' : 'text-orange-400'}`}>
                                         {blockType() === 'gold' ? 'GOLD BLOCK MINED!' : blockType() === 'silver' ? 'SILVER BLOCK MINED!' : 'BLOCK MINED!'}
+                                    </div>
+                                    {/* Time + Record */}
+                                    <div class="flex items-center justify-center gap-3 mb-3">
+                                        <span class="text-sm font-mono font-bold text-cyan-400">{blockElapsed().toFixed(1)}s</span>
+                                        <Show when={isNewRecord()}>
+                                            <span class="text-[10px] font-black text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full animate-bounce">NEW RECORD! +10% BONUS</span>
+                                        </Show>
                                     </div>
                                     <div class="flex items-center justify-center gap-6">
                                         <div class="flex items-center gap-2">
@@ -867,10 +953,17 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                             <span class="text-sm text-gray-500 font-bold">RP</span>
                                         </div>
                                     </div>
-                                    <button onClick={startBlock} disabled={blocksRemaining() <= 0}
-                                        class={`mt-4 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${blocksRemaining() > 0 ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>
-                                        {blocksRemaining() > 0 ? `Mine Again (${blocksRemaining()} left)` : 'No blocks left today'}
-                                    </button>
+                                    <div class="flex items-center justify-center gap-3 mt-4">
+                                        <button onClick={startBlock} disabled={blocksRemaining() <= 0}
+                                            class={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${blocksRemaining() > 0 ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>
+                                            {blocksRemaining() > 0 ? `Mine Again (${blocksRemaining()} left)` : 'No blocks left'}
+                                        </button>
+                                        <Show when={blocksRemaining() <= 0}>
+                                            <button onClick={handleInviteFriend} class="px-5 py-2.5 bg-emerald-500/15 text-emerald-400 text-sm font-bold rounded-xl hover:bg-emerald-500/25 active:scale-95 transition-all" style="touch-action: manipulation;">
+                                                {inviteCopied() ? 'Copied!' : 'Invite Friend'}
+                                            </button>
+                                        </Show>
+                                    </div>
                                 </div>
                             </Show>
                         </div>
