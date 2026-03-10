@@ -16,11 +16,13 @@
  */
 
 const { initFirebase, getDb } = require("./firestoreClient");
-const { ema, sma, rsi, macd, bollinger } = require("./indicators");
+const { ema, sma, rsi, macd, bollinger, atr, obv, williamsR, ultimateOscillator, donchianChannel, vwap, zScore } = require("./indicators");
 const {
     fetchCandles, fetchPrices, placeOrder, placeFuturesOrder,
     fetchFundingRate, fetchFuturesCandles, toExchangeMarket,
 } = require("./exchangeAdapter");
+const { scaleOrderSize } = require("./volatilityOverlay");
+const { checkAllExceptions } = require("./exceptionRules");
 const crypto = require("crypto");
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -103,6 +105,126 @@ function evaluateSignals(agent, prices, priceHistory, volumeHistory) {
             }
         }
 
+        // ── Multi-Factor Quant Guard ──
+        if (strategyId.includes("multi_factor") || strategyId.includes("quant_guard")) {
+            let factors = 0;
+            const ema50 = ema(c, 50);
+            const ema200 = ema(c, 200);
+            // Factor 1: Trend (price > EMA50 > EMA200)
+            if (ema50 && ema200 && price > ema50 && ema50 > ema200) factors++;
+            // Factor 2: Momentum (RSI between 40-60 recovering)
+            const rsiVal = rsi(c, 14);
+            if (rsiVal !== null && rsiVal > 40 && rsiVal < 65) factors++;
+            // Factor 3: Volume (OBV rising)
+            const v = volumes[asset];
+            if (v && v.length >= 20) {
+                const obvCurrent = obv(c, v);
+                const obvPrev = obv(c.slice(0, -5), v.slice(0, -5));
+                if (obvCurrent !== null && obvPrev !== null && obvCurrent > obvPrev) factors++;
+            }
+            // Factor 4: Volatility (ATR not extreme)
+            const atrVal = atr(null, null, c, 14);
+            const sma20 = sma(c, 20);
+            if (atrVal && sma20 && (atrVal / sma20) < 0.05) factors++;
+            // Require at least 3 of 4 factors
+            if (factors >= 3) {
+                signals.push({ asset, side: "buy", reason: `Multi-Factor: ${factors}/4 confirmed` });
+            }
+        }
+
+        // ── Turtle Trading Crypto ──
+        if (strategyId.includes("turtle")) {
+            const entry = Number(params.donchian_period) || 20;
+            const exitP = Number(params.exit_period) || 10;
+            if (c.length >= entry) {
+                const entryHigh = Math.max(...c.slice(-entry));
+                const exitLow = Math.min(...c.slice(-exitP));
+                const atrVal = atr(null, null, c, 14);
+                if (price >= entryHigh && atrVal) {
+                    // ATR-based N-unit sizing: smaller positions when ATR is high
+                    signals.push({ asset, side: "buy", reason: `Turtle: ${entry}d breakout`, atrUnit: atrVal });
+                }
+                // Exit: price below exit-period low
+                for (const pos of (agent.positions || [])) {
+                    if (pos.asset === asset && price <= exitLow) {
+                        signals.push({ asset, side: "sell", reason: `Turtle exit: below ${exitP}d low` });
+                    }
+                }
+            }
+        }
+
+        // ── Williams Volatility Breakout ──
+        if (strategyId.includes("williams") || strategyId.includes("volatility_breakout")) {
+            const wrVal = williamsR(null, null, c, Number(params.williams_period) || 14);
+            const uoVal = ultimateOscillator(null, null, c);
+            if (wrVal !== null && uoVal !== null) {
+                // Buy: Williams %R < -80 (oversold) AND Ultimate Oscillator > 30 (not dying)
+                if (wrVal < -80 && uoVal > 30) {
+                    signals.push({ asset, side: "buy", reason: `Williams: %R=${wrVal.toFixed(1)}, UO=${uoVal.toFixed(1)}` });
+                }
+                // Sell: Williams %R > -20 (overbought)
+                for (const pos of (agent.positions || [])) {
+                    if (pos.asset === asset && wrVal > -20) {
+                        signals.push({ asset, side: "sell", reason: `Williams exit: %R=${wrVal.toFixed(1)} overbought` });
+                    }
+                }
+            }
+        }
+
+        // ── Minervini VCP Momentum ──
+        if (strategyId.includes("minervini") || strategyId.includes("vcp")) {
+            const ema50 = ema(c, 50);
+            const ema150 = ema(c, 150);
+            const ema200 = ema(c, 200);
+            const rsiVal = rsi(c, 14);
+            if (ema50 && ema150 && ema200) {
+                // SEPA Trend Template: price > EMA50 > EMA150 > EMA200, all rising
+                const trendTemplate = price > ema50 && ema50 > ema150 && ema150 > ema200;
+                // VCP: volatility contracting (recent range < older range)
+                const recentRange = c.length >= 10 ? (Math.max(...c.slice(-10)) - Math.min(...c.slice(-10))) / sma(c, 10) : 999;
+                const olderRange = c.length >= 30 ? (Math.max(...c.slice(-30, -10)) - Math.min(...c.slice(-30, -10))) / sma(c.slice(0, -10), 20) : 0;
+                const vcpContracting = recentRange < olderRange * 0.7;
+                if (trendTemplate && vcpContracting && rsiVal > 50) {
+                    signals.push({ asset, side: "buy", reason: `Minervini VCP: trend confirmed, volatility contracting` });
+                }
+            }
+        }
+
+        // ── Livermore Trend Pyramid ──
+        if (strategyId.includes("livermore") || strategyId.includes("pyramid")) {
+            const ema20 = ema(c, 20);
+            const ema50 = ema(c, 50);
+            if (ema20 && ema50 && price > ema20 && ema20 > ema50) {
+                // Check for confirmed higher lows (last 3 swing lows rising)
+                const lows = [];
+                for (let i = 2; i < Math.min(c.length - 1, 60); i++) {
+                    if (c[c.length - i] < c[c.length - i - 1] && c[c.length - i] < c[c.length - i + 1]) {
+                        lows.push(c[c.length - i]);
+                    }
+                    if (lows.length >= 3) break;
+                }
+                const higherLows = lows.length >= 2 && lows[0] > lows[1];
+                // Pyramiding: add to existing position if already in profit
+                const existingPos = (agent.positions || []).find(p => p.asset === asset);
+                if (higherLows) {
+                    if (!existingPos) {
+                        signals.push({ asset, side: "buy", reason: `Livermore: higher lows confirmed, initial entry` });
+                    } else if (existingPos.unrealizedPnlPercent > 2) {
+                        signals.push({ asset, side: "buy", reason: `Livermore: pyramid add (+${existingPos.unrealizedPnlPercent?.toFixed(1)}% profit)` });
+                    }
+                }
+            }
+            // Exit: price below EMA50
+            const ema50exit = ema(c, 50);
+            if (ema50exit && price < ema50exit) {
+                for (const pos of (agent.positions || [])) {
+                    if (pos.asset === asset) {
+                        signals.push({ asset, side: "sell", reason: `Livermore exit: below EMA50` });
+                    }
+                }
+            }
+        }
+
         // Futures strategies
         if (strategyId.includes("futures")) {
             const leverage = Number(params.leverage) || 3;
@@ -127,6 +249,51 @@ function evaluateSignals(agent, prices, priceHistory, volumeHistory) {
                     signals.push({ asset, side: "buy", reason: `Scalper LONG: RSI ${rsiVal.toFixed(1)}`, leverage: Number(params.leverage) || 2, direction: "long" });
                 } else if (rsiVal && rsiVal >= 70) {
                     signals.push({ asset, side: "sell", reason: `Scalper SHORT: RSI ${rsiVal.toFixed(1)}`, leverage: Number(params.leverage) || 2, direction: "short" });
+                }
+            }
+
+            // ── Funding Rate Arbitrage ──
+            if (strategyId.includes("funding") || strategyId.includes("arbitrage")) {
+                // Market-neutral: profit from funding rate payments
+                // If funding rate is extremely positive, short perp to collect funding
+                // Note: actual funding rate data should come from exchange
+                const fundingThreshold = Number(params.funding_threshold) || 0.03; // 3% annualized
+                signals.push({ asset, side: "buy", reason: `Funding Arb: monitor mode`, leverage: 1, direction: "long", fundingArb: true });
+            }
+
+            // ── Short Squeeze Hunter ──
+            if (strategyId.includes("short_squeeze") || strategyId.includes("squeeze")) {
+                const rsiVal = rsi(c, 14);
+                const atrVal = atr(null, null, c, 14);
+                const sma20 = sma(c, 20);
+                // Look for: oversold RSI + high ATR (volatility) + price near resistance
+                const nearResistance = c.length >= 20 && price >= Math.max(...c.slice(-20)) * 0.98;
+                if (rsiVal && rsiVal < 35 && atrVal && sma20 && (atrVal / sma20) > 0.03 && nearResistance) {
+                    const sqLev = Number(params.leverage) || 5;
+                    signals.push({ asset, side: "buy", reason: `Squeeze Hunter: RSI=${rsiVal.toFixed(1)}, high ATR, near resistance`, leverage: sqLev, direction: "long" });
+                }
+            }
+
+            // ── Long-Short Balance ──
+            if (strategyId.includes("long_short") || strategyId.includes("balance")) {
+                // Pairs/mean-reversion: use Z-score of price ratio
+                if (c.length >= 30) {
+                    const zVal = zScore(c, 20);
+                    const entryZ = Number(params.entry_zscore) || 2.0;
+                    const exitZ = Number(params.exit_zscore) || 0.5;
+                    if (zVal !== null) {
+                        if (zVal < -entryZ) {
+                            signals.push({ asset, side: "buy", reason: `L/S Balance: Z=${zVal.toFixed(2)} < -${entryZ} (long)`, leverage: Number(params.leverage) || 1, direction: "long" });
+                        } else if (zVal > entryZ) {
+                            signals.push({ asset, side: "sell", reason: `L/S Balance: Z=${zVal.toFixed(2)} > ${entryZ} (short)`, leverage: Number(params.leverage) || 1, direction: "short" });
+                        }
+                        // Exit when Z returns to mean
+                        for (const pos of (agent.positions || [])) {
+                            if (pos.asset === asset && Math.abs(zVal) < exitZ) {
+                                signals.push({ asset, side: "sell", reason: `L/S Balance exit: Z=${zVal.toFixed(2)} mean reverted` });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -394,12 +561,13 @@ async function main() {
                     const isFuturesStrategy = (agent.strategyId || "").includes("futures");
 
                     for (const signal of signals) {
-                        const { asset, side, reason, leverage: sigLeverage, direction } = signal;
+                        const { asset, side, reason, leverage: sigLeverage, direction, atrUnit } = signal;
                         const price = prices[asset];
                         if (!price || price <= 0) continue;
 
-                        // Price spike check (3% for live)
                         const assetCloses = priceHistory[asset] || [];
+
+                        // Price spike check (3% for live)
                         if (assetCloses.length >= 2) {
                             const prevPrice = assetCloses[assetCloses.length - 2];
                             const changePct = Math.abs((price - prevPrice) / prevPrice) * 100;
@@ -409,6 +577,17 @@ async function main() {
                         if (side === "buy" && rs.todayTradeCount >= maxDailyTrades) continue;
 
                         if (side === "buy") {
+                            // ── Exception Rules check ──
+                            const exceptions = checkAllExceptions({
+                                currentPrice: price,
+                                closes: assetCloses,
+                                params: agent.params || {},
+                            });
+                            if (exceptions.blocked) {
+                                console.log(`[Worker] Agent ${agent.id} signal BLOCKED: ${exceptions.reasons.join("; ")}`);
+                                continue;
+                            }
+
                             let orderBudget = cashBalance * 0.10;
                             const budgetConfig = agent.budgetConfig || {};
                             if (budgetConfig.maxOrderSizeEnabled && budgetConfig.maxOrderSize > 0) {
@@ -418,6 +597,27 @@ async function main() {
                             const totalVal = cashBalance + positions.reduce((s, p) => s + (p.value || 0), 0);
                             if (totalVal > 0) orderBudget = Math.min(orderBudget, totalVal * maxPosPct / 100);
                             orderBudget = Math.min(orderBudget, cashBalance * 0.90);
+
+                            // ── Volatility Overlay (Layer 3) ──
+                            const volResult = scaleOrderSize(orderBudget, assetCloses);
+                            if (volResult.halted) {
+                                console.log(`[Worker] Agent ${agent.id} HALTED by Volatility Overlay: ${asset} bucket=${volResult.bucket}`);
+                                continue;
+                            }
+                            orderBudget = volResult.scaledSize;
+
+                            // ── Downtrend reduction ──
+                            if (exceptions.downtrendScale < 1.0) {
+                                orderBudget *= exceptions.downtrendScale;
+                            }
+
+                            // ── Turtle ATR-based N-unit sizing ──
+                            if (atrUnit && atrUnit > 0) {
+                                const dollarVol = atrUnit * 1; // 1 unit
+                                const accountRisk = totalVal * 0.01; // 1% risk per trade
+                                const turtleBudget = accountRisk / (atrUnit / price);
+                                orderBudget = Math.min(orderBudget, turtleBudget);
+                            }
 
                             const minOrder = agent.seedCurrency === "KRW" ? 5000 : 5;
                             if (orderBudget < minOrder) continue;
