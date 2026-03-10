@@ -128,6 +128,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [riskProfile, setRiskProfile] = createSignal<'conservative' | 'balanced' | 'aggressive'>('balanced');
     const [customParams, setCustomParams] = createSignal<Record<string, number | string | boolean>>({});
     const [budgetConfig, setBudgetConfig] = createSignal<BudgetConfig>({ ...DEFAULT_BUDGET_CONFIG });
+    const [tradingMode, setTradingMode] = createSignal<'live' | 'paper'>('paper');
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
@@ -253,6 +254,7 @@ const VisionQuantEngine = (): JSX.Element => {
         setAcceptedTerms(false);
         setAcceptedBeta(false);
         setBudgetConfig({ ...DEFAULT_BUDGET_CONFIG });
+        setTradingMode('paper');
         // Initialize params from strategy defaults
         const params: Record<string, number | string | boolean> = {};
         strategy.parameters.forEach(p => { params[p.key] = p.value; });
@@ -702,6 +704,52 @@ const VisionQuantEngine = (): JSX.Element => {
                                     </button>
                                 </div>
 
+                                {/* Trading Mode Selection */}
+                                <div>
+                                    <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+                                        </svg>
+                                        Trading Mode
+                                    </h4>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => setTradingMode('paper')}
+                                            class={`p-4 rounded-xl border text-left transition-all ${tradingMode() === 'paper'
+                                                ? 'bg-amber-500/[0.06] border-amber-500/20'
+                                                : 'bg-white/[0.01] border-white/[0.04] hover:border-white/[0.1]'}`}
+                                        >
+                                            <div class="flex items-center gap-2 mb-1.5">
+                                                <div class={`w-2 h-2 rounded-full ${tradingMode() === 'paper' ? 'bg-amber-400' : 'bg-gray-600'}`} />
+                                                <span class={`text-xs font-black ${tradingMode() === 'paper' ? 'text-amber-400' : 'text-gray-400'}`}>Paper Trading</span>
+                                            </div>
+                                            <p class="text-[10px] text-gray-500 leading-relaxed">
+                                                모의 거래로 전략 테스트. 실제 자산 사용 없음.
+                                            </p>
+                                        </button>
+                                        <button
+                                            onClick={() => setTradingMode('live')}
+                                            class={`p-4 rounded-xl border text-left transition-all ${tradingMode() === 'live'
+                                                ? 'bg-cyan-500/[0.06] border-cyan-500/20'
+                                                : 'bg-white/[0.01] border-white/[0.04] hover:border-white/[0.1]'}`}
+                                        >
+                                            <div class="flex items-center gap-2 mb-1.5">
+                                                <div class={`w-2 h-2 rounded-full ${tradingMode() === 'live' ? 'bg-cyan-400' : 'bg-gray-600'}`} />
+                                                <span class={`text-xs font-black ${tradingMode() === 'live' ? 'text-cyan-400' : 'text-gray-400'}`}>Live Trading</span>
+                                            </div>
+                                            <p class="text-[10px] text-gray-500 leading-relaxed">
+                                                실제 거래소 자산으로 자동 매매.
+                                            </p>
+                                        </button>
+                                    </div>
+                                    <Show when={tradingMode() === 'paper'}>
+                                        <div class="flex items-center gap-1.5 mt-2 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                                            <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                            <span class="text-[10px] text-amber-400">모의 거래는 실제 주문을 실행하지 않으며, 시장 가격 기반으로 시뮬레이션됩니다.</span>
+                                        </div>
+                                    </Show>
+                                </div>
+
                                 {/* Asset Selection from CEX Portfolio */}
                                 <div>
                                     <h4 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">
@@ -1112,6 +1160,12 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <span class="text-[10px] text-gray-500 uppercase tracking-wider">Timeframe</span>
                                         <span class="text-xs font-bold text-white">{selectedStrategy()!.recommendedTimeframe.toUpperCase()}</span>
                                     </div>
+                                    <div class={`flex items-center justify-between p-3 rounded-xl ${tradingMode() === 'paper' ? 'bg-amber-500/[0.04] border border-amber-500/10' : 'bg-cyan-500/[0.04] border border-cyan-500/10'}`}>
+                                        <span class="text-[10px] text-gray-500 uppercase tracking-wider">Trading Mode</span>
+                                        <span class={`text-xs font-black uppercase tracking-wider ${tradingMode() === 'paper' ? 'text-amber-400' : 'text-cyan-400'}`}>
+                                            {tradingMode() === 'paper' ? 'Paper Trading' : 'Live Trading'}
+                                        </span>
+                                    </div>
                                     <div class="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
                                         <span class="text-[10px] text-gray-500 uppercase tracking-wider">Max Position</span>
                                         <span class="text-xs font-bold text-white">{selectedStrategy()!.riskRules.maxPositionPct}%</span>
@@ -1200,6 +1254,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                             assets: selectedAssets(),
                                             params: customParams(),
                                             budgetConfig: budgetConfig(),
+                                            tradingMode: tradingMode(),
                                         });
 
                                         // Award quant_strategy_setup RP (fire-and-forget)
@@ -1215,7 +1270,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                     }}
                                 >
                                     <Play class="w-4 h-4" />
-                                    Create Agent
+                                    {tradingMode() === 'paper' ? 'Start Paper Trading' : 'Create Agent'}
                                 </button>
                             </div>
                         </div>
