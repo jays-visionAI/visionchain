@@ -128,12 +128,12 @@ const MN_API_KEY = 'mn_api_key';
 const MN_NODE_ID = 'mn_node_id';
 
 // ---------- Version ----------
-const NODE_VERSION = '1.2.0';
+const NODE_VERSION = '1.1.2-beta';
 const DOWNLOAD_URLS: Record<string, string> = {
-    mac_arm: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-mac-arm64.dmg',
-    mac_intel: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-mac-x64.dmg',
-    windows: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-win-x64.exe',
-    linux: 'https://github.com/jays-visionAI/vision-node/releases/latest/download/VisionNode-linux-x64.AppImage',
+    mac_arm: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-arm64.dmg',
+    mac_intel: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-1.1.2-beta-x64.dmg',
+    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
+    linux: 'https://github.com/jays-visionAI/visionchain/releases/download/v1.1.2-beta/Vision-Node-Setup-1.1.2-beta.exe',
 };
 
 const DownloadIcon = (props: { class?: string }) => (
@@ -367,7 +367,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
     // ---------- Version Check ----------
     const checkForUpdate = async () => {
         try {
-            const res = await fetch('https://api.github.com/repos/jays-visionAI/vision-node/releases/latest');
+            const res = await fetch('https://api.github.com/repos/jays-visionAI/visionchain/releases/latest');
             if (res.ok) {
                 const data = await res.json();
                 const remote = (data.tag_name || '').replace(/^v/, '');
