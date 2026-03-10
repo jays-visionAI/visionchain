@@ -55,6 +55,7 @@ import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/fi
 import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, getActiveCompetition, joinCompetition } from '../../services/quant/paperTradingService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
+const QuantArenaLazy = lazy(() => import('./QuantArenaLeaderboard'));
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ const BithumbIcon = () => (
 
 // ─── Tab Types ──────────────────────────────────────────────────────────────
 
-type QuantTab = 'strategies' | 'agents' | 'signals' | 'reports';
+type QuantTab = 'strategies' | 'agents' | 'arena' | 'signals' | 'reports';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -373,19 +374,28 @@ const VisionQuantEngine = (): JSX.Element => {
 
                         {/* Tab Navigation */}
                         <div class="flex items-center gap-1 bg-[#111113]/40 rounded-xl p-1 border border-white/[0.04]">
-                            {(['strategies', 'agents', 'signals', 'reports'] as QuantTab[]).map(tab => (
+                            {(['strategies', 'agents', 'arena', 'signals', 'reports'] as QuantTab[]).map(tab => (
                                 <button
                                     onClick={() => setActiveTab(tab)}
                                     class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === tab
-                                        ? 'bg-white/[0.08] text-white shadow-lg'
+                                        ? tab === 'arena'
+                                            ? 'bg-cyan-500/15 text-cyan-400 shadow-lg border border-cyan-500/20'
+                                            : 'bg-white/[0.08] text-white shadow-lg'
                                         : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
                                         }`}
                                 >
                                     {tab === 'strategies' && <StrategyIcon />}
                                     {tab === 'agents' && <BotIcon />}
+                                    {tab === 'arena' && (
+                                        <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                            <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                        </svg>
+                                    )}
                                     {tab === 'signals' && <Activity class="w-4 h-4" />}
                                     {tab === 'reports' && <BarChart3 class="w-4 h-4" />}
-                                    <span class="capitalize">{tab}</span>
+                                    <span class="capitalize">{tab === 'arena' ? 'Arena' : tab}</span>
                                 </button>
                             ))}
                         </div>
@@ -725,6 +735,11 @@ const VisionQuantEngine = (): JSX.Element => {
                                     </For>
                                 </Show>
                             </div>
+                        </Show>
+
+                        {/* ═══ ARENA TAB ═══ */}
+                        <Show when={activeTab() === 'arena'}>
+                            <QuantArenaLazy />
                         </Show>
 
                         {/* ═══ SIGNALS TAB ═══ */}
