@@ -56,203 +56,6 @@ const ChartLineIcon = () => (
     </svg>
 );
 
-// ─── Demo Data Generator ───────────────────────────────────────────────────
-
-function generateDemoReport(period: ReportPeriod): PerformanceReport {
-    const now = new Date();
-    let startDate: Date;
-    let days: number;
-
-    switch (period) {
-        case 'weekly':
-            startDate = new Date(now.getTime() - 7 * 86400000);
-            days = 7;
-            break;
-        case 'monthly':
-            startDate = new Date(now.getTime() - 30 * 86400000);
-            days = 30;
-            break;
-        case 'annual':
-            startDate = new Date(now.getTime() - 365 * 86400000);
-            days = 365;
-            break;
-    }
-
-    // Generate daily PnL
-    let cumPnl = 0;
-    let cumReturn = 0;
-    let portfolioVal = 10000000;
-    const baseVal = portfolioVal;
-    let btcReturn = 0;
-    const dailyPnl: DailyPnL[] = [];
-    for (let i = 0; i < days; i++) {
-        const d = new Date(startDate.getTime() + i * 86400000);
-        const dailyReturn = (Math.random() - 0.47) * 2.5; // slightly positive bias
-        const pnl = portfolioVal * (dailyReturn / 100);
-        cumPnl += pnl;
-        portfolioVal += pnl;
-        cumReturn = ((portfolioVal - baseVal) / baseVal) * 100;
-        btcReturn += (Math.random() - 0.48) * 1.8;
-        dailyPnl.push({
-            date: d.toISOString().split('T')[0],
-            pnl, pnlPercent: dailyReturn,
-            cumulativePnl: cumPnl,
-            cumulativeReturn: cumReturn,
-            portfolioValue: portfolioVal,
-            benchmark: btcReturn,
-        });
-    }
-
-    // Generate trades
-    const assets = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE'];
-    const strategies = ['MACD Crossover', 'RSI Mean Reversion', 'Bollinger Breakout'];
-    const trades: TradeRecord[] = [];
-    const numTrades = period === 'weekly' ? 18 : period === 'monthly' ? 64 : 312;
-    for (let i = 0; i < numTrades; i++) {
-        const asset = assets[Math.floor(Math.random() * assets.length)];
-        const side = Math.random() > 0.5 ? 'buy' : 'sell';
-        const pnl = (Math.random() - 0.45) * 500000;
-        trades.push({
-            id: `T${String(i + 1).padStart(4, '0')}`,
-            asset,
-            side: side as 'buy' | 'sell',
-            price: asset === 'BTC' ? 65000000 + Math.random() * 5000000 : 3500000 + Math.random() * 500000,
-            quantity: Math.random() * 0.5,
-            value: 500000 + Math.random() * 2000000,
-            fee: 500 + Math.random() * 2000,
-            pnl,
-            pnlPercent: (pnl / 1000000) * 100,
-            strategy: strategies[Math.floor(Math.random() * strategies.length)],
-            timestamp: new Date(startDate.getTime() + Math.random() * days * 86400000).toISOString(),
-            holdingPeriod: Math.random() * 72,
-        });
-    }
-
-    const winTrades = trades.filter(t => t.pnl > 0);
-    const loseTrades = trades.filter(t => t.pnl <= 0);
-    const totalFees = trades.reduce((s, t) => s + t.fee, 0);
-
-    // Asset performance
-    const assetPerf: AssetPerformance[] = assets.map(a => {
-        const at = trades.filter(t => t.asset === a);
-        const wins = at.filter(t => t.pnl > 0);
-        return {
-            asset: a,
-            trades: at.length,
-            winRate: at.length > 0 ? (wins.length / at.length) * 100 : 0,
-            totalPnl: at.reduce((s, t) => s + t.pnl, 0),
-            totalReturn: (Math.random() - 0.4) * 15,
-            avgHoldingPeriod: 12 + Math.random() * 36,
-            bestTrade: Math.max(...at.map(t => t.pnl), 0),
-            worstTrade: Math.min(...at.map(t => t.pnl), 0),
-            sharpeRatio: 0.5 + Math.random() * 2,
-            allocation: 100 / assets.length,
-        };
-    });
-
-    // Strategy performance
-    const stratPerf: StrategyPerformance[] = strategies.map((s, i) => {
-        const st = trades.filter(t => t.strategy === s);
-        const wins = st.filter(t => t.pnl > 0);
-        const avgW = wins.length > 0 ? wins.reduce((acc, t) => acc + t.pnl, 0) / wins.length : 0;
-        const loses = st.filter(t => t.pnl <= 0);
-        const avgL = loses.length > 0 ? Math.abs(loses.reduce((acc, t) => acc + t.pnl, 0) / loses.length) : 1;
-        return {
-            strategyId: `s${i}`,
-            strategyName: s,
-            trades: st.length,
-            winRate: st.length > 0 ? (wins.length / st.length) * 100 : 0,
-            totalPnl: st.reduce((acc, t) => acc + t.pnl, 0),
-            totalReturn: (Math.random() - 0.4) * 10,
-            profitFactor: avgL > 0 ? avgW / avgL : 0,
-            avgWin: avgW,
-            avgLoss: avgL,
-            maxConsecutiveWins: 3 + Math.floor(Math.random() * 5),
-            maxConsecutiveLosses: 2 + Math.floor(Math.random() * 3),
-            signalsGenerated: st.length + Math.floor(Math.random() * 10),
-            signalsExecuted: st.length,
-            signalsSkipped: Math.floor(Math.random() * 10),
-        };
-    });
-
-    // Drawdowns
-    const drawdowns: DrawdownEvent[] = [
-        { startDate: dailyPnl[Math.floor(days * 0.2)]?.date || '', endDate: dailyPnl[Math.floor(days * 0.25)]?.date || '', depth: -3.2, duration: Math.ceil(days * 0.05), recovery: Math.ceil(days * 0.03), peakValue: baseVal * 1.02, troughValue: baseVal * 0.988 },
-        { startDate: dailyPnl[Math.floor(days * 0.6)]?.date || '', endDate: dailyPnl[Math.floor(days * 0.68)]?.date || '', depth: -5.1, duration: Math.ceil(days * 0.08), recovery: Math.ceil(days * 0.05), peakValue: baseVal * 1.05, troughValue: baseVal * 0.999 },
-    ];
-
-    // Monthly returns (for annual)
-    const monthlyReturns: MonthlyReturn[] = [];
-    if (period === 'annual') {
-        for (let m = 0; m < 12; m++) {
-            monthlyReturns.push({ year: now.getFullYear(), month: m + 1, return: (Math.random() - 0.42) * 8, trades: 20 + Math.floor(Math.random() * 30) });
-        }
-    } else if (period === 'monthly') {
-        for (let w = 0; w < 4; w++) {
-            monthlyReturns.push({ year: now.getFullYear(), month: now.getMonth() + 1, return: (Math.random() - 0.42) * 4, trades: 10 + Math.floor(Math.random() * 15) });
-        }
-    }
-
-    const risk: RiskMetrics = {
-        sharpeRatio: 1.2 + Math.random() * 0.8,
-        sortinoRatio: 1.5 + Math.random() * 1.0,
-        calmarRatio: 0.8 + Math.random() * 1.2,
-        maxDrawdown: -5.1,
-        maxDrawdownDuration: Math.ceil(days * 0.08),
-        volatility: 12 + Math.random() * 8,
-        beta: 0.6 + Math.random() * 0.4,
-        alpha: 2 + Math.random() * 5,
-        var95: -(1 + Math.random() * 2),
-        var99: -(2 + Math.random() * 3),
-        winRate: trades.length > 0 ? (winTrades.length / trades.length) * 100 : 0,
-        profitFactor: loseTrades.length > 0 ? Math.abs(winTrades.reduce((s, t) => s + t.pnl, 0) / loseTrades.reduce((s, t) => s + t.pnl, 0)) : 0,
-        avgWinLossRatio: loseTrades.length > 0 ? (winTrades.reduce((s, t) => s + t.pnl, 0) / (winTrades.length || 1)) / (Math.abs(loseTrades.reduce((s, t) => s + t.pnl, 0)) / (loseTrades.length || 1)) : 0,
-        expectancy: trades.reduce((s, t) => s + t.pnl, 0) / (trades.length || 1),
-        kellyFraction: 0.15 + Math.random() * 0.15,
-    };
-
-    const sortedDaily = [...dailyPnl].sort((a, b) => b.pnl - a.pnl);
-
-    return {
-        reportId: `RPT-${Date.now()}`,
-        userId: 'user@example.com',
-        period,
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: now.toISOString().split('T')[0],
-        generatedAt: now.toISOString(),
-        currency: 'KRW',
-        summary: {
-            startingCapital: baseVal,
-            endingCapital: portfolioVal,
-            netPnl: cumPnl,
-            totalReturn: cumReturn,
-            annualizedReturn: cumReturn * (365 / days),
-            totalTrades: trades.length,
-            winningTrades: winTrades.length,
-            losingTrades: loseTrades.length,
-            winRate: trades.length > 0 ? (winTrades.length / trades.length) * 100 : 0,
-            bestDay: sortedDaily[0] ? { date: sortedDaily[0].date, pnl: sortedDaily[0].pnl, pnlPercent: sortedDaily[0].pnlPercent } : { date: '', pnl: 0, pnlPercent: 0 },
-            worstDay: sortedDaily[sortedDaily.length - 1] ? { date: sortedDaily[sortedDaily.length - 1].date, pnl: sortedDaily[sortedDaily.length - 1].pnl, pnlPercent: sortedDaily[sortedDaily.length - 1].pnlPercent } : { date: '', pnl: 0, pnlPercent: 0 },
-            avgDailyReturn: cumReturn / days,
-            totalFees,
-            netAfterFees: cumPnl - totalFees,
-        },
-        dailyPnl,
-        trades,
-        assetPerformance: assetPerf,
-        strategyPerformance: stratPerf,
-        riskMetrics: risk,
-        drawdowns,
-        monthlyReturns,
-        benchmarks: {
-            btcReturn: btcReturn,
-            ethReturn: btcReturn * 0.8 + (Math.random() - 0.5) * 5,
-            marketAvg: btcReturn * 0.6,
-            outperformance: cumReturn - btcReturn,
-        },
-    };
-}
-
 // ─── Formatting Helpers ────────────────────────────────────────────────────
 
 const fmtKrw = (v: number) => {
@@ -273,6 +76,7 @@ const pnlBg = (v: number) => v >= 0 ? 'bg-emerald-500/8 border-emerald-500/15' :
 /** Report header with branding */
 const ReportHeader = (props: { report: PerformanceReport }) => {
     const r = () => props.report;
+    const isPaper = () => r().tradingMode === 'paper';
     const periodLabel = () => {
         switch (r().period) {
             case 'weekly': return 'Weekly Performance Report';
@@ -285,12 +89,23 @@ const ReportHeader = (props: { report: PerformanceReport }) => {
         <div class="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-[#0a0a0c] via-[#111118] to-[#0a0a0c]">
             {/* Decorative grid */}
             <div class="absolute inset-0 opacity-[0.03]" style={`background-image: linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 40px 40px;`} />
+
+            {/* Paper Trading Watermark */}
+            <Show when={isPaper()}>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+                    <span class="text-[80px] sm:text-[120px] font-black text-white/[0.02] uppercase tracking-[0.3em] -rotate-12 select-none whitespace-nowrap">PAPER TRADING</span>
+                </div>
+            </Show>
+
             <div class="relative p-6 sm:p-8">
                 <div class="flex items-start justify-between mb-6">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
-                            <div class="w-1 h-6 bg-gradient-to-b from-cyan-400 to-blue-500 rounded-full" />
+                            <div class={`w-1 h-6 rounded-full ${isPaper() ? 'bg-gradient-to-b from-amber-400 to-orange-500' : 'bg-gradient-to-b from-cyan-400 to-blue-500'}`} />
                             <span class="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">Vision Quant Engine</span>
+                            <Show when={isPaper()}>
+                                <span class="px-2 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded-md text-[9px] font-black text-amber-400 uppercase tracking-wider">Paper Trading</span>
+                            </Show>
                         </div>
                         <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight">{periodLabel()}</h1>
                         <p class="text-xs text-gray-500 mt-1">{r().startDate} ~ {r().endDate}</p>
@@ -301,6 +116,19 @@ const ReportHeader = (props: { report: PerformanceReport }) => {
                         <div class="text-[9px] text-gray-600 mt-1">Generated {new Date(r().generatedAt).toLocaleString()}</div>
                     </div>
                 </div>
+
+                {/* Paper Trading Notice */}
+                <Show when={isPaper()}>
+                    <div class="flex items-start gap-2.5 p-3 mb-4 bg-amber-500/[0.05] border border-amber-500/15 rounded-xl">
+                        <AlertTriangle class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <p class="text-[11px] font-bold text-amber-400 mb-0.5">Simulated Trading Report</p>
+                            <p class="text-[10px] text-amber-400/60 leading-relaxed">
+                                This report is based on paper trading (simulated) results. No actual capital was used or risked. Simulated results may not reflect real market conditions including slippage, liquidity, and execution delays.
+                            </p>
+                        </div>
+                    </div>
+                </Show>
 
                 {/* Hero KPIs */}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -756,11 +584,14 @@ const TradeLog = (props: { trades: TradeRecord[]; limit?: number }) => {
 };
 
 /** Disclaimer / footer */
-const ReportDisclaimer = () => (
+const ReportDisclaimer = (props: { isPaper?: boolean }) => (
     <div class="p-4 bg-white/[0.01] rounded-xl border border-white/[0.04]">
         <div class="flex items-start gap-2">
             <Info class="w-3.5 h-3.5 text-gray-600 mt-0.5 flex-shrink-0" />
             <div class="text-[9px] text-gray-600 leading-relaxed space-y-1">
+                <Show when={props.isPaper}>
+                    <p class="font-bold text-amber-400/80">PAPER TRADING DISCLAIMER: This report reflects simulated trading results only. No real capital was deployed or at risk. Simulated performance does not represent actual trading and may differ materially from live execution due to slippage, market impact, liquidity constraints, and order execution latency.</p>
+                </Show>
                 <p><span class="font-bold text-gray-500">Disclaimer:</span> This report is generated automatically by Vision Quant Engine and is provided for informational purposes only. Past performance does not guarantee future results. All trading involves risk, including the possibility of loss of principal. The metrics shown are based on historical data and may not reflect actual market conditions. Vision Chain assumes no responsibility for trading decisions made based on this report.</p>
                 <p class="font-bold text-gray-500">Confidential - For authorized account holder only.</p>
             </div>
@@ -772,24 +603,14 @@ const ReportDisclaimer = () => (
 
 interface QuantReportProps {
     onBack?: () => void;
+    report?: PerformanceReport | null;
 }
 
 const QuantReport = (props: QuantReportProps): JSX.Element => {
     const [period, setPeriod] = createSignal<ReportPeriod>('weekly');
-    const [report, setReport] = createSignal<PerformanceReport | null>(null);
-    const [isLoading, setIsLoading] = createSignal(true);
 
-    const loadReport = (p: ReportPeriod) => {
-        setIsLoading(true);
-        setPeriod(p);
-        // Simulate async load
-        setTimeout(() => {
-            setReport(generateDemoReport(p));
-            setIsLoading(false);
-        }, 400);
-    };
-
-    onMount(() => loadReport('weekly'));
+    const hasReport = () => !!props.report;
+    const isPaper = () => props.report?.tradingMode === 'paper';
 
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
@@ -806,33 +627,58 @@ const QuantReport = (props: QuantReportProps): JSX.Element => {
                             Back to Quant Engine
                         </button>
                     </Show>
-                    <div class="flex items-center gap-1 bg-[#111113]/60 rounded-xl p-1 border border-white/[0.04] ml-auto">
-                        {(['weekly', 'monthly', 'annual'] as ReportPeriod[]).map(p => (
-                            <button
-                                onClick={() => loadReport(p)}
-                                class={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${period() === p
-                                    ? 'bg-white/[0.08] text-white shadow-lg'
-                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
-                                    }`}
-                            >
-                                {p === 'weekly' ? 'Weekly' : p === 'monthly' ? 'Monthly' : 'Annual'}
-                            </button>
-                        ))}
-                    </div>
+                    <Show when={hasReport()}>
+                        <div class="flex items-center gap-1 bg-[#111113]/60 rounded-xl p-1 border border-white/[0.04] ml-auto">
+                            {(['weekly', 'monthly', 'annual'] as ReportPeriod[]).map(p => (
+                                <button
+                                    onClick={() => setPeriod(p)}
+                                    class={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${period() === p
+                                        ? 'bg-white/[0.08] text-white shadow-lg'
+                                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                                        }`}
+                                >
+                                    {p === 'weekly' ? 'Weekly' : p === 'monthly' ? 'Monthly' : 'Annual'}
+                                </button>
+                            ))}
+                        </div>
+                    </Show>
                 </div>
 
-                {/* Loading */}
-                <Show when={isLoading()}>
-                    <div class="flex flex-col items-center justify-center py-20">
-                        <div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full mb-3" />
-                        <span class="text-xs text-gray-500">Generating {period()} report...</span>
+                {/* Empty State - No Report Data */}
+                <Show when={!hasReport()}>
+                    <div class="flex flex-col items-center justify-center py-20 px-6">
+                        <div class="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-6">
+                            <ReportIcon />
+                        </div>
+                        <h3 class="text-lg font-black text-white mb-2">No Report Data Available</h3>
+                        <p class="text-xs text-gray-500 text-center max-w-md mb-6 leading-relaxed">
+                            에이전트가 활성화되어 거래가 실행되면, 주간/월별/연간 성과 리포트가 자동으로 생성됩니다.
+                            모의거래(Paper Trading)를 시작하면 실제 자산 없이도 전략을 테스트하고 리포트를 받을 수 있습니다.
+                        </p>
+                        <div class="flex flex-col sm:flex-row items-center gap-3">
+                            <div class="p-4 bg-white/[0.02] rounded-xl border border-white/[0.04] text-center max-w-[200px]">
+                                <div class="w-8 h-8 mx-auto mb-2 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                                    <Activity class="w-4 h-4 text-cyan-400" />
+                                </div>
+                                <div class="text-[10px] font-bold text-white mb-0.5">Live Trading</div>
+                                <div class="text-[9px] text-gray-500">에이전트 활성화 후 자동 생성</div>
+                            </div>
+                            <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 rotate-90 sm:rotate-0 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                            <div class="p-4 bg-amber-500/[0.03] rounded-xl border border-amber-500/10 text-center max-w-[200px]">
+                                <div class="w-8 h-8 mx-auto mb-2 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                                    <Shield class="w-4 h-4 text-amber-400" />
+                                </div>
+                                <div class="text-[10px] font-bold text-white mb-0.5">Paper Trading</div>
+                                <div class="text-[9px] text-gray-500">모의 거래로 전략 테스트</div>
+                            </div>
+                        </div>
                     </div>
                 </Show>
 
                 {/* Report Content */}
-                <Show when={!isLoading() && report()}>
+                <Show when={hasReport()}>
                     {(() => {
-                        const r = report()!;
+                        const r = props.report!;
                         return (
                             <div class="space-y-6">
                                 {/* Header */}
@@ -868,7 +714,7 @@ const QuantReport = (props: QuantReportProps): JSX.Element => {
                                 <TradeLog trades={r.trades} limit={period() === 'weekly' ? 18 : 25} />
 
                                 {/* Disclaimer */}
-                                <ReportDisclaimer />
+                                <ReportDisclaimer isPaper={isPaper()} />
                             </div>
                         );
                     })()}
