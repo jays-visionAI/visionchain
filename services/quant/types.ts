@@ -6,7 +6,10 @@
 
 // ─── Strategy Types ────────────────────────────────────────────────────────
 
-export type StrategyCategory = 'trend_following' | 'mean_reversion' | 'multi_signal' | 'breakout' | 'risk_overlay' | 'turtle_trading' | 'momentum_swing' | 'williams' | 'stage_analysis';
+export type StrategyCategory = 'trend_following' | 'mean_reversion' | 'multi_signal' | 'breakout' | 'risk_overlay' | 'turtle_trading' | 'momentum_swing' | 'williams' | 'stage_analysis'
+    | 'futures_trend' | 'futures_mean_reversion' | 'futures_breakout' | 'futures_arbitrage' | 'futures_scalping';
+
+export type MarketType = 'spot' | 'futures';
 
 export type RiskLevel = 'low' | 'medium' | 'medium_high' | 'high';
 
@@ -115,11 +118,21 @@ export interface StrategyBlogContent {
     }[];
 }
 
+export interface FuturesConfig {
+    defaultLeverage: number;
+    maxLeverage: number;
+    marginType: 'cross' | 'isolated';
+    supportedDirections: ('long' | 'short' | 'both');
+    autoDeleverage: boolean;
+    liquidationBuffer: number; // % buffer before liquidation price
+}
+
 export interface StrategyTemplate {
     id: string;
     name: string;
     nameKo: string;
     category: StrategyCategory;
+    marketType: MarketType;
     description: string;
     descriptionKo: string;
     shortDescription: string;
@@ -141,6 +154,9 @@ export interface StrategyTemplate {
     avgReturn30d?: number;
     premium?: boolean;
     blogContent?: StrategyBlogContent;
+    // Futures-specific
+    maxLeverage?: number;
+    futuresConfig?: FuturesConfig;
 }
 
 // ─── Agent Types ───────────────────────────────────────────────────────────
@@ -304,7 +320,7 @@ export interface CompetitionEntry {
 
 // ─── Signal Types ──────────────────────────────────────────────────────────
 
-export type SignalType = 'entry_long' | 'exit_long' | 'scale_in' | 'partial_exit' | 'stop_loss' | 'take_profit' | 'trailing_stop';
+export type SignalType = 'entry_long' | 'exit_long' | 'entry_short' | 'exit_short' | 'scale_in' | 'partial_exit' | 'stop_loss' | 'take_profit' | 'trailing_stop' | 'liquidation_warning';
 
 export type SignalAction = 'executed' | 'skipped' | 'pending';
 

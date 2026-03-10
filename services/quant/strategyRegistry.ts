@@ -1,7 +1,7 @@
 /**
  * Vision Quant Engine - Strategy Registry
  *
- * 6 built-in strategy templates based on research-backed methodologies.
+ * 10 spot + 5 futures strategy templates based on research-backed methodologies.
  * Each strategy is designed for explainability, controllability, and risk engine compatibility.
  */
 
@@ -14,6 +14,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Conservative Trend Core',
         nameKo: '보수적 추세추종',
         category: 'trend_following',
+        marketType: 'spot',
         description: 'Time-series momentum strategy using EMA crossover with volume and volatility filters. Enters only when the long-term trend is confirmed and market conditions are favorable. Designed for capital preservation with moderate upside capture.',
         descriptionKo: 'EMA 크로스오버에 거래량 및 변동성 필터를 결합한 추세추종 전략입니다. 장기 추세가 확인되고 시장 조건이 우호적일 때만 진입합니다. 적당한 수익 추구와 함께 자본 보존에 초점을 맞춥니다.',
         shortDescription: 'EMA crossover trend following with volume confirmation',
@@ -71,6 +72,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Bollinger Mean Reversion Guarded',
         nameKo: '볼린저 평균회귀 가드',
         category: 'mean_reversion',
+        marketType: 'spot',
         description: 'Enters when price bounces back from the lower Bollinger Band with RSI recovery confirmation. A trend filter prevents entries during strong downtrends. Designed for ranging markets with established support levels.',
         descriptionKo: '가격이 볼린저 밴드 하단에서 반등하고 RSI 회복이 확인될 때 진입합니다. 추세 필터가 강한 하락추세에서의 진입을 방지합니다. 지지선이 형성된 횡보 시장에 적합합니다.',
         shortDescription: 'Bollinger Band reversal with RSI and trend guard',
@@ -124,6 +126,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'RSI Reversal Filtered',
         nameKo: 'RSI 반전 필터형',
         category: 'mean_reversion',
+        marketType: 'spot',
         description: 'A safer version of the classic RSI strategy. Never enters on RSI signal alone - requires MACD histogram improvement or short-term price recovery as confirmation. Includes scale-in logic and consecutive loss pause.',
         descriptionKo: '클래식 RSI 전략의 안전 버전입니다. RSI 신호만으로는 절대 진입하지 않으며 MACD 히스토그램 개선 또는 단기 가격 반등 확인이 필요합니다. 분할 진입과 연속 손실 시 중단 기능을 포함합니다.',
         shortDescription: 'RSI oversold entry with MACD confirmation filter',
@@ -179,6 +182,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Donchian Breakout Swing',
         nameKo: '돈치안 돌파 스윙',
         category: 'breakout',
+        marketType: 'spot',
         description: 'Captures strong breakouts above N-period highs with volume confirmation. Only enters long when the market is above the long-term trend. ATR-based stop provides dynamic risk management.',
         descriptionKo: 'N봉 최고가 상향 돌파를 거래량 확인과 함께 포착합니다. 시장이 장기 추세 위에 있을 때만 매수 진입합니다. ATR 기반 손절로 동적 리스크 관리를 제공합니다.',
         shortDescription: 'N-period high breakout with volume and trend confirmation',
@@ -231,6 +235,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Multi-Factor Quant Guard',
         nameKo: '멀티팩터 퀀트가드',
         category: 'multi_signal',
+        marketType: 'spot',
         description: 'Vision Chain\'s flagship strategy combining trend, momentum, volume, and volatility filters. Requires multiple confirmations before entry, significantly reducing false signals. ATR-based dynamic exit management.',
         descriptionKo: '비전체인의 대표 전략으로 추세, 모멘텀, 거래량, 변동성 필터를 결합합니다. 진입 전 여러 조건의 확인을 요구하여 거짓 신호를 크게 줄입니다. ATR 기반 동적 청산 관리를 제공합니다.',
         shortDescription: 'Trend + Momentum + Volume + Volatility multi-factor strategy',
@@ -291,6 +296,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Volatility Target Overlay',
         nameKo: '변동성 타기팅 오버레이',
         category: 'risk_overlay',
+        marketType: 'spot',
         description: 'Not a signal generator - this is a risk control layer that sits on top of all other strategies. Adjusts position sizes based on realized volatility and enforces drawdown kill switches. Applied by default to all strategies.',
         descriptionKo: '시그널 생성기가 아닌 모든 전략 위에 적용되는 리스크 제어 레이어입니다. 실현 변동성 기반으로 포지션 크기를 조절하고 손실한도 도달 시 거래를 중단합니다. 모든 전략에 기본 적용됩니다.',
         shortDescription: 'Risk control overlay for position sizing and drawdown protection',
@@ -334,6 +340,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Turtle Trading Crypto',
         nameKo: '터틀 트레이딩 크립토',
         category: 'turtle_trading',
+        marketType: 'spot',
         description: 'Adapted from Richard Dennis & William Eckhardt\'s legendary Turtle Trading system (1983). Uses Donchian Channel breakouts with ATR-based position sizing (N-Unit system). The original Turtles risked 1% per trade using volatility-normalized position sizes. Crypto adaptation uses tighter risk (0.5-1%) due to higher market volatility. Dual system: System 1 (20-period breakout) for quick entries, System 2 (55-period) for trend confirmation.',
         descriptionKo: 'Richard Dennis와 William Eckhardt의 전설적인 터틀 트레이딩 시스템(1983)을 암호화폐에 맞게 변환한 전략입니다. 돈치안 채널 돌파와 ATR 기반 포지션 사이징(N-Unit 시스템)을 사용합니다. 크립토 시장의 높은 변동성에 맞게 리스크를 0.5-1%로 조정했습니다.',
         shortDescription: 'Richard Dennis Turtle system with ATR position sizing for crypto',
@@ -416,6 +423,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Williams Volatility Breakout',
         nameKo: '윌리엄스 변동성 돌파',
         category: 'williams',
+        marketType: 'spot',
         description: 'Based on Larry Williams\' volatility breakout methodology that won the 1987 World Cup Trading Championship (11,376% return in 12 months). Enters when today\'s price exceeds yesterday\'s close + (yesterday\'s range x K-factor). Uses Williams %R for overbought/oversold confirmation and the Ultimate Oscillator for momentum validation. Crypto-adapted with 24/7 market support and tighter K-factor range.',
         descriptionKo: '1987년 세계 트레이딩 챔피언십 우승자 Larry Williams의 변동성 돌파 전략을 기반으로 합니다 (12개월 11,376% 수익). 당일 가격이 전일 종가 + (전일 변동폭 x K팩터)를 초과할 때 진입합니다. Williams %R과 Ultimate Oscillator로 확인합니다.',
         shortDescription: 'Larry Williams championship-winning volatility breakout system',
@@ -498,6 +506,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Minervini VCP Momentum',
         nameKo: '미너비니 VCP 모멘텀',
         category: 'momentum_swing',
+        marketType: 'spot',
         description: 'Based on Mark Minervini\'s SEPA methodology (2x US Investing Champion). Identifies Stage 2 uptrends using his Trend Template: price above 50/150/200 SMA, 200 SMA rising for 1+ month, price within 25% of 52-week high and 30%+ above 52-week low. Entry on Volatility Contraction Patterns (VCP) where each pullback is shallower than the last, signaling exhaustion of sellers. Adapted for 24/7 crypto using rolling-period equivalents.',
         descriptionKo: 'Mark Minervini의 SEPA 전략(2회 미국 투자 챔피언)을 기반으로 합니다. Trend Template으로 Stage 2 상승추세를 식별합니다: 50/150/200 SMA 위 가격, 200 SMA 1개월+ 상승, 52주 고점 25% 이내, 52주 저점 30%+ 위. VCP(변동성 축소 패턴)에서 진입합니다.',
         shortDescription: 'Mark Minervini\'s SEPA Trend Template + VCP breakout for crypto',
@@ -585,6 +594,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         name: 'Livermore Trend Pyramid',
         nameKo: '리버모어 추세 피라미드',
         category: 'stage_analysis',
+        marketType: 'spot',
         description: 'Inspired by Jesse Livermore\'s trend trading principles from "Reminiscences of a Stock Operator" and his personal trading records. The strategy waits for the "path of least resistance" -- entering only when price breaks key resistance on heavy volume after a base-building period. Uses Livermore\'s pyramid technique: add to winners in 1/2-unit increments at confirmed higher lows, never average down on losers. Strict 10% stop-loss rule from his later career discipline. Adapted for crypto using rolling 200-period regime detection.',
         descriptionKo: 'Jesse Livermore의 "어느 주식투자자의 회상"과 매매 기록에서 영감을 받은 전략입니다. "최소 저항선의 방향"을 기다려 기반 형성 후 키 저항선을 강한 거래량으로 돌파할 때만 진입합니다. Livermore의 피라미딩: 확인된 더 높은 저점에서 1/2 단위씩 추가, 손실 포지션에는 절대 물타기 금지.',
         shortDescription: 'Jesse Livermore\'s trend following with pyramiding on confirmed breakouts',
@@ -660,6 +670,336 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
             ],
         },
     },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ═══ FUTURES STRATEGIES ════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ─── Futures Module 1: Leveraged Trend Following ────────────────────
+    {
+        id: 'futures_leveraged_trend_v1',
+        name: 'Leveraged Trend Following',
+        nameKo: '레버리지 추세추종',
+        category: 'futures_trend',
+        marketType: 'futures',
+        description: 'A disciplined leveraged trend-following strategy for perpetual futures. Uses EMA crossover with volume and RSI confirmation to identify established trends, then enters long or short with controlled leverage (2-5x). ATR-based dynamic stops prevent liquidation. Position sizing is inversely proportional to leverage -- higher leverage means smaller notional size. Auto-deleverage feature reduces leverage when unrealized P&L hits warning thresholds.',
+        descriptionKo: '무기한 선물용 레버리지 추세추종 전략입니다. EMA 크로스오버에 거래량/RSI 확인으로 추세를 식별한 후, 통제된 레버리지(2-5x)로 롱/숏 진입합니다. ATR 기반 동적 손절로 청산을 방지하고, 레버리지에 반비례하는 포지션 사이징을 적용합니다.',
+        shortDescription: 'Controlled leverage (2-5x) trend following with auto-deleverage',
+        shortDescriptionKo: '자동 디레버리지 기능의 레버리지(2-5x) 추세추종',
+        favorableMarket: 'Strong trending markets with clear directional momentum',
+        favorableMarketKo: '명확한 방향성 모멘텀이 있는 강한 추세 시장',
+        weakMarket: 'Choppy sideways markets with funding rate spikes',
+        weakMarketKo: '펀딩비 급등이 동반된 혼조세 횡보 시장',
+        riskLevel: 'medium_high',
+        recommendedAssets: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+        recommendedTimeframe: '4h',
+        entryRules: [
+            { indicator: 'ema_cross', condition: 'fast_above_slow', fast: 20, slow: 50 },
+            { indicator: 'ema_trend', condition: 'price_above', value: 200 },
+            { indicator: 'rsi', condition: 'within_range', value: 50 },
+            { indicator: 'volume', condition: 'gte_ma_ratio', value: 1.2 },
+            { indicator: 'funding_rate', condition: 'not_extreme' },
+        ],
+        exitRules: [
+            { type: 'stop_loss', mode: 'atr_multiple', value: 1.5 },
+            { type: 'take_profit', mode: 'atr_multiple', value: 3.0 },
+            { type: 'trailing_stop', mode: 'atr_multiple', value: 2.0 },
+        ],
+        riskRules: {
+            maxPositionPct: 10,
+            dailyDrawdownLimit: 5,
+            weeklyDrawdownLimit: 10,
+            maxCorrelatedPositions: 2,
+        },
+        exceptions: [
+            'skip_if_daily_loss_limit',
+            'pause_if_extreme_volatility',
+            'skip_if_spread_too_wide',
+        ],
+        volatilityOverlay: {
+            enabled: true,
+            window: 20,
+            targetBucket: { low: 1.0, mid: 0.6, high: 0.3, extreme: 0.0 },
+        },
+        parameters: [
+            { key: 'leverage', label: 'Leverage', labelKo: '레버리지', type: 'number', value: 3, min: 2, max: 5, step: 1, group: 'risk' },
+            { key: 'fast_ema', label: 'Fast EMA', labelKo: '빠른 EMA', type: 'number', value: 20, min: 10, max: 30, step: 1, group: 'entry' },
+            { key: 'slow_ema', label: 'Slow EMA', labelKo: '느린 EMA', type: 'number', value: 50, min: 30, max: 80, step: 1, group: 'entry' },
+            { key: 'trend_ema', label: 'Trend EMA', labelKo: '추세 EMA', type: 'number', value: 200, min: 100, max: 300, step: 10, group: 'entry' },
+            { key: 'atr_stop', label: 'ATR Stop Multiple', labelKo: 'ATR 손절 배수', type: 'number', value: 1.5, min: 1.0, max: 2.5, step: 0.1, group: 'exit' },
+            { key: 'deleverage_pnl', label: 'Deleverage at Loss %', labelKo: '디레버리지 손실률 %', type: 'number', value: 3, min: 1, max: 5, step: 0.5, group: 'risk' },
+            { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 10, min: 5, max: 20, step: 1, group: 'risk' },
+        ],
+        maxLeverage: 5,
+        futuresConfig: {
+            defaultLeverage: 3,
+            maxLeverage: 5,
+            marginType: 'isolated',
+            supportedDirections: 'both',
+            autoDeleverage: true,
+            liquidationBuffer: 15,
+        },
+        userCount: 0,
+        premium: true,
+    },
+
+    // ─── Futures Module 2: Funding Rate Arbitrage ────────────────────────
+    {
+        id: 'futures_funding_arb_v1',
+        name: 'Funding Rate Arbitrage',
+        nameKo: '펀딩비 차익거래',
+        category: 'futures_arbitrage',
+        marketType: 'futures',
+        description: 'Exploits extreme funding rate differentials in perpetual futures markets. When funding rate is significantly positive (longs pay shorts), enters short on perp while holding spot long as hedge -- collecting the funding payment. Reverses when funding is extremely negative. Market-neutral strategy with profit from funding payments, not directional bets. Requires both spot and futures market access.',
+        descriptionKo: '무기한 선물의 펀딩비 차이를 이용한 차익거래 전략입니다. 펀딩비가 크게 양수면(롱이 숏에 지불) 선물 숏 + 현물 롱 헤지로 펀딩비를 수취합니다. 방향성 베팅이 아닌 펀딩비 수익에 집중하는 시장 중립 전략입니다.',
+        shortDescription: 'Market-neutral funding rate collection via spot-perp hedge',
+        shortDescriptionKo: '현물-선물 헤지를 통한 시장 중립 펀딩비 수취',
+        favorableMarket: 'Markets with persistently high positive or negative funding rates',
+        favorableMarketKo: '지속적으로 높은 양수/음수 펀딩비가 나타나는 시장',
+        weakMarket: 'Markets with flat or frequently oscillating funding rates',
+        weakMarketKo: '펀딩비가 0 근처에서 빈번하게 변동하는 시장',
+        riskLevel: 'low',
+        recommendedAssets: ['BTCUSDT', 'ETHUSDT'],
+        recommendedTimeframe: '1h',
+        entryRules: [
+            { indicator: 'funding_rate', condition: 'above_threshold', value: 0.03 },
+            { indicator: 'funding_rate', condition: 'persistent_3_periods' },
+            { indicator: 'spread', condition: 'within_range', value: 0.1 },
+        ],
+        exitRules: [
+            { type: 'stop_loss', mode: 'percentage', value: 1.5 },
+            { type: 'take_profit', mode: 'percentage', value: 3 },
+        ],
+        riskRules: {
+            maxPositionPct: 20,
+            dailyDrawdownLimit: 2,
+            weeklyDrawdownLimit: 4,
+        },
+        exceptions: [
+            'skip_if_spread_too_wide',
+            'skip_if_exchange_latency_abnormal',
+        ],
+        volatilityOverlay: {
+            enabled: true,
+            window: 20,
+            targetBucket: { low: 1.0, mid: 0.8, high: 0.5, extreme: 0.2 },
+        },
+        parameters: [
+            { key: 'funding_threshold', label: 'Funding Rate Threshold', labelKo: '펀딩비 임계값', type: 'number', value: 0.03, min: 0.01, max: 0.1, step: 0.005, group: 'entry' },
+            { key: 'min_periods', label: 'Min Persistent Periods', labelKo: '최소 지속 기간', type: 'number', value: 3, min: 1, max: 6, step: 1, group: 'filter' },
+            { key: 'max_spread', label: 'Max Spread %', labelKo: '최대 스프레드 %', type: 'number', value: 0.1, min: 0.05, max: 0.3, step: 0.01, group: 'filter' },
+            { key: 'stop_loss', label: 'Stop Loss %', labelKo: '손절률 %', type: 'number', value: 1.5, min: 0.5, max: 3, step: 0.25, group: 'exit' },
+            { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 20, min: 10, max: 40, step: 5, group: 'risk' },
+        ],
+        maxLeverage: 1,
+        futuresConfig: {
+            defaultLeverage: 1,
+            maxLeverage: 1,
+            marginType: 'cross',
+            supportedDirections: 'both',
+            autoDeleverage: false,
+            liquidationBuffer: 20,
+        },
+        userCount: 0,
+        premium: true,
+    },
+
+    // ─── Futures Module 3: Short Squeeze Hunter ─────────────────────────
+    {
+        id: 'futures_short_squeeze_v1',
+        name: 'Short Squeeze Hunter',
+        nameKo: '숏 스퀴즈 헌터',
+        category: 'futures_breakout',
+        marketType: 'futures',
+        description: 'Detects conditions ripe for short squeezes in perpetual futures. Monitors extreme negative funding rates (excessive shorts), rising open interest, and price approaching key resistance. Enters long with leverage when these conditions converge, profiting from forced short liquidations. High risk-reward ratio with strict time-based exit if squeeze does not materialize.',
+        descriptionKo: '무기한 선물에서 숏 스퀴즈 조건을 감지하는 전략입니다. 극단적 음수 펀딩비(과도한 숏 포지션), 미결제약정 증가, 주요 저항선 근접을 모니터링합니다. 이 조건이 수렴하면 레버리지를 사용해 롱 진입하여 강제 청산에서 수익을 추구합니다.',
+        shortDescription: 'Detects and profits from forced short liquidation cascades',
+        shortDescriptionKo: '강제 숏 청산 캐스케이드 감지 및 수익화',
+        favorableMarket: 'Markets with extreme short positioning and approaching resistance breakout',
+        favorableMarketKo: '극단적 숏 포지셔닝과 저항선 돌파가 임박한 시장',
+        weakMarket: 'Markets with balanced long/short ratios and low open interest',
+        weakMarketKo: '롱/숏 비율이 균형적이고 미결제약정이 낮은 시장',
+        riskLevel: 'high',
+        recommendedAssets: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+        recommendedTimeframe: '1h',
+        entryRules: [
+            { indicator: 'funding_rate', condition: 'extremely_negative', value: -0.05 },
+            { indicator: 'open_interest', condition: 'rising', value: 10 },
+            { indicator: 'price_structure', condition: 'near_resistance' },
+            { indicator: 'volume', condition: 'gte_ma_ratio', value: 1.3 },
+        ],
+        exitRules: [
+            { type: 'stop_loss', mode: 'percentage', value: 3 },
+            { type: 'take_profit', mode: 'percentage', value: 10 },
+            { type: 'trailing_stop', mode: 'percentage', value: 4 },
+        ],
+        riskRules: {
+            maxPositionPct: 8,
+            dailyDrawdownLimit: 5,
+            weeklyDrawdownLimit: 10,
+        },
+        exceptions: [
+            'skip_if_daily_loss_limit',
+            'pause_if_extreme_volatility',
+            'pause_after_consecutive_losses',
+        ],
+        volatilityOverlay: {
+            enabled: true,
+            window: 20,
+            targetBucket: { low: 1.0, mid: 0.7, high: 0.4, extreme: 0.0 },
+        },
+        parameters: [
+            { key: 'leverage', label: 'Leverage', labelKo: '레버리지', type: 'number', value: 3, min: 2, max: 10, step: 1, group: 'risk' },
+            { key: 'funding_threshold', label: 'Funding Rate Threshold', labelKo: '펀딩비 임계값', type: 'number', value: -0.05, min: -0.1, max: -0.02, step: 0.005, group: 'entry' },
+            { key: 'oi_increase', label: 'OI Increase %', labelKo: '미결제약정 증가율 %', type: 'number', value: 10, min: 5, max: 30, step: 1, group: 'entry' },
+            { key: 'stop_loss', label: 'Stop Loss %', labelKo: '손절률 %', type: 'number', value: 3, min: 1, max: 5, step: 0.5, group: 'exit' },
+            { key: 'take_profit', label: 'Take Profit %', labelKo: '익절률 %', type: 'number', value: 10, min: 5, max: 20, step: 1, group: 'exit' },
+            { key: 'max_hold_hours', label: 'Max Hold Hours', labelKo: '최대 보유 시간', type: 'number', value: 48, min: 12, max: 72, step: 6, group: 'risk' },
+            { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 8, min: 3, max: 15, step: 1, group: 'risk' },
+        ],
+        maxLeverage: 10,
+        futuresConfig: {
+            defaultLeverage: 3,
+            maxLeverage: 10,
+            marginType: 'isolated',
+            supportedDirections: 'long',
+            autoDeleverage: true,
+            liquidationBuffer: 20,
+        },
+        userCount: 0,
+        premium: true,
+    },
+
+    // ─── Futures Module 4: Futures Scalper ──────────────────────────────
+    {
+        id: 'futures_scalper_v1',
+        name: 'Futures Scalper',
+        nameKo: '선물 스캘퍼',
+        category: 'futures_scalping',
+        marketType: 'futures',
+        description: 'High-frequency short-term scalping strategy for perpetual futures. Exploits micro-trends on 5m/15m timeframes using VWAP deviation, RSI extremes, and order flow imbalance. Enters with moderate leverage (2-3x) and targets small, frequent profits (0.3-0.8% per trade). Strict time-based exits and maximum holding period of 4 hours. Optimized for high-liquidity pairs with tight spreads.',
+        descriptionKo: '무기한 선물용 고빈도 단기 스캘핑 전략입니다. VWAP 이탈, RSI 극단값, 주문 흐름 불균형으로 5분/15분 마이크로 추세를 포착합니다. 적당한 레버리지(2-3x)로 소규모 빈번한 수익(거래당 0.3-0.8%)을 목표합니다.',
+        shortDescription: 'High-frequency micro-trend scalping with VWAP and order flow',
+        shortDescriptionKo: 'VWAP + 주문 흐름 기반 고빈도 마이크로 추세 스캘핑',
+        favorableMarket: 'Active markets with consistent micro-trends and tight spreads',
+        favorableMarketKo: '일관된 마이크로 추세와 좁은 스프레드의 활발한 시장',
+        weakMarket: 'Low-liquidity markets with wide spreads and sudden gaps',
+        weakMarketKo: '넓은 스프레드와 갑작스러운 갭이 있는 저유동성 시장',
+        riskLevel: 'medium',
+        recommendedAssets: ['BTCUSDT', 'ETHUSDT'],
+        recommendedTimeframe: '15m',
+        entryRules: [
+            { indicator: 'vwap', condition: 'price_deviation', value: 0.5 },
+            { indicator: 'rsi', condition: 'extreme_zone', value: 30 },
+            { indicator: 'order_flow', condition: 'imbalance_detected' },
+            { indicator: 'volume', condition: 'gte_ma_ratio', value: 1.3 },
+        ],
+        exitRules: [
+            { type: 'stop_loss', mode: 'percentage', value: 0.5 },
+            { type: 'take_profit', mode: 'percentage', value: 0.8 },
+            { type: 'trailing_stop', mode: 'percentage', value: 0.3 },
+        ],
+        riskRules: {
+            maxPositionPct: 8,
+            dailyDrawdownLimit: 3,
+            weeklyDrawdownLimit: 6,
+            maxConsecutiveLosses: 5,
+        },
+        exceptions: [
+            'skip_if_spread_too_wide',
+            'pause_after_consecutive_losses',
+            'skip_if_exchange_latency_abnormal',
+        ],
+        volatilityOverlay: {
+            enabled: true,
+            window: 20,
+            targetBucket: { low: 1.0, mid: 0.8, high: 0.4, extreme: 0.0 },
+        },
+        parameters: [
+            { key: 'leverage', label: 'Leverage', labelKo: '레버리지', type: 'number', value: 2, min: 1, max: 3, step: 1, group: 'risk' },
+            { key: 'vwap_deviation', label: 'VWAP Deviation %', labelKo: 'VWAP 이탈률 %', type: 'number', value: 0.5, min: 0.2, max: 1.0, step: 0.1, group: 'entry' },
+            { key: 'rsi_extreme', label: 'RSI Extreme Zone', labelKo: 'RSI 극단 구간', type: 'number', value: 30, min: 20, max: 35, step: 1, group: 'entry' },
+            { key: 'stop_loss', label: 'Stop Loss %', labelKo: '손절률 %', type: 'number', value: 0.5, min: 0.2, max: 1.0, step: 0.1, group: 'exit' },
+            { key: 'take_profit', label: 'Take Profit %', labelKo: '익절률 %', type: 'number', value: 0.8, min: 0.3, max: 1.5, step: 0.1, group: 'exit' },
+            { key: 'max_hold_minutes', label: 'Max Hold (min)', labelKo: '최대 보유(분)', type: 'number', value: 240, min: 60, max: 480, step: 30, group: 'risk' },
+            { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 8, min: 3, max: 15, step: 1, group: 'risk' },
+        ],
+        maxLeverage: 3,
+        futuresConfig: {
+            defaultLeverage: 2,
+            maxLeverage: 3,
+            marginType: 'isolated',
+            supportedDirections: 'both',
+            autoDeleverage: true,
+            liquidationBuffer: 25,
+        },
+        userCount: 0,
+        premium: true,
+    },
+
+    // ─── Futures Module 5: Long-Short Balance ───────────────────────────
+    {
+        id: 'futures_long_short_balance_v1',
+        name: 'Long-Short Balance',
+        nameKo: '롱숏 밸런스',
+        category: 'futures_mean_reversion',
+        marketType: 'futures',
+        description: 'A market-neutral mean reversion strategy that simultaneously holds long and short positions across correlated assets. Enters long on the underperformer and short on the outperformer when their spread deviates beyond historical bands. Profits from spread convergence regardless of market direction. Low leverage (1-2x) with strict spread monitoring.',
+        descriptionKo: '상관관계가 있는 자산 간 롱/숏을 동시에 보유하는 시장 중립 평균회귀 전략입니다. 스프레드가 역사적 밴드를 벗어나면, 약세 자산 롱 + 강세 자산 숏으로 진입합니다. 시장 방향과 무관하게 스프레드 수렴에서 수익을 추구합니다.',
+        shortDescription: 'Market-neutral pairs trading with spread mean reversion',
+        shortDescriptionKo: '스프레드 평균회귀 기반 시장 중립 페어 트레이딩',
+        favorableMarket: 'Markets with stable correlations between asset pairs',
+        favorableMarketKo: '자산 간 상관관계가 안정적인 시장',
+        weakMarket: 'Markets with regime changes that break historical correlations',
+        weakMarketKo: '역사적 상관관계가 깨지는 레짐 전환 시장',
+        riskLevel: 'medium',
+        recommendedAssets: ['BTCUSDT', 'ETHUSDT'],
+        recommendedTimeframe: '4h',
+        entryRules: [
+            { indicator: 'spread', condition: 'deviation_from_mean', value: 2.0 },
+            { indicator: 'correlation', condition: 'above_threshold', value: 0.7 },
+            { indicator: 'volume', condition: 'both_above_avg' },
+        ],
+        exitRules: [
+            { type: 'stop_loss', mode: 'percentage', value: 2 },
+            { type: 'take_profit', mode: 'percentage', value: 3 },
+        ],
+        riskRules: {
+            maxPositionPct: 15,
+            dailyDrawdownLimit: 2,
+            weeklyDrawdownLimit: 5,
+        },
+        exceptions: [
+            'skip_if_spread_too_wide',
+            'skip_if_daily_loss_limit',
+            'pause_on_news_crash',
+        ],
+        volatilityOverlay: {
+            enabled: true,
+            window: 20,
+            targetBucket: { low: 1.0, mid: 0.8, high: 0.5, extreme: 0.2 },
+        },
+        parameters: [
+            { key: 'leverage', label: 'Leverage', labelKo: '레버리지', type: 'number', value: 2, min: 1, max: 2, step: 1, group: 'risk' },
+            { key: 'spread_threshold', label: 'Spread Z-Score Entry', labelKo: '스프레드 Z-Score 진입', type: 'number', value: 2.0, min: 1.5, max: 3.0, step: 0.1, group: 'entry' },
+            { key: 'spread_exit', label: 'Spread Z-Score Exit', labelKo: '스프레드 Z-Score 청산', type: 'number', value: 0.5, min: 0.0, max: 1.0, step: 0.1, group: 'exit' },
+            { key: 'correlation_min', label: 'Min Correlation', labelKo: '최소 상관관계', type: 'number', value: 0.7, min: 0.5, max: 0.9, step: 0.05, group: 'filter' },
+            { key: 'lookback_period', label: 'Lookback Period', labelKo: '회귀 기간', type: 'number', value: 60, min: 30, max: 120, step: 10, group: 'entry' },
+            { key: 'stop_loss', label: 'Stop Loss %', labelKo: '손절률 %', type: 'number', value: 2, min: 1, max: 4, step: 0.5, group: 'exit' },
+            { key: 'max_position', label: 'Max Position %', labelKo: '최대 포지션 %', type: 'number', value: 15, min: 5, max: 25, step: 5, group: 'risk' },
+        ],
+        maxLeverage: 2,
+        futuresConfig: {
+            defaultLeverage: 2,
+            maxLeverage: 2,
+            marginType: 'cross',
+            supportedDirections: 'both',
+            autoDeleverage: false,
+            liquidationBuffer: 30,
+        },
+        userCount: 0,
+        premium: true,
+    },
 ];
 
 /**
@@ -674,6 +1014,20 @@ export function getStrategyById(id: string): StrategyTemplate | undefined {
  */
 export function getSignalStrategies(): StrategyTemplate[] {
     return STRATEGY_TEMPLATES.filter(s => s.category !== 'risk_overlay');
+}
+
+/**
+ * Get spot-only signal strategies
+ */
+export function getSpotStrategies(): StrategyTemplate[] {
+    return STRATEGY_TEMPLATES.filter(s => s.marketType === 'spot' && s.category !== 'risk_overlay');
+}
+
+/**
+ * Get futures-only strategies
+ */
+export function getFuturesStrategies(): StrategyTemplate[] {
+    return STRATEGY_TEMPLATES.filter(s => s.marketType === 'futures');
 }
 
 /**
@@ -730,6 +1084,11 @@ export function getCategoryLabel(category: string): string {
         case 'momentum_swing': return 'Momentum Swing';
         case 'williams': return 'Williams System';
         case 'stage_analysis': return 'Stage Analysis';
+        case 'futures_trend': return 'Futures Trend';
+        case 'futures_mean_reversion': return 'Futures Mean Reversion';
+        case 'futures_breakout': return 'Futures Breakout';
+        case 'futures_arbitrage': return 'Futures Arbitrage';
+        case 'futures_scalping': return 'Futures Scalping';
         default: return category;
     }
 }
@@ -745,6 +1104,11 @@ export function getCategoryLabelKo(category: string): string {
         case 'momentum_swing': return '모멘텀 스윙';
         case 'williams': return '윌리엄스 시스템';
         case 'stage_analysis': return '단계 분석';
+        case 'futures_trend': return '선물 추세추종';
+        case 'futures_mean_reversion': return '선물 평균회귀';
+        case 'futures_breakout': return '선물 돌파';
+        case 'futures_arbitrage': return '선물 차익거래';
+        case 'futures_scalping': return '선물 스캘핑';
         default: return category;
     }
 }

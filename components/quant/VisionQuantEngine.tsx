@@ -41,6 +41,8 @@ import {
 import {
     STRATEGY_TEMPLATES,
     getSignalStrategies,
+    getSpotStrategies,
+    getFuturesStrategies,
     getStrategyById,
     getRiskLevelColor,
     getRiskLevelLabel,
@@ -120,6 +122,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [showSetup, setShowSetup] = createSignal(false);
     const [showConfirm, setShowConfirm] = createSignal(false);
     const [categoryFilter, setCategoryFilter] = createSignal('all');
+    const [marketFilter, setMarketFilter] = createSignal<'all' | 'spot' | 'futures'>('all');
     const [viewCurrency, setViewCurrency] = createSignal<'krw' | 'usd'>('krw');
 
     // === Setup State ===
@@ -206,7 +209,11 @@ const VisionQuantEngine = (): JSX.Element => {
     const hasCredentials = createMemo(() => credentials().length > 0);
 
     const filteredStrategies = createMemo(() => {
-        const strategies = getSignalStrategies();
+        let strategies = getSignalStrategies();
+        // Market type filter
+        if (marketFilter() === 'spot') strategies = strategies.filter(s => s.marketType === 'spot');
+        else if (marketFilter() === 'futures') strategies = strategies.filter(s => s.marketType === 'futures');
+        // Category filter
         if (categoryFilter() === 'all') return strategies;
         if (categoryFilter() === 'premium') return strategies.filter(s => s.premium);
         return strategies.filter(s => s.category === categoryFilter());
@@ -378,24 +385,55 @@ const VisionQuantEngine = (): JSX.Element => {
 
                         {/* ═══ STRATEGIES TAB ═══ */}
                         <Show when={activeTab() === 'strategies'}>
+                            {/* Market Type Toggle */}
+                            <div class="flex items-center gap-1.5 mb-3 bg-[#111113]/60 p-1 rounded-xl border border-white/[0.04] w-fit">
+                                {(['all', 'spot', 'futures'] as const).map(m => (
+                                    <button
+                                        onClick={() => { setMarketFilter(m); setCategoryFilter('all'); }}
+                                        class={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${marketFilter() === m
+                                            ? m === 'futures'
+                                                ? 'bg-purple-500/15 text-purple-400 border border-purple-500/25'
+                                                : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                            : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                                            }`}
+                                    >
+                                        {m === 'all' ? 'All' : m === 'spot' ? 'Spot' : 'Futures'}
+                                        <span class="ml-1 text-[9px] opacity-60">
+                                            {m === 'all' ? getSignalStrategies().length : m === 'spot' ? getSpotStrategies().length : getFuturesStrategies().length}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+
                             {/* Category Filters */}
                             <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
                                 {[
                                     { id: 'all', label: 'All' },
                                     { id: 'premium', label: 'Premium' },
-                                    { id: 'trend_following', label: 'Trend' },
-                                    { id: 'mean_reversion', label: 'Mean Reversion' },
-                                    { id: 'multi_signal', label: 'Multi-Signal' },
-                                    { id: 'breakout', label: 'Breakout' },
-                                    { id: 'turtle_trading', label: 'Turtle' },
-                                    { id: 'momentum_swing', label: 'Momentum' },
-                                    { id: 'williams', label: 'Williams' },
-                                    { id: 'stage_analysis', label: 'Stage' },
+                                    ...(marketFilter() !== 'futures' ? [
+                                        { id: 'trend_following', label: 'Trend' },
+                                        { id: 'mean_reversion', label: 'Mean Reversion' },
+                                        { id: 'multi_signal', label: 'Multi-Signal' },
+                                        { id: 'breakout', label: 'Breakout' },
+                                        { id: 'turtle_trading', label: 'Turtle' },
+                                        { id: 'momentum_swing', label: 'Momentum' },
+                                        { id: 'williams', label: 'Williams' },
+                                        { id: 'stage_analysis', label: 'Stage' },
+                                    ] : []),
+                                    ...(marketFilter() !== 'spot' ? [
+                                        { id: 'futures_trend', label: 'F-Trend' },
+                                        { id: 'futures_mean_reversion', label: 'F-Mean Rev' },
+                                        { id: 'futures_breakout', label: 'F-Breakout' },
+                                        { id: 'futures_arbitrage', label: 'F-Arb' },
+                                        { id: 'futures_scalping', label: 'F-Scalp' },
+                                    ] : []),
                                 ].map(cat => (
                                     <button
                                         onClick={() => setCategoryFilter(cat.id)}
                                         class={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap border ${categoryFilter() === cat.id
-                                            ? cat.id === 'premium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                            ? cat.id === 'premium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                : cat.id.startsWith('futures_') ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                                    : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
                                             : 'bg-white/[0.02] text-gray-500 border-white/[0.04] hover:text-white hover:border-white/[0.1]'
                                             }`}
                                     >
@@ -411,15 +449,32 @@ const VisionQuantEngine = (): JSX.Element => {
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <For each={filteredStrategies()}>
                                     {(strategy) => (
-                                        <div class={`bg-[#111113]/60 rounded-2xl border ${strategy.premium ? 'border-amber-500/15 hover:border-amber-500/30 ring-1 ring-amber-500/5' : 'border-white/[0.04] hover:border-white/[0.1]'} transition-all group overflow-hidden`}>
+                                        <div class={`bg-[#111113]/60 rounded-2xl border ${strategy.premium ? 'border-amber-500/15 hover:border-amber-500/30 ring-1 ring-amber-500/5' : strategy.marketType === 'futures' ? 'border-purple-500/10 hover:border-purple-500/25' : 'border-white/[0.04] hover:border-white/[0.1]'} transition-all group overflow-hidden`}>
+                                            {/* Futures Banner */}
+                                            <Show when={strategy.marketType === 'futures' && !strategy.premium}>
+                                                <div class="flex items-center justify-between px-4 py-1.5 bg-gradient-to-r from-purple-500/10 via-purple-400/5 to-transparent border-b border-purple-500/10">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <svg viewBox="0 0 24 24" class="w-3 h-3 text-purple-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M5 20V8l5-6 5 6v12M15 20V4l5 6v10" /><circle cx="10" cy="13" r="2" /><circle cx="17.5" cy="11" r="1.5" /></svg>
+                                                        <span class="text-[9px] font-black text-purple-400 uppercase tracking-widest">Futures Strategy</span>
+                                                    </div>
+                                                    <Show when={strategy.maxLeverage}>
+                                                        <span class="text-[8px] font-bold text-purple-300 bg-purple-400/10 px-1.5 py-0.5 rounded-full">Up to {strategy.maxLeverage}x</span>
+                                                    </Show>
+                                                </div>
+                                            </Show>
                                             {/* Premium Banner */}
                                             <Show when={strategy.premium}>
                                                 <div class="flex items-center justify-between px-4 py-1.5 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border-b border-amber-500/10">
                                                     <div class="flex items-center gap-1.5">
                                                         <svg viewBox="0 0 24 24" class="w-3 h-3 text-amber-400" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                                                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-widest">Premium Strategy</span>
+                                                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-widest">{strategy.marketType === 'futures' ? 'Premium Futures' : 'Premium Strategy'}</span>
                                                     </div>
-                                                    <span class="text-[8px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">FREE (Limited)</span>
+                                                    <Show when={strategy.marketType === 'futures' && strategy.maxLeverage}>
+                                                        <span class="text-[8px] font-bold text-purple-300 bg-purple-400/10 px-1.5 py-0.5 rounded-full">Up to {strategy.maxLeverage}x</span>
+                                                    </Show>
+                                                    <Show when={strategy.marketType !== 'futures'}>
+                                                        <span class="text-[8px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">FREE (Limited)</span>
+                                                    </Show>
                                                 </div>
                                             </Show>
                                             {/* Card Header */}
