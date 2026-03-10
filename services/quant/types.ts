@@ -178,6 +178,130 @@ export interface QuantAgent {
     skippedSignals: number;
 }
 
+// ─── Paper Trading Types ───────────────────────────────────────────────────
+
+export type PaperAgentStatus = 'running' | 'paused' | 'stopped' | 'completed';
+
+/** Fixed seed amounts for paper trading */
+export const PAPER_TRADING_SEED = {
+    KRW: 10_000_000,   // 1천만원
+    USDT: 10_000,       // 10,000 USDT
+} as const;
+
+export interface PaperPosition {
+    asset: string;
+    quantity: number;
+    avgEntryPrice: number;
+    currentPrice: number;
+    value: number;
+    unrealizedPnl: number;
+    unrealizedPnlPercent: number;
+}
+
+export interface PaperAgent {
+    id: string;
+    userId: string;
+    userEmail: string;
+    displayName: string;
+
+    // Strategy config
+    strategyId: string;
+    strategyName: string;
+    selectedAssets: string[];
+    params: Record<string, number | string | boolean>;
+    budgetConfig: BudgetConfig;
+    riskProfile: 'conservative' | 'balanced' | 'aggressive';
+
+    // Seed
+    seed: number;
+    seedCurrency: 'KRW' | 'USDT';
+
+    // Portfolio state
+    cashBalance: number;
+    positions: PaperPosition[];
+    totalValue: number;
+    totalPnl: number;
+    totalPnlPercent: number;
+
+    // Stats
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    winRate: number;
+    bestTrade: number;
+    worstTrade: number;
+
+    // Status
+    status: PaperAgentStatus;
+    competitionId: string | null;
+
+    // Timestamps
+    createdAt: string;
+    updatedAt: string;
+    lastTradeAt: string | null;
+}
+
+export interface PaperTrade {
+    id: string;
+    agentId: string;
+    userId: string;
+    asset: string;
+    side: 'buy' | 'sell';
+    price: number;
+    quantity: number;
+    value: number;
+    fee: number;
+    pnl: number;
+    pnlPercent: number;
+    strategy: string;
+    signal: string;
+    balanceAfter: number;
+    timestamp: string;
+}
+
+// ─── Competition Types ─────────────────────────────────────────────────────
+
+export type CompetitionStatus = 'upcoming' | 'active' | 'completed';
+
+export interface CompetitionPrize {
+    rankMin: number;
+    rankMax: number;
+    reward: string;
+    label: string;
+}
+
+export interface Competition {
+    id: string;
+    title: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+    status: CompetitionStatus;
+    seed: number;
+    seedCurrency: 'KRW' | 'USDT';
+    participantCount: number;
+    prizes: CompetitionPrize[];
+    rules: string[];
+    createdAt: string;
+}
+
+export interface CompetitionEntry {
+    userId: string;
+    userEmail: string;
+    displayName: string;
+    agentId: string;
+    strategyName: string;
+    selectedAssets: string[];
+    currentValue: number;
+    currentPnl: number;
+    currentPnlPercent: number;
+    totalTrades: number;
+    winRate: number;
+    rank: number;
+    joinedAt: string;
+    updatedAt: string;
+}
+
 // ─── Signal Types ──────────────────────────────────────────────────────────
 
 export type SignalType = 'entry_long' | 'exit_long' | 'scale_in' | 'partial_exit' | 'stop_loss' | 'take_profit' | 'trailing_stop';

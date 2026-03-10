@@ -47,10 +47,11 @@ import {
     getCategoryLabel,
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
-import { DEFAULT_BUDGET_CONFIG } from '../../services/quant/types';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig } from '../../services/quant/types';
+import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { lazy } from 'solid-js';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent } from '../../services/quant/paperTradingService';
+import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
@@ -129,6 +130,11 @@ const VisionQuantEngine = (): JSX.Element => {
     const [customParams, setCustomParams] = createSignal<Record<string, number | string | boolean>>({});
     const [budgetConfig, setBudgetConfig] = createSignal<BudgetConfig>({ ...DEFAULT_BUDGET_CONFIG });
     const [tradingMode, setTradingMode] = createSignal<'live' | 'paper'>('paper');
+
+    // === Paper Agents State ===
+    const [paperAgents, setPaperAgents] = createSignal<PaperAgent[]>([]);
+    const [agentsLoading, setAgentsLoading] = createSignal(true);
+    const [creatingAgent, setCreatingAgent] = createSignal(false);
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
@@ -234,7 +240,16 @@ const VisionQuantEngine = (): JSX.Element => {
         }
     };
 
-    onMount(() => { loadData(); });
+    onMount(() => {
+        loadData();
+
+        // Subscribe to paper agents (realtime)
+        const unsub = subscribeToPaperAgents((agents) => {
+            setPaperAgents(agents);
+            setAgentsLoading(false);
+        });
+        onCleanup(unsub);
+    });
 
     // === Setup Helpers ===
     const toggleAsset = (currency: string) => {
@@ -479,18 +494,145 @@ const VisionQuantEngine = (): JSX.Element => {
 
                         {/* ═══ AGENTS TAB ═══ */}
                         <Show when={activeTab() === 'agents'}>
-                            <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
-                                <BotIcon />
-                                <h3 class="text-base font-black text-white mt-4 mb-2">No Active Agents</h3>
-                                <p class="text-xs text-gray-500 text-center max-w-sm">
-                                    전략 탭에서 전략을 선택하고 에이전트를 생성하여 자동매매를 시작하세요.
-                                </p>
-                                <button
-                                    onClick={() => setActiveTab('strategies')}
-                                    class="mt-4 px-4 py-2 text-xs font-bold text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl transition-all border border-cyan-500/20"
-                                >
-                                    Browse Strategies
-                                </button>
+                            <div class="space-y-4">
+                                {/* Loading */}
+                                <Show when={agentsLoading()}>
+                                    <div class="flex items-center justify-center py-16">
+                                        <div class="animate-spin w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                                    </div>
+                                </Show>
+
+                                {/* No agents */}
+                                <Show when={!agentsLoading() && paperAgents().length === 0}>
+                                    <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
+                                        <BotIcon />
+                                        <h3 class="text-base font-black text-white mt-4 mb-2">No Active Agents</h3>
+                                        <p class="text-xs text-gray-500 text-center max-w-sm">
+                                            전략 탭에서 전략을 선택하고 에이전트를 생성하여 자동매매를 시작하세요.
+                                        </p>
+                                        <button
+                                            onClick={() => setActiveTab('strategies')}
+                                            class="mt-4 px-4 py-2 text-xs font-bold text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl transition-all border border-cyan-500/20"
+                                        >
+                                            Browse Strategies
+                                        </button>
+                                    </div>
+                                </Show>
+
+                                {/* Agent List */}
+                                <Show when={!agentsLoading() && paperAgents().length > 0}>
+                                    <For each={paperAgents()}>
+                                        {(agent) => {
+                                            const seedLabel = () => agent.seedCurrency === 'KRW'
+                                                ? `\u20a9${agent.seed.toLocaleString()}`
+                                                : `$${agent.seed.toLocaleString()}`;
+                                            const valueLabel = () => agent.seedCurrency === 'KRW'
+                                                ? `\u20a9${Math.round(agent.totalValue).toLocaleString()}`
+                                                : `$${agent.totalValue.toLocaleString()}`;
+                                            const pnlLabel = () => {
+                                                const sign = agent.totalPnl >= 0 ? '+' : '';
+                                                return agent.seedCurrency === 'KRW'
+                                                    ? `${sign}\u20a9${Math.round(agent.totalPnl).toLocaleString()}`
+                                                    : `${sign}$${agent.totalPnl.toFixed(2)}`;
+                                            };
+                                            const statusColor = () => {
+                                                switch (agent.status) {
+                                                    case 'running': return 'bg-green-400';
+                                                    case 'paused': return 'bg-yellow-400';
+                                                    case 'stopped': return 'bg-red-400';
+                                                    case 'completed': return 'bg-gray-400';
+                                                }
+                                            };
+
+                                            return (
+                                                <div class="p-5 bg-[#111113]/60 rounded-2xl border border-white/[0.06] hover:border-white/[0.1] transition-all">
+                                                    {/* Header */}
+                                                    <div class="flex items-start justify-between mb-4">
+                                                        <div>
+                                                            <div class="flex items-center gap-2 mb-1">
+                                                                <div class={`w-2 h-2 rounded-full ${statusColor()} ${agent.status === 'running' ? 'animate-pulse' : ''}`} />
+                                                                <span class="text-xs font-black text-white">{agent.strategyName}</span>
+                                                                <span class="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded text-[8px] font-black text-amber-400 uppercase tracking-wider">Paper</span>
+                                                            </div>
+                                                            <div class="text-[10px] text-gray-500">
+                                                                {agent.selectedAssets.join(', ')} · {agent.status === 'running' ? 'Running' : agent.status === 'paused' ? 'Paused' : agent.status === 'stopped' ? 'Stopped' : 'Completed'}
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <div class={`text-sm font-black ${agent.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                {pnlLabel()} ({agent.totalPnl >= 0 ? '+' : ''}{agent.totalPnlPercent.toFixed(2)}%)
+                                                            </div>
+                                                            <div class="text-[10px] text-gray-500">P&L</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Stats Grid */}
+                                                    <div class="grid grid-cols-4 gap-3 mb-4">
+                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Seed</div>
+                                                            <div class="text-[11px] font-bold text-white">{seedLabel()}</div>
+                                                        </div>
+                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Value</div>
+                                                            <div class="text-[11px] font-bold text-white">{valueLabel()}</div>
+                                                        </div>
+                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Trades</div>
+                                                            <div class="text-[11px] font-bold text-white">{agent.totalTrades}</div>
+                                                        </div>
+                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Win Rate</div>
+                                                            <div class="text-[11px] font-bold text-white">{agent.winRate.toFixed(1)}%</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Actions */}
+                                                    <div class="flex items-center gap-2">
+                                                        <Show when={agent.status === 'running'}>
+                                                            <button
+                                                                onClick={() => updatePaperAgentStatus(agent.id, 'paused')}
+                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 rounded-lg text-[10px] font-bold text-yellow-400 transition-colors"
+                                                            >
+                                                                <Pause class="w-3 h-3" />
+                                                                Pause
+                                                            </button>
+                                                        </Show>
+                                                        <Show when={agent.status === 'paused'}>
+                                                            <button
+                                                                onClick={() => updatePaperAgentStatus(agent.id, 'running')}
+                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg text-[10px] font-bold text-green-400 transition-colors"
+                                                            >
+                                                                <Play class="w-3 h-3" />
+                                                                Resume
+                                                            </button>
+                                                        </Show>
+                                                        <Show when={agent.status === 'running' || agent.status === 'paused'}>
+                                                            <button
+                                                                onClick={() => updatePaperAgentStatus(agent.id, 'stopped')}
+                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-[10px] font-bold text-red-400 transition-colors"
+                                                            >
+                                                                <Square class="w-3 h-3" />
+                                                                Stop
+                                                            </button>
+                                                        </Show>
+                                                        <Show when={agent.status === 'stopped' || agent.status === 'completed'}>
+                                                            <button
+                                                                onClick={() => deletePaperAgent(agent.id)}
+                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg text-[10px] font-bold text-gray-400 transition-colors"
+                                                            >
+                                                                <X class="w-3 h-3" />
+                                                                Delete
+                                                            </button>
+                                                        </Show>
+                                                        <div class="ml-auto text-[9px] text-gray-600">
+                                                            Created {new Date(agent.createdAt).toLocaleDateString()}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }}
+                                    </For>
+                                </Show>
                             </div>
                         </Show>
 
@@ -1245,17 +1387,43 @@ const VisionQuantEngine = (): JSX.Element => {
                                     Back
                                 </button>
                                 <button
-                                    disabled={!acceptedTerms() || !acceptedBeta() || selectedAssets().length === 0}
-                                    class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl text-sm font-black text-black transition-colors"
-                                    onClick={() => {
-                                        // TODO: Create agent via backend
-                                        console.log('[Quant] Creating agent:', {
-                                            strategy: selectedStrategy()!.id,
-                                            assets: selectedAssets(),
-                                            params: customParams(),
-                                            budgetConfig: budgetConfig(),
-                                            tradingMode: tradingMode(),
-                                        });
+                                    disabled={!acceptedTerms() || !acceptedBeta() || selectedAssets().length === 0 || creatingAgent()}
+                                    class={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black transition-colors ${tradingMode() === 'paper'
+                                        ? 'bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black'
+                                        : 'bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-black'
+                                        }`}
+                                    onClick={async () => {
+                                        if (tradingMode() === 'paper') {
+                                            // Create Paper Trading Agent in Firestore
+                                            setCreatingAgent(true);
+                                            try {
+                                                const strategy = selectedStrategy()!;
+                                                // Determine seed currency based on exchange
+                                                const creds = credentials();
+                                                const firstCred = creds[0];
+                                                const isKrw = !firstCred || firstCred.exchange === 'upbit' || firstCred.exchange === 'bithumb';
+                                                const seedCurrency = isKrw ? 'KRW' as const : 'USDT' as const;
+
+                                                await createPaperAgent({
+                                                    strategyId: strategy.id,
+                                                    strategyName: strategy.name,
+                                                    selectedAssets: selectedAssets(),
+                                                    params: customParams(),
+                                                    budgetConfig: budgetConfig(),
+                                                    riskProfile: riskProfile(),
+                                                    seedCurrency,
+                                                });
+
+                                                console.log('[Quant] Paper agent created successfully');
+                                            } catch (err) {
+                                                console.error('[Quant] Failed to create paper agent:', err);
+                                            } finally {
+                                                setCreatingAgent(false);
+                                            }
+                                        } else {
+                                            // Live trading - TODO
+                                            console.log('[Quant] Live agent creation not yet implemented');
+                                        }
 
                                         // Award quant_strategy_setup RP (fire-and-forget)
                                         const email = getFirebaseAuth().currentUser?.email;
@@ -1269,8 +1437,13 @@ const VisionQuantEngine = (): JSX.Element => {
                                         setActiveTab('agents');
                                     }}
                                 >
-                                    <Play class="w-4 h-4" />
-                                    {tradingMode() === 'paper' ? 'Start Paper Trading' : 'Create Agent'}
+                                    <Show when={creatingAgent()}>
+                                        <div class="animate-spin w-4 h-4 border-2 border-black border-t-transparent rounded-full" />
+                                    </Show>
+                                    <Show when={!creatingAgent()}>
+                                        <Play class="w-4 h-4" />
+                                    </Show>
+                                    {creatingAgent() ? 'Creating...' : tradingMode() === 'paper' ? 'Start Paper Trading' : 'Create Agent'}
                                 </button>
                             </div>
                         </div>
