@@ -204,27 +204,37 @@
 
 ---
 
-## 3. 탑재 전략 모듈 (10개)
+## 3. Strategy Modules (15 total: 10 Spot + 5 Futures)
 
-### 시그널 생성 전략 (9개)
+### Spot Signal Strategies (9)
 
-| # | 전략명 | 카테고리 | 리스크 | 핵심 원리 | 유리한 시장 |
-|---|--------|----------|--------|-----------|-------------|
-| 1 | **Conservative Trend Core** (보수적 추세추종) | Trend Following | Low | EMA 크로스오버 + 200일 추세확인 + 거래량 필터 | 명확한 추세 시장 |
-| 2 | **Bollinger Mean Reversion Guarded** (볼린저 평균회귀 가드) | Mean Reversion | Medium | 볼린저 밴드 하단 반등 + RSI 회복 + 하락추세 필터 | 횡보 시장 |
-| 3 | **RSI Reversal Filtered** (RSI 반전 필터형) | Mean Reversion | Medium | RSI 과매도 회복 + MACD 히스토그램 확인 (RSI 단독 사용 금지) | 주기적 반등 시장 |
-| 4 | **Donchian Breakout Swing** (돈치안 돌파 스윙) | Breakout | Med-High | N봉 최고가 돌파 + 거래량 급증 + ATR 동적 손절 | 횡보→추세 전환기 |
-| 5 | **Multi-Factor Quant Guard** (멀티팩터 퀀트가드) | Multi-Signal | Medium | 추세+모멘텀+거래량+변동성 4중 확인 — 비전체인 대표 전략 | 조정 후 회복 시장 |
-| 6 | **Turtle Trading** (터틀 트레이딩) | Trend Following | Med-High | 리처드 데니스의 전설적 추세추종 돌파 전략 | 강한 추세 시장 |
-| 7 | **Williams Breakout** (윌리엄스 브레이크아웃) | Breakout | High | 래리 윌리엄스의 변동성 돌파 단기 전략 | 변동성 돌파 시장 |
-| 8 | **Minervini VCP** (미너비니 VCP) | Breakout | Medium | 마크 미너비니의 Volatility Contraction Pattern | 조정 후 돌파 시장 |
-| 9 | **Livermore Pyramid** (리버모어 피라미드) | Trend Following | High | 제시 리버모어의 수익 시 피라미딩 전략 | 강한 추세 시장 |
+| # | Strategy | Category | Risk | Core Logic | Favorable Market |
+|---|----------|----------|------|------------|-----------------|
+| 1 | **Conservative Trend Core** | Trend Following | Low | EMA crossover + 200-day trend confirmation + volume filter | Clear trending markets |
+| 2 | **Bollinger Mean Reversion Guarded** | Mean Reversion | Medium | Bollinger Band lower bounce + RSI recovery + downtrend filter | Range-bound markets |
+| 3 | **RSI Reversal Filtered** | Mean Reversion | Medium | RSI oversold recovery + MACD histogram confirmation (never RSI alone) | Periodic bounce markets |
+| 4 | **Donchian Breakout Swing** | Breakout | Med-High | N-period high breakout + volume surge + ATR dynamic stop | Consolidation-to-trend transitions |
+| 5 | **Multi-Factor Quant Guard** | Multi-Signal | Medium | Trend + Momentum + Volume + Volatility 4-factor confirmation — Vision Chain flagship | Post-correction recovery |
+| 6 | **Turtle Trading Crypto** | Trend Following | Med-High | Richard Dennis' legendary trend-following breakout with ATR N-Unit sizing | Strong trending markets |
+| 7 | **Williams Volatility Breakout** | Breakout | Med-High | Larry Williams' 1987 championship volatility breakout + Williams %R + Ultimate Oscillator | High-momentum markets |
+| 8 | **Minervini VCP Momentum** | Momentum Swing | Medium | Mark Minervini's SEPA Trend Template + Volatility Contraction Pattern breakout | Bull markets with sector rotation |
+| 9 | **Livermore Trend Pyramid** | Stage Analysis | Med-High | Jesse Livermore's trend following with pyramiding on confirmed higher lows | Clear trending markets |
 
-### 리스크 제어 레이어 (1개)
+### Spot Risk Control Layer (1)
 
-| # | 전략명 | 역할 |
-|---|--------|------|
-| 10 | **Volatility Target Overlay** (변동성 타기팅 오버레이) | 모든 전략 위에 기본 적용되는 포지션 크기 조절 + 손실한도 킬 스위치 |
+| # | Strategy | Role |
+|---|----------|------|
+| 10 | **Volatility Target Overlay** | Position sizing + drawdown kill switch applied on top of all strategies by default |
+
+### Futures Strategies (5)
+
+| # | Strategy | Category | Risk | Leverage | Core Logic | Favorable Market |
+|---|----------|----------|------|----------|------------|-----------------|
+| 11 | **Leveraged Trend Following** | Futures Trend | Med-High | 2-5x | EMA crossover with RSI/volume on perpetual futures. Auto-deleverage reduces leverage on unrealized loss. Position sized inversely to leverage. | Strong trending markets |
+| 12 | **Funding Rate Arbitrage** | Futures Arbitrage | Low | 1x | Exploits extreme funding rate differentials. Shorts perp + longs spot to collect funding. Market-neutral, profits from payments not direction. | Persistently high funding rate markets |
+| 13 | **Short Squeeze Hunter** | Futures Breakout | High | 2-10x | Detects extreme negative funding + rising open interest + resistance approach. Enters long to capitalize on forced short liquidation cascades. Time-based exit. | Extreme short-positioning markets |
+| 14 | **Futures Scalper** | Futures Scalping | Medium | 2-3x | High-frequency micro-trend scalping on 5m/15m using VWAP deviation, RSI extremes, order flow imbalance. Targets 0.3-0.8% per trade, max 4hr hold. | Active high-liquidity markets |
+| 15 | **Long-Short Balance** | Futures Mean Reversion | Medium | 1-2x | Market-neutral pairs trading. Longs underperformer, shorts outperformer when spread deviates beyond Z-score bands. Profits from spread convergence. | Stable correlation markets |
 
 ---
 
@@ -331,7 +341,7 @@ Step 5: 확인 & 실행
 
 | 수치 | 의미 |
 |------|------|
-| **10** | 탑재된 전략 모듈 수 (9 시그널 + 1 리스크 레이어) |
+| **15** | Total strategy modules (9 spot signal + 1 risk overlay + 5 futures) |
 | **8** | 기본 기술지표 (EMA, RSI, MACD, Bollinger, Donchian, ATR, Volume MA, OBV) |
 | **3중** | 안전장치 레이어 (일일/주간/변동성) |
 | **4단계** | 예산 한도 (전체/종목/주문/일일) |

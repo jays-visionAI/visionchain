@@ -50,9 +50,9 @@ import {
     getCategoryLabelKo,
 } from '../../services/quant/strategyRegistry';
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
-import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, Competition } from '../../services/quant/types';
+import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetition, joinCompetition } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetition, joinCompetition, fetchPaperReport } from '../../services/quant/paperTradingService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
 const QuantArenaLazy = lazy(() => import('./QuantArenaLeaderboard'));
@@ -142,6 +142,9 @@ const VisionQuantEngine = (): JSX.Element => {
     const [successToast, setSuccessToast] = createSignal<string | null>(null);
     const [activeCompetition, setActiveCompetition] = createSignal<Competition | null>(null);
     const [expandedAgentId, setExpandedAgentId] = createSignal<string | null>(null);
+    const [reportData, setReportData] = createSignal<PerformanceReport | null>(null);
+    const [reportLoading, setReportLoading] = createSignal(false);
+    const [reportAgentId, setReportAgentId] = createSignal<string | null>(null);
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
@@ -743,10 +746,10 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 <div class="flex gap-2">
                                                                     {(['conservative', 'balanced', 'aggressive'] as const).map(rp => (
                                                                         <div class={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${agent.riskProfile === rp
-                                                                                ? rp === 'conservative' ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
-                                                                                    : rp === 'balanced' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25'
-                                                                                        : 'bg-red-500/15 text-red-400 border-red-500/25'
-                                                                                : 'text-gray-600 border-white/[0.04]'}`}
+                                                                            ? rp === 'conservative' ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
+                                                                                : rp === 'balanced' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25'
+                                                                                    : 'bg-red-500/15 text-red-400 border-red-500/25'
+                                                                            : 'text-gray-600 border-white/[0.04]'}`}
                                                                         >
                                                                             {rp === 'conservative' ? 'Conservative' : rp === 'balanced' ? 'Balanced' : 'Aggressive'}
                                                                         </div>
@@ -870,7 +873,70 @@ const VisionQuantEngine = (): JSX.Element => {
 
                         {/* ═══ REPORTS TAB ═══ */}
                         <Show when={activeTab() === 'reports'}>
-                            <QuantReportLazy onBack={() => setActiveTab('strategies')} />
+                            <Show when={!reportData()}>
+                                {/* Agent selector for reports */}
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between">
+                                        <h3 class="text-sm font-black text-white">Select Agent for Report</h3>
+                                    </div>
+                                    <Show when={paperAgents().length > 0} fallback={
+                                        <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
+                                            <svg viewBox="0 0 24 24" class="w-6 h-6 text-gray-600 mb-4" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                                            <h3 class="text-base font-black text-white mb-2">No Agents</h3>
+                                            <p class="text-xs text-gray-500 text-center max-w-sm">
+                                                먼저 Strategies 탭에서 전략을 설정하고 에이전트를 생성하세요. 트레이딩 데이터가 쌓이면 리포트를 확인할 수 있습니다.
+                                            </p>
+                                        </div>
+                                    }>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <For each={paperAgents()}>
+                                                {(agent) => {
+                                                    const isLoading = () => reportLoading() && reportAgentId() === agent.id;
+                                                    return (
+                                                        <button
+                                                            onClick={async () => {
+                                                                setReportAgentId(agent.id);
+                                                                setReportLoading(true);
+                                                                const report = await fetchPaperReport(agent.id, 'weekly');
+                                                                setReportData(report);
+                                                                setReportLoading(false);
+                                                            }}
+                                                            disabled={reportLoading()}
+                                                            class="p-4 bg-[#111113]/60 rounded-2xl border border-white/[0.06] hover:border-cyan-500/30 transition-all text-left"
+                                                        >
+                                                            <div class="flex items-center gap-2 mb-2">
+                                                                <div class={`w-2 h-2 rounded-full ${agent.status === 'running' ? 'bg-green-400 animate-pulse' : agent.status === 'paused' ? 'bg-yellow-400' : 'bg-gray-400'}`} />
+                                                                <span class="text-xs font-black text-white">{agent.strategyName}</span>
+                                                                <span class="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded text-[8px] font-black text-amber-400 uppercase">Paper</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-between">
+                                                                <div class="text-[10px] text-gray-500">
+                                                                    {agent.selectedAssets.slice(0, 3).join(', ')}{agent.selectedAssets.length > 3 ? ` +${agent.selectedAssets.length - 3}` : ''}
+                                                                </div>
+                                                                <div class={`text-xs font-bold ${agent.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                    {agent.totalPnl >= 0 ? '+' : ''}{agent.totalPnlPercent.toFixed(2)}%
+                                                                </div>
+                                                            </div>
+                                                            <div class="text-[10px] text-gray-600 mt-1">{agent.totalTrades} trades | {new Date(agent.createdAt).toLocaleDateString()}</div>
+                                                            <Show when={isLoading()}>
+                                                                <div class="mt-2 h-1 bg-white/[0.03] rounded-full overflow-hidden">
+                                                                    <div class="h-full w-1/3 bg-cyan-400/50 rounded-full animate-pulse" />
+                                                                </div>
+                                                            </Show>
+                                                        </button>
+                                                    );
+                                                }}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                </div>
+                            </Show>
+                            <Show when={reportData()}>
+                                <QuantReportLazy
+                                    report={reportData()}
+                                    onBack={() => { setReportData(null); setReportAgentId(null); }}
+                                />
+                            </Show>
                         </Show>
                     </Show>
                 </Show>

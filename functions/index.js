@@ -25542,3 +25542,869 @@ exports.adminFinalizeRelease = onCall({
     return { success: false, error: err.message };
   }
 });
+
+// =============================================================================
+// PAPER TRADING ENGINE
+// =============================================================================
+
+/**
+ * Fetch current KRW prices from Upbit public API (no auth needed)
+ * @param {string[]} markets e.g. ["KRW-BTC","KRW-ETH"]
+ * @return {Promise<Record<string, number>>} { "KRW-BTC": 85000000, ... }
+ */
+async function fetchUpbitPrices(markets) {
+  if (markets.length === 0) return {};
+  const http = getAxios();
+  try {
+    const resp = await http.get(
+      `https://api.upbit.com/v1/ticker?markets=${markets.join(",")}`,
+      { timeout: 10000 },
+    );
+    const prices = {};
+    for (const t of resp.data) {
+      prices[t.market] = t.trade_price;
+    }
+    return prices;
+  } catch (err) {
+    console.error("[fetchUpbitPrices] Error:", err.message);
+    return {};
+  }
+}
+
+/**
+ * Simple technical indicator calculations for paper strategy signals.
+ * Works with an array of close prices (oldest first).
+ */
+const TechIndicators = {
+  /** Simple Moving Average */
+  sma(closes, period) {
+    if (closes.length < period) return null;
+    const slice = closes.slice(-period);
+    return slice.reduce((a, b) => a + b, 0) / period;
+  },
+
+  /** Exponential Moving Average */
+  ema(closes, period) {
+    if (closes.length < period) return null;
+    const k = 2 / (period + 1);
+    let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < closes.length; i++) {
+      ema = closes[i] * k + ema * (1 - k);
+    }
+    return ema;
+  },
+
+  /** RSI (Relative Strength Index) */
+  rsi(closes, period = 14) {
+    if (closes.length < period + 1) return null;
+    let gains = 0;
+    let losses = 0;
+    for (let i = closes.length - period; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff > 0) gains += diff;
+      else losses -= diff;
+    }
+    if (losses === 0) return 100;
+    const rs = (gains / period) / (losses / period);
+    return 100 - (100 / (1 + rs));
+  },
+
+  /** Bollinger Bands */
+  bollinger(closes, period = 20, mult = 2) {
+    if (closes.length < period) return null;
+    const slice = closes.slice(-period);
+    const sma = slice.reduce((a, b) => a + b, 0) / period;
+    const variance = slice.reduce((sum, v) => sum + (v - sma) ** 2, 0) / period;
+    const std = Math.sqrt(variance);
+    return { upper: sma + mult * std, middle: sma, lower: sma - mult * std };
+  },
+
+  /** MACD */
+  macd(closes, fast = 12, slow = 26, signal = 9) {
+    const emaFast = this.ema(closes, fast);
+    const emaSlow = this.ema(closes, slow);
+    if (emaFast === null || emaSlow === null) return null;
+    const macdLine = emaFast - emaSlow;
+    // Simplified signal line
+    const signalLine = this.ema(
+      closes.slice(-slow).map(() => macdLine), // approximation
+      signal,
+    ) || macdLine;
+    return { macd: macdLine, signal: signalLine, histogram: macdLine - signalLine };
+  },
+};
+
+/**
+ * Evaluate a strategy's entry/exit signals against current market data.
+ * @param {object} agent - Paper agent document
+ * @param {Record<string, number>} prices - Current prices
+ * @param {Record<string, number[]>} priceHistory - Recent close prices per asset
+ * @return {Array<{asset: string, side: 'buy'|'sell', reason: string, strength: number}>}
+ */
+function evaluateStrategy(agent, prices, priceHistory) {
+  const signals = [];
+  const params = agent.params || {};
+  const strategyId = agent.strategyId;
+
+  for (const asset of agent.selectedAssets) {
+    const price = prices[asset];
+    if (!price) continue;
+
+    const closes = priceHistory[asset] || [];
+    if (closes.length < 30) continue; // Need enough history
+
+    const hasPosition = (agent.positions || []).some(p => p.asset === asset);
+
+    // === Entry Signal Evaluation ===
+    if (!hasPosition) {
+      let buyScore = 0;
+      let buyReason = "";
+
+      // Trend following: EMA cross
+      if (strategyId.includes("trend") || strategyId.includes("conservative")) {
+        const fastPeriod = Number(params.fast_ema) || 20;
+        const slowPeriod = Number(params.slow_ema) || 50;
+        const emaFast = TechIndicators.ema(closes, fastPeriod);
+        const emaSlow = TechIndicators.ema(closes, slowPeriod);
+        if (emaFast && emaSlow && emaFast > emaSlow) {
+          buyScore += 30;
+          buyReason += "EMA bullish cross; ";
+        }
+        const ema200 = TechIndicators.ema(closes, 200) || TechIndicators.ema(closes, Math.min(closes.length - 1, 100));
+        if (ema200 && price > ema200) {
+          buyScore += 20;
+          buyReason += "Above long-term trend; ";
+        }
+      }
+
+      // Mean reversion: RSI / Bollinger
+      if (strategyId.includes("reversion") || strategyId.includes("bollinger") || strategyId.includes("rsi")) {
+        const rsiPeriod = Number(params.rsi_length) || 14;
+        const rsi = TechIndicators.rsi(closes, rsiPeriod);
+        const entryRSI = Number(params.entry_rsi) || 30;
+        if (rsi !== null && rsi < entryRSI + 5 && rsi > entryRSI - 5) {
+          buyScore += 35;
+          buyReason += `RSI oversold recovery (${rsi.toFixed(1)}); `;
+        }
+
+        const bbLen = Number(params.bb_length) || 20;
+        const bb = TechIndicators.bollinger(closes, bbLen);
+        if (bb && price <= bb.lower * 1.02) {
+          buyScore += 30;
+          buyReason += "Near Bollinger lower band; ";
+        }
+      }
+
+      // Breakout: Donchian
+      if (strategyId.includes("breakout") || strategyId.includes("donchian")) {
+        const period = Number(params.entry_period) || 20;
+        const recentHighs = closes.slice(-period);
+        const channelHigh = Math.max(...recentHighs);
+        if (price >= channelHigh * 0.99) {
+          buyScore += 40;
+          buyReason += `Donchian breakout (${period}d high); `;
+        }
+      }
+
+      // Momentum / Multi-signal
+      if (strategyId.includes("momentum") || strategyId.includes("multi") || strategyId.includes("williams")) {
+        const rsi = TechIndicators.rsi(closes, 14);
+        const macd = TechIndicators.macd(closes);
+        if (rsi !== null && rsi > 40 && rsi < 70) buyScore += 15;
+        if (macd && macd.histogram > 0) {
+          buyScore += 25;
+          buyReason += "MACD positive momentum; ";
+        }
+      }
+
+      // Generic RSI check for all strategies
+      const rsi = TechIndicators.rsi(closes, 14);
+      if (rsi !== null && rsi < 35) {
+        buyScore += 15;
+        buyReason += `RSI low (${rsi.toFixed(1)}); `;
+      }
+
+      // Risk profile adjustment
+      const threshold = agent.riskProfile === "aggressive" ? 35 :
+        agent.riskProfile === "conservative" ? 55 : 45;
+
+      if (buyScore >= threshold) {
+        signals.push({ asset, side: "buy", reason: buyReason.trim(), strength: buyScore });
+      }
+    }
+
+    // === Exit Signal Evaluation ===
+    if (hasPosition) {
+      const pos = (agent.positions || []).find(p => p.asset === asset);
+      if (!pos) continue;
+
+      let sellScore = 0;
+      let sellReason = "";
+      const pnlPct = ((price - pos.avgEntryPrice) / pos.avgEntryPrice) * 100;
+
+      // Stop loss
+      const stopLoss = Number(params.stop_loss) || 5;
+      if (pnlPct <= -stopLoss) {
+        sellScore = 100;
+        sellReason = `Stop loss hit (${pnlPct.toFixed(2)}%)`;
+      }
+
+      // Take profit
+      const takeProfit = Number(params.take_profit) || 10;
+      if (pnlPct >= takeProfit) {
+        sellScore = 90;
+        sellReason = `Take profit hit (${pnlPct.toFixed(2)}%)`;
+      }
+
+      // Trailing stop
+      const trailingStop = Number(params.trailing_stop) || 5;
+      if (pnlPct > trailingStop && pnlPct < takeProfit) {
+        // Check if price dropped from recent high
+        const recentHigh = Math.max(...closes.slice(-5));
+        const dropFromHigh = ((recentHigh - price) / recentHigh) * 100;
+        if (dropFromHigh > trailingStop * 0.5) {
+          sellScore = 70;
+          sellReason = `Trailing stop (${dropFromHigh.toFixed(1)}% from high)`;
+        }
+      }
+
+      // RSI overbought exit
+      const rsi = TechIndicators.rsi(closes, 14);
+      if (rsi !== null && rsi > 75 && pnlPct > 0) {
+        sellScore = Math.max(sellScore, 60);
+        sellReason = sellReason || `RSI overbought (${rsi.toFixed(1)})`;
+      }
+
+      // EMA bearish cross for trend strategies
+      if (strategyId.includes("trend") || strategyId.includes("conservative")) {
+        const emaFast = TechIndicators.ema(closes, Number(params.fast_ema) || 20);
+        const emaSlow = TechIndicators.ema(closes, Number(params.slow_ema) || 50);
+        if (emaFast && emaSlow && emaFast < emaSlow && pnlPct > -2) {
+          sellScore = Math.max(sellScore, 55);
+          sellReason = sellReason || "EMA bearish cross";
+        }
+      }
+
+      if (sellScore >= 50) {
+        signals.push({ asset, side: "sell", reason: sellReason, strength: sellScore });
+      }
+    }
+  }
+
+  return signals;
+}
+
+/**
+ * Fetch the last N hours of hourly candle close prices from Upbit.
+ * @param {string} market e.g. "KRW-BTC"
+ * @param {number} count number of candles
+ * @return {Promise<number[]>} array of close prices oldest first
+ */
+async function fetchCandles(market, count = 100) {
+  try {
+    const http = getAxios();
+    const resp = await http.get(
+      `https://api.upbit.com/v1/candles/minutes/60?market=${market}&count=${count}`,
+      { timeout: 10000 },
+    );
+    // Upbit returns newest first, we reverse
+    return resp.data.reverse().map((c) => c.trade_price);
+  } catch (err) {
+    console.error(`[fetchCandles] ${market} error:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * runPaperTradingEngine - Scheduled every hour
+ * Evaluates all running paper agents, executes simulated trades
+ */
+exports.runPaperTradingEngine = onSchedule({
+  schedule: "every 1 hours",
+  region: "us-central1",
+  memory: "512MiB",
+  timeoutSeconds: 120,
+}, async () => {
+  console.log("[PaperEngine] Starting hourly run...");
+
+  // 1. Get all running agents
+  const agentSnap = await db.collection("paperAgents")
+    .where("status", "==", "running")
+    .get();
+
+  if (agentSnap.empty) {
+    console.log("[PaperEngine] No running agents.");
+    return;
+  }
+
+  const agents = agentSnap.docs.map((d) => ({ ref: d.ref, ...d.data() }));
+  console.log(`[PaperEngine] Processing ${agents.length} agents`);
+
+  // 2. Collect all unique assets
+  const allAssets = new Set();
+  for (const agent of agents) {
+    for (const asset of (agent.selectedAssets || [])) {
+      allAssets.add(asset);
+    }
+    for (const pos of (agent.positions || [])) {
+      allAssets.add(pos.asset);
+    }
+  }
+  const assetList = [...allAssets];
+
+  // 3. Fetch current prices
+  const prices = await fetchUpbitPrices(assetList);
+  if (Object.keys(prices).length === 0) {
+    console.log("[PaperEngine] Failed to fetch prices, skipping");
+    return;
+  }
+
+  // 4. Fetch candle history for each asset (with rate limiting)
+  const priceHistory = {};
+  for (const asset of assetList) {
+    priceHistory[asset] = await fetchCandles(asset, 100);
+    // Upbit rate limit: ~10 req/sec for public endpoints
+    await new Promise((r) => setTimeout(r, 120));
+  }
+
+  // 5. Process each agent
+  const batch = db.batch();
+  const tradeWrites = [];
+  let totalTrades = 0;
+
+  for (const agent of agents) {
+    try {
+      // Evaluate signals
+      const signals = evaluateStrategy(agent, prices, priceHistory);
+      if (signals.length === 0) {
+        // Still update portfolio values
+        const positions = (agent.positions || []).map((pos) => {
+          const currentPrice = prices[pos.asset] || pos.currentPrice;
+          const value = pos.quantity * currentPrice;
+          const unrealizedPnl = value - (pos.quantity * pos.avgEntryPrice);
+          const unrealizedPnlPercent = pos.avgEntryPrice > 0
+            ? ((currentPrice - pos.avgEntryPrice) / pos.avgEntryPrice) * 100 : 0;
+          return { ...pos, currentPrice, value, unrealizedPnl, unrealizedPnlPercent };
+        });
+
+        const totalValue = agent.cashBalance +
+          positions.reduce((sum, p) => sum + p.value, 0);
+        const totalPnl = totalValue - agent.seed;
+        const totalPnlPercent = agent.seed > 0 ? (totalPnl / agent.seed) * 100 : 0;
+
+        batch.update(agent.ref, {
+          positions,
+          totalValue,
+          totalPnl,
+          totalPnlPercent,
+          updatedAt: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      let { cashBalance, positions = [], totalTrades: agentTotalTrades = 0,
+        winningTrades = 0, losingTrades = 0, bestTrade = 0, worstTrade = 0 } = agent;
+
+      for (const signal of signals) {
+        const { asset, side, reason } = signal;
+        const price = prices[asset];
+        if (!price) continue;
+
+        const FEE_RATE = 0.0005; // 0.05% simulated fee
+
+        if (side === "buy") {
+          // Calculate order size based on budget config
+          const budgetConfig = agent.budgetConfig || {};
+          let orderBudget = cashBalance * 0.15; // Default: 15% of cash
+
+          if (budgetConfig.maxOrderSizeEnabled && budgetConfig.maxOrderSize > 0) {
+            orderBudget = Math.min(orderBudget, budgetConfig.maxOrderSize);
+          }
+          if (budgetConfig.perAssetBudgetEnabled && budgetConfig.perAssetBudget > 0) {
+            orderBudget = Math.min(orderBudget, budgetConfig.perAssetBudget);
+          }
+
+          orderBudget = Math.min(orderBudget, cashBalance * 0.95); // Keep 5% reserve
+          if (orderBudget < (agent.seedCurrency === "KRW" ? 5000 : 5)) continue; // Min order
+
+          const fee = orderBudget * FEE_RATE;
+          const netAmount = orderBudget - fee;
+          const quantity = netAmount / price;
+
+          cashBalance -= orderBudget;
+          positions.push({
+            asset,
+            quantity,
+            avgEntryPrice: price,
+            currentPrice: price,
+            value: netAmount,
+            unrealizedPnl: 0,
+            unrealizedPnlPercent: 0,
+          });
+          agentTotalTrades++;
+          totalTrades++;
+
+          // Record trade
+          const tradeId = `pt_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          tradeWrites.push({
+            id: tradeId,
+            agentId: agent.id,
+            userId: agent.userId,
+            asset,
+            side: "buy",
+            price,
+            quantity,
+            value: orderBudget,
+            fee,
+            pnl: 0,
+            pnlPercent: 0,
+            strategy: agent.strategyName,
+            signal: reason,
+            balanceAfter: cashBalance,
+            timestamp: new Date().toISOString(),
+          });
+        } else if (side === "sell") {
+          const posIdx = positions.findIndex((p) => p.asset === asset);
+          if (posIdx === -1) continue;
+
+          const pos = positions[posIdx];
+          const sellValue = pos.quantity * price;
+          const fee = sellValue * FEE_RATE;
+          const netProceeds = sellValue - fee;
+          const costBasis = pos.quantity * pos.avgEntryPrice;
+          const tradePnl = netProceeds - costBasis;
+          const tradePnlPct = costBasis > 0 ? (tradePnl / costBasis) * 100 : 0;
+
+          cashBalance += netProceeds;
+          positions.splice(posIdx, 1);
+          agentTotalTrades++;
+          totalTrades++;
+
+          if (tradePnl >= 0) winningTrades++;
+          else losingTrades++;
+          if (tradePnlPct > bestTrade) bestTrade = tradePnlPct;
+          if (tradePnlPct < worstTrade) worstTrade = tradePnlPct;
+
+          const tradeId = `pt_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          tradeWrites.push({
+            id: tradeId,
+            agentId: agent.id,
+            userId: agent.userId,
+            asset,
+            side: "sell",
+            price,
+            quantity: pos.quantity,
+            value: sellValue,
+            fee,
+            pnl: tradePnl,
+            pnlPercent: tradePnlPct,
+            strategy: agent.strategyName,
+            signal: reason,
+            balanceAfter: cashBalance,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Update positions with current prices
+      const updatedPositions = positions.map((pos) => {
+        const cp = prices[pos.asset] || pos.currentPrice;
+        const value = pos.quantity * cp;
+        const unrealizedPnl = value - (pos.quantity * pos.avgEntryPrice);
+        const unrealizedPnlPercent = pos.avgEntryPrice > 0
+          ? ((cp - pos.avgEntryPrice) / pos.avgEntryPrice) * 100 : 0;
+        return { ...pos, currentPrice: cp, value, unrealizedPnl, unrealizedPnlPercent };
+      });
+
+      const totalValue = cashBalance +
+        updatedPositions.reduce((sum, p) => sum + p.value, 0);
+      const totalPnl = totalValue - agent.seed;
+      const totalPnlPercent = agent.seed > 0 ? (totalPnl / agent.seed) * 100 : 0;
+      const winRate = agentTotalTrades > 0 ? (winningTrades / agentTotalTrades) * 100 : 0;
+
+      batch.update(agent.ref, {
+        cashBalance,
+        positions: updatedPositions,
+        totalValue,
+        totalPnl,
+        totalPnlPercent,
+        totalTrades: agentTotalTrades,
+        winningTrades,
+        losingTrades,
+        winRate,
+        bestTrade,
+        worstTrade,
+        lastTradeAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (agentErr) {
+      console.error(`[PaperEngine] Agent ${agent.id} error:`, agentErr.message);
+    }
+  }
+
+  // 6. Commit all agent updates
+  await batch.commit();
+
+  // 7. Write trades in batches of 500
+  for (let i = 0; i < tradeWrites.length; i += 500) {
+    const chunk = tradeWrites.slice(i, i + 500);
+    const tradeBatch = db.batch();
+    for (const trade of chunk) {
+      tradeBatch.set(db.collection("paperTrades").doc(trade.id), trade);
+    }
+    await tradeBatch.commit();
+  }
+
+  console.log(`[PaperEngine] Completed. ${agents.length} agents, ${totalTrades} trades, ${tradeWrites.length} recorded.`);
+});
+
+/**
+ * paperDailySnapshot - Runs daily at midnight KST (15:00 UTC)
+ * Saves daily PnL snapshots for all active agents
+ */
+exports.paperDailySnapshot = onSchedule({
+  schedule: "0 15 * * *",
+  region: "us-central1",
+  memory: "256MiB",
+  timeoutSeconds: 60,
+}, async () => {
+  const today = new Date().toISOString().split("T")[0];
+  console.log(`[DailySnapshot] Running for ${today}...`);
+
+  // Get all agents (not just running - include paused for snapshot continuity)
+  const agentSnap = await db.collection("paperAgents")
+    .where("status", "in", ["running", "paused"])
+    .get();
+
+  if (agentSnap.empty) {
+    console.log("[DailySnapshot] No active agents.");
+    return;
+  }
+
+  const batch = db.batch();
+  let count = 0;
+
+  for (const doc of agentSnap.docs) {
+    const agent = doc.data();
+    const snapshotId = `${agent.id}_${today}`;
+
+    // Check if already snapshotted today
+    const existing = await db.collection("paperDailyPnl").doc(snapshotId).get();
+    if (existing.exists) continue;
+
+    // Get yesterday's snapshot to compute daily change
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const yesterdaySnap = await db.collection("paperDailyPnl")
+      .doc(`${agent.id}_${yesterday}`).get();
+
+    const yesterdayValue = yesterdaySnap.exists
+      ? yesterdaySnap.data().portfolioValue
+      : agent.seed;
+
+    const dailyPnl = agent.totalValue - yesterdayValue;
+    const dailyPnlPercent = yesterdayValue > 0
+      ? (dailyPnl / yesterdayValue) * 100 : 0;
+
+    const snapshot = {
+      id: snapshotId,
+      agentId: agent.id,
+      userId: agent.userId,
+      date: today,
+      portfolioValue: agent.totalValue || agent.seed,
+      cashBalance: agent.cashBalance || agent.seed,
+      positionsValue: (agent.positions || []).reduce((s, p) => s + (p.value || 0), 0),
+      pnl: dailyPnl,
+      pnlPercent: dailyPnlPercent,
+      cumulativePnl: agent.totalPnl || 0,
+      cumulativeReturn: agent.totalPnlPercent || 0,
+      totalTrades: agent.totalTrades || 0,
+      benchmark: 0, // Will be filled with BTC return
+      createdAt: new Date().toISOString(),
+    };
+
+    batch.set(db.collection("paperDailyPnl").doc(snapshotId), snapshot);
+    count++;
+  }
+
+  // Also compute BTC benchmark return and backfill
+  try {
+    const prices = await fetchUpbitPrices(["KRW-BTC"]);
+    const btcPrice = prices["KRW-BTC"];
+    if (btcPrice) {
+      // Get BTC price from first agent's first snapshot as baseline
+      const firstSnapQ = await db.collection("paperDailyPnl")
+        .orderBy("date", "asc")
+        .limit(1)
+        .get();
+
+      if (!firstSnapQ.empty) {
+        // Store BTC price reference
+        batch.set(db.collection("paperBenchmarks").doc(today), {
+          date: today,
+          btcPrice,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[DailySnapshot] BTC benchmark error:", err.message);
+  }
+
+  await batch.commit();
+  console.log(`[DailySnapshot] Saved ${count} snapshots for ${today}`);
+});
+
+/**
+ * getPaperReport - onCall: Generate a performance report for a paper agent
+ */
+exports.getPaperReport = onCall({
+  region: "us-central1",
+  memory: "512MiB",
+  timeoutSeconds: 30,
+}, async (request) => {
+  const { agentId, period = "weekly" } = request.data || {};
+  if (!agentId) throw new HttpsError("invalid-argument", "agentId required");
+
+  const auth = request.auth;
+  if (!auth) throw new HttpsError("unauthenticated", "Login required");
+
+  // Get agent
+  const agentDoc = await db.collection("paperAgents").doc(agentId).get();
+  if (!agentDoc.exists) throw new HttpsError("not-found", "Agent not found");
+  const agent = agentDoc.data();
+  if (agent.userId !== auth.uid) throw new HttpsError("permission-denied", "Not your agent");
+
+  // Determine date range
+  const now = new Date();
+  let startDate;
+  if (period === "weekly") {
+    startDate = new Date(now.getTime() - 7 * 86400000);
+  } else if (period === "monthly") {
+    startDate = new Date(now.getTime() - 30 * 86400000);
+  } else {
+    startDate = new Date(now.getTime() - 365 * 86400000);
+  }
+  const startStr = startDate.toISOString().split("T")[0];
+  const endStr = now.toISOString().split("T")[0];
+
+  // 1. Get daily PnL snapshots
+  const pnlSnap = await db.collection("paperDailyPnl")
+    .where("agentId", "==", agentId)
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .orderBy("date", "asc")
+    .get();
+
+  const dailyPnl = pnlSnap.docs.map((d) => {
+    const data = d.data();
+    return {
+      date: data.date,
+      pnl: data.pnl || 0,
+      pnlPercent: data.pnlPercent || 0,
+      cumulativePnl: data.cumulativePnl || 0,
+      cumulativeReturn: data.cumulativeReturn || 0,
+      portfolioValue: data.portfolioValue || 0,
+      benchmark: data.benchmark || 0,
+    };
+  });
+
+  // 2. Get trades
+  const tradesSnap = await db.collection("paperTrades")
+    .where("agentId", "==", agentId)
+    .where("timestamp", ">=", startDate.toISOString())
+    .orderBy("timestamp", "desc")
+    .limit(200)
+    .get();
+
+  const trades = tradesSnap.docs.map((d) => d.data());
+
+  // 3. Compute summary metrics
+  const sellTrades = trades.filter((t) => t.side === "sell");
+  const winTrades = sellTrades.filter((t) => t.pnl > 0);
+  const loseTrades = sellTrades.filter((t) => t.pnl <= 0);
+  const totalPnlFromTrades = sellTrades.reduce((s, t) => s + t.pnl, 0);
+  const totalFees = trades.reduce((s, t) => s + (t.fee || 0), 0);
+
+  // Best/worst day
+  let bestDay = { date: endStr, pnl: 0, pnlPercent: 0 };
+  let worstDay = { date: endStr, pnl: 0, pnlPercent: 0 };
+  for (const d of dailyPnl) {
+    if (d.pnl > bestDay.pnl) bestDay = { date: d.date, pnl: d.pnl, pnlPercent: d.pnlPercent };
+    if (d.pnl < worstDay.pnl) worstDay = { date: d.date, pnl: d.pnl, pnlPercent: d.pnlPercent };
+  }
+
+  // Average daily return
+  const avgDailyReturn = dailyPnl.length > 0
+    ? dailyPnl.reduce((s, d) => s + d.pnlPercent, 0) / dailyPnl.length : 0;
+
+  // Risk metrics
+  const returns = dailyPnl.map((d) => d.pnlPercent);
+  const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+  const stdDev = returns.length > 1
+    ? Math.sqrt(returns.reduce((s, r) => s + (r - avgReturn) ** 2, 0) / (returns.length - 1))
+    : 1;
+  const negReturns = returns.filter((r) => r < 0);
+  const downDev = negReturns.length > 0
+    ? Math.sqrt(negReturns.reduce((s, r) => s + r ** 2, 0) / negReturns.length)
+    : 1;
+
+  const annFactor = Math.sqrt(365);
+  const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * annFactor : 0;
+  const sortinoRatio = downDev > 0 ? (avgReturn / downDev) * annFactor : 0;
+
+  // Max drawdown
+  let peak = agent.seed;
+  let maxDD = 0;
+  let maxDDduration = 0;
+  let ddStart = 0;
+  for (const d of dailyPnl) {
+    if (d.portfolioValue > peak) {
+      peak = d.portfolioValue;
+      ddStart = 0;
+    }
+    const dd = peak > 0 ? ((d.portfolioValue - peak) / peak) * 100 : 0;
+    if (dd < maxDD) {
+      maxDD = dd;
+      ddStart++;
+      if (ddStart > maxDDduration) maxDDduration = ddStart;
+    }
+  }
+
+  const totalReturn = agent.seed > 0 ? (agent.totalPnl / agent.seed) * 100 : 0;
+  const daysRan = Math.max(dailyPnl.length, 1);
+  const annualizedReturn = totalReturn * (365 / daysRan);
+
+  // Profit factor
+  const grossProfit = sellTrades.filter((t) => t.pnl > 0).reduce((s, t) => s + t.pnl, 0);
+  const grossLoss = Math.abs(sellTrades.filter((t) => t.pnl <= 0).reduce((s, t) => s + t.pnl, 0));
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 99 : 0;
+  const avgWin = winTrades.length > 0 ? grossProfit / winTrades.length : 0;
+  const avgLoss = loseTrades.length > 0 ? grossLoss / loseTrades.length : 0;
+  const winRate = sellTrades.length > 0 ? (winTrades.length / sellTrades.length) * 100 : 0;
+
+  // Asset performance
+  const assetMap = {};
+  for (const t of trades) {
+    if (!assetMap[t.asset]) {
+      assetMap[t.asset] = { trades: 0, wins: 0, totalPnl: 0, totalValue: 0, best: -Infinity, worst: Infinity };
+    }
+    const a = assetMap[t.asset];
+    a.trades++;
+    a.totalValue += t.value;
+    if (t.side === "sell") {
+      if (t.pnl > 0) a.wins++;
+      a.totalPnl += t.pnl;
+      if (t.pnlPercent > a.best) a.best = t.pnlPercent;
+      if (t.pnlPercent < a.worst) a.worst = t.pnlPercent;
+    }
+  }
+  const totalAlloc = Object.values(assetMap).reduce((s, a) => s + a.totalValue, 0);
+  const assetPerformance = Object.entries(assetMap).map(([asset, data]) => ({
+    asset,
+    trades: data.trades,
+    winRate: data.trades > 0 ? (data.wins / Math.max(data.trades / 2, 1)) * 100 : 0,
+    totalPnl: data.totalPnl,
+    totalReturn: data.totalValue > 0 ? (data.totalPnl / data.totalValue) * 100 : 0,
+    avgHoldingPeriod: 24,
+    bestTrade: data.best === -Infinity ? 0 : data.best,
+    worstTrade: data.worst === Infinity ? 0 : data.worst,
+    sharpeRatio: 0,
+    allocation: totalAlloc > 0 ? (data.totalValue / totalAlloc) * 100 : 0,
+  }));
+
+  // Build report
+  const report = {
+    reportId: `rpt_${agentId}_${period}_${Date.now()}`,
+    userId: auth.uid,
+    period,
+    tradingMode: "paper",
+    startDate: startStr,
+    endDate: endStr,
+    generatedAt: new Date().toISOString(),
+    currency: agent.seedCurrency === "KRW" ? "KRW" : "USD",
+    summary: {
+      startingCapital: agent.seed,
+      endingCapital: agent.totalValue || agent.seed,
+      netPnl: agent.totalPnl || 0,
+      totalReturn,
+      annualizedReturn,
+      totalTrades: trades.length,
+      winningTrades: winTrades.length,
+      losingTrades: loseTrades.length,
+      winRate,
+      bestDay,
+      worstDay,
+      avgDailyReturn,
+      totalFees,
+      netAfterFees: (agent.totalPnl || 0) - totalFees,
+    },
+    dailyPnl,
+    trades: trades.map((t) => ({
+      id: t.id,
+      asset: t.asset,
+      side: t.side,
+      price: t.price,
+      quantity: t.quantity,
+      value: t.value,
+      fee: t.fee,
+      pnl: t.pnl,
+      pnlPercent: t.pnlPercent,
+      strategy: t.strategy,
+      timestamp: t.timestamp,
+    })),
+    assetPerformance,
+    strategyPerformance: [{
+      strategyId: agent.strategyId,
+      strategyName: agent.strategyName,
+      trades: sellTrades.length,
+      winRate,
+      totalPnl: totalPnlFromTrades,
+      totalReturn,
+      profitFactor,
+      avgWin,
+      avgLoss,
+      maxConsecutiveWins: 0,
+      maxConsecutiveLosses: 0,
+      signalsGenerated: trades.length,
+      signalsExecuted: trades.length,
+      signalsSkipped: 0,
+    }],
+    riskMetrics: {
+      sharpeRatio,
+      sortinoRatio,
+      calmarRatio: maxDD !== 0 ? annualizedReturn / Math.abs(maxDD) : 0,
+      maxDrawdown: maxDD,
+      maxDrawdownDuration: maxDDduration,
+      volatility: stdDev * annFactor,
+      beta: 1,
+      alpha: totalReturn,
+      var95: avgReturn - 1.645 * stdDev,
+      var99: avgReturn - 2.326 * stdDev,
+      winRate,
+      profitFactor,
+      avgWinLossRatio: avgLoss > 0 ? avgWin / avgLoss : 0,
+      expectancy: sellTrades.length > 0 ? totalPnlFromTrades / sellTrades.length : 0,
+      kellyFraction: avgLoss > 0 && winRate > 0
+        ? ((winRate / 100) - ((1 - winRate / 100) / (avgWin / avgLoss || 1))) : 0,
+    },
+    drawdowns: maxDD < 0 ? [{
+      startDate: startStr,
+      endDate: null,
+      depth: maxDD,
+      duration: maxDDduration,
+      recovery: null,
+      peakValue: peak,
+      troughValue: peak * (1 + maxDD / 100),
+    }] : [],
+    monthlyReturns: [],
+    benchmarks: {
+      btcReturn: 0,
+      ethReturn: 0,
+      marketAvg: 0,
+      outperformance: totalReturn,
+    },
+  };
+
+  return { success: true, report };
+});
+

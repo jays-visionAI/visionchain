@@ -10,9 +10,10 @@ import {
     query, where, orderBy, limit, onSnapshot, serverTimestamp, increment,
     Timestamp,
 } from 'firebase/firestore';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 import type {
     PaperAgent, PaperTrade, PaperAgentStatus, BudgetConfig,
-    Competition, CompetitionEntry,
+    Competition, CompetitionEntry, PerformanceReport, ReportPeriod,
 } from './types';
 import { PAPER_TRADING_SEED } from './types';
 
@@ -279,4 +280,47 @@ export function subscribeToLeaderboard(
     return onSnapshot(q, (snap) => {
         callback(snap.docs.map((d, i) => ({ ...d.data(), rank: i + 1 } as CompetitionEntry)));
     }, () => callback([]));
+}
+
+// ─── Paper Trades Subscription ─────────────────────────────────────────────
+
+/** Subscribe to recent trades for a paper agent (realtime) */
+export function subscribeToPaperTrades(
+    agentId: string,
+    callback: (trades: PaperTrade[]) => void,
+    max = 50,
+): () => void {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, 'paperTrades'),
+        where('agentId', '==', agentId),
+        orderBy('timestamp', 'desc'),
+        limit(max),
+    );
+
+    return onSnapshot(q, (snap) => {
+        callback(snap.docs.map(d => d.data() as PaperTrade));
+    }, (err) => {
+        console.error('[subscribeToPaperTrades] Error:', err.message);
+        callback([]);
+    });
+}
+
+// ─── Performance Reports ───────────────────────────────────────────────────
+
+/** Fetch performance report from Cloud Function */
+export async function fetchPaperReport(
+    agentId: string,
+    period: ReportPeriod = 'weekly',
+): Promise<PerformanceReport | null> {
+    try {
+        const functions = getFunctions();
+        const callable = httpsCallable(functions, 'getPaperReport');
+        const result = await callable({ agentId, period });
+        const data = result.data as { success: boolean; report?: PerformanceReport };
+        return data.success && data.report ? data.report : null;
+    } catch (err: any) {
+        console.error('[fetchPaperReport] Error:', err.message);
+        return null;
+    }
 }
