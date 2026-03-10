@@ -1166,6 +1166,9 @@ export interface RPConfig {
     game_scratch_rp: number;
     game_daily_spins: number;
     game_daily_blocks: number;
+    game_daily_memory: number;
+    game_daily_falling: number;
+    game_daily_predict: number;
 }
 
 const DEFAULT_RP_CONFIG: RPConfig = {
@@ -1212,6 +1215,9 @@ const DEFAULT_RP_CONFIG: RPConfig = {
     game_scratch_rp: 10,
     game_daily_spins: 3,
     game_daily_blocks: 2,
+    game_daily_memory: 3,
+    game_daily_falling: 3,
+    game_daily_predict: 3,
 };
 
 let _rpConfigCache: RPConfig | null = null;

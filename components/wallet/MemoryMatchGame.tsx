@@ -16,8 +16,8 @@ interface MemoryMatchProps {
     todayBestBy?: string; // Who holds today's best
 }
 
-// ─── Coin Data (8 pairs) ────────────────────────────────────────────────────
-const COINS = [
+// ─── Coin Data (12 coins, 10 pairs randomly selected per game) ──────────────
+const ALL_COINS = [
     { id: 'btc', name: 'BTC', color: '#F7931A', bg: '#F7931A20' },
     { id: 'eth', name: 'ETH', color: '#627EEA', bg: '#627EEA20' },
     { id: 'sol', name: 'SOL', color: '#14F195', bg: '#14F19520' },
@@ -26,11 +26,17 @@ const COINS = [
     { id: 'xrp', name: 'XRP', color: '#23292F', bg: '#ffffff15' },
     { id: 'doge', name: 'DOGE', color: '#C3A634', bg: '#C3A63420' },
     { id: 'ada', name: 'ADA', color: '#0D1E30', bg: '#3B82F620' },
+    { id: 'avax', name: 'AVAX', color: '#E84142', bg: '#E8414220' },
+    { id: 'dot', name: 'DOT', color: '#E6007A', bg: '#E6007A20' },
+    { id: 'link', name: 'LINK', color: '#2A5ADA', bg: '#2A5ADA20' },
+    { id: 'matic', name: 'MATIC', color: '#8247E5', bg: '#8247E520' },
 ];
+
+const TOTAL_PAIRS = 10; // 20 cards = 10 pairs
 
 // ─── Coin Logo SVGs ─────────────────────────────────────────────────────────
 const CoinLogo = (props: { coinId: string; class?: string }) => {
-    const coin = COINS.find(c => c.id === props.coinId);
+    const coin = ALL_COINS.find(c => c.id === props.coinId);
     if (!coin) return null;
 
     return (
@@ -96,6 +102,34 @@ const CoinLogo = (props: { coinId: string; class?: string }) => {
                     <circle cx="9" cy="20" r="1.5" fill="#3B82F6" />
                     <circle cx="23" cy="20" r="1.5" fill="#3B82F6" />
                     <circle cx="16" cy="16" r="4" stroke="#3B82F6" stroke-width="1" fill="none" />
+                </svg>
+            )}
+            {props.coinId === 'avax' && (
+                <svg viewBox="0 0 32 32" class="w-8 h-8">
+                    <circle cx="16" cy="16" r="15" fill="#E84142" />
+                    <path d="M11 22h3l2-6 2 6h3L16 8 11 22z" fill="white" />
+                </svg>
+            )}
+            {props.coinId === 'dot' && (
+                <svg viewBox="0 0 32 32" class="w-8 h-8">
+                    <circle cx="16" cy="16" r="15" fill="#E6007A" />
+                    <circle cx="16" cy="16" r="5" fill="white" />
+                    <circle cx="16" cy="7" r="2.5" fill="white" />
+                    <circle cx="16" cy="25" r="2.5" fill="white" />
+                </svg>
+            )}
+            {props.coinId === 'link' && (
+                <svg viewBox="0 0 32 32" class="w-8 h-8">
+                    <circle cx="16" cy="16" r="15" fill="#2A5ADA" />
+                    <polygon points="16,6 24,11 24,21 16,26 8,21 8,11" fill="none" stroke="white" stroke-width="2" />
+                    <polygon points="16,10 20,13 20,19 16,22 12,19 12,13" fill="white" opacity="0.3" />
+                </svg>
+            )}
+            {props.coinId === 'matic' && (
+                <svg viewBox="0 0 32 32" class="w-8 h-8">
+                    <circle cx="16" cy="16" r="15" fill="#8247E5" />
+                    <path d="M20 12l-4-2.5L12 12v5l4 2.5 4-2.5v-5z" fill="white" opacity="0.5" />
+                    <path d="M16 14.5l4 2.5v5l-4 2.5-4-2.5v-5l4-2.5z" fill="white" />
                 </svg>
             )}
         </div>
@@ -177,7 +211,7 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
     const [lastMatchAnim, setLastMatchAnim] = createSignal<string | null>(null);
     const [shakeId, setShakeId] = createSignal<number | null>(null);
 
-    const totalPairs = 8;
+    const totalPairs = TOTAL_PAIRS;
     let timerInterval: ReturnType<typeof setInterval> | null = null;
     let startTime = 0;
 
@@ -193,9 +227,14 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
     });
 
     const initGame = () => {
+        // Randomly select 10 coins from 12 (VCN always included)
+        const vcnCoin = ALL_COINS.find(c => c.id === 'vcn')!;
+        const otherCoins = shuffle(ALL_COINS.filter(c => c.id !== 'vcn'));
+        const selectedCoins = [vcnCoin, ...otherCoins.slice(0, TOTAL_PAIRS - 1)];
+
         // Create pairs
         const pairs: MemoryCard[] = [];
-        COINS.forEach((coin, idx) => {
+        selectedCoins.forEach((coin, idx) => {
             pairs.push({ id: idx * 2, coinId: coin.id, flipped: false, matched: false });
             pairs.push({ id: idx * 2 + 1, coinId: coin.id, flipped: false, matched: false });
         });
@@ -211,7 +250,7 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
         setShowPreview(true);
         setIsLocked(true);
 
-        // Preview: show all cards for 1.5s
+        // Preview: show all cards for 2s (more cards need more memorization time)
         setTimeout(() => {
             setShowPreview(false);
             setIsLocked(false);
@@ -221,7 +260,7 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
             timerInterval = setInterval(() => {
                 setTimer(+(((Date.now() - startTime) / 1000).toFixed(1)));
             }, 100);
-        }, 1500);
+        }, 2000);
     };
 
     // ── Card Click ──
@@ -303,19 +342,19 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
         const t = timer();
         const att = attempts();
 
-        // Grade
+        // Grade (adjusted for 20 cards = harder)
         let g = 'CLEAR';
-        if (t < 20) g = 'PERFECT';
-        else if (t < 40) g = 'GREAT';
-        else if (t < 60) g = 'GOOD';
+        if (t < 30) g = 'PERFECT';
+        else if (t < 50) g = 'GREAT';
+        else if (t < 80) g = 'GOOD';
         setGrade(g);
 
-        // Reward
+        // Reward (higher rewards for harder game)
         const rewards: Record<string, { vcn: number; rp: number }> = {
-            PERFECT: { vcn: 3.0, rp: 25 },
-            GREAT: { vcn: 1.5, rp: 15 },
-            GOOD: { vcn: 0.8, rp: 8 },
-            CLEAR: { vcn: 0.3, rp: 3 },
+            PERFECT: { vcn: 4.5, rp: 37 },
+            GREAT: { vcn: 2.5, rp: 20 },
+            GOOD: { vcn: 1.2, rp: 10 },
+            CLEAR: { vcn: 0.5, rp: 4 },
         };
         let r = { ...rewards[g] };
 
@@ -394,7 +433,7 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
 
             {/* Card Grid */}
             <Show when={!gameOver()}>
-                <div class="grid grid-cols-4 gap-2 sm:gap-3 max-w-md mx-auto" style="perspective: 1000px;">
+                <div class="grid grid-cols-5 gap-2 sm:gap-2.5 max-w-lg mx-auto" style="perspective: 1000px;">
                     <For each={cards()}>
                         {(card) => {
                             const isFlipped = () => card.flipped || showPreview() || card.matched;
@@ -434,7 +473,7 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
                                                 'backface-visibility': 'hidden',
                                                 transform: 'rotateY(180deg)',
                                             }}>
-                                            <CoinLogo coinId={card.coinId} class="w-12 h-12 sm:w-14 sm:h-14" />
+                                            <CoinLogo coinId={card.coinId} class="w-10 h-10 sm:w-12 sm:h-12" />
                                         </div>
                                     </div>
                                 </button>

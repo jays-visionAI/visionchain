@@ -450,6 +450,102 @@ async function main() {
         return data;
     }
 
+    // ── Decision Log Writer ──
+    async function writeDecisionLogs(db, agent, entries) {
+        if (!entries || entries.length === 0) return;
+        try {
+            const batch = db.batch();
+            const now = new Date().toISOString();
+            for (const entry of entries) {
+                const logId = `dl_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                const docRef = db.collection("decisionLogs").doc(logId);
+                batch.set(docRef, {
+                    id: logId,
+                    agentId: agent.id,
+                    userId: agent.userId,
+                    strategyId: agent.strategyId,
+                    exchange: agent.exchange || "upbit",
+                    timestamp: now,
+                    signal: entry.signal || { side: "none", asset: "-", reason: "", strength: 0 },
+                    risk: entry.risk || { approved: true },
+                    execution: entry.execution || null,
+                    marketSnapshot: entry.marketSnapshot || {},
+                    volatilityOverlay: entry.volatilityOverlay || null,
+                    exceptionRules: entry.exceptionRules || null,
+                });
+            }
+            await batch.commit();
+        } catch (err) {
+            console.warn(`[Worker] Decision log write failed: ${err.message}`);
+        }
+    }
+
+    // ── Daily PnL Snapshot Writer ──
+    async function writeDailyPnlSnapshot(db, agent, totalValue, totalPnl, totalPnlPercent) {
+        try {
+            const today = new Date().toISOString().split("T")[0];
+            const snapshotId = `${agent.id}_${today}`;
+            const docRef = db.collection("paperDailyPnl").doc(snapshotId);
+            const existing = await docRef.get();
+
+            if (existing.exists) {
+                // Update existing snapshot for today
+                await docRef.update({
+                    portfolioValue: totalValue,
+                    pnl: totalPnl,
+                    pnlPercent: totalPnlPercent,
+                    cumulativePnl: totalPnl,
+                    cumulativeReturn: totalPnlPercent,
+                    updatedAt: new Date().toISOString(),
+                });
+            } else {
+                // Find yesterday's snapshot for cumulative calculation
+                let prevCumulativePnl = 0;
+                const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+                const prevSnap = await db.collection("paperDailyPnl")
+                    .doc(`${agent.id}_${yesterday}`).get();
+                if (prevSnap.exists) {
+                    prevCumulativePnl = prevSnap.data().cumulativePnl || 0;
+                }
+
+                const dailyPnl = totalPnl - prevCumulativePnl;
+                const dailyPnlPercent = agent.seed > 0 ? (dailyPnl / agent.seed) * 100 : 0;
+
+                // Fetch BTC benchmark
+                let benchmark = 0;
+                try {
+                    const axios = require("axios");
+                    const btcResp = await axios.get(
+                        "https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=2",
+                        { timeout: 5000 }
+                    );
+                    if (btcResp.data && btcResp.data.length >= 2) {
+                        const btcToday = btcResp.data[0].trade_price;
+                        const btcYesterday = btcResp.data[1].trade_price;
+                        benchmark = btcYesterday > 0
+                            ? ((btcToday - btcYesterday) / btcYesterday) * 100 : 0;
+                    }
+                } catch { /* silent */ }
+
+                await docRef.set({
+                    agentId: agent.id,
+                    userId: agent.userId,
+                    date: today,
+                    pnl: dailyPnl,
+                    pnlPercent: dailyPnlPercent,
+                    cumulativePnl: totalPnl,
+                    cumulativeReturn: totalPnlPercent,
+                    portfolioValue: totalValue,
+                    benchmark,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                });
+            }
+        } catch (err) {
+            console.warn(`[Worker] Daily PnL snapshot failed: ${err.message}`);
+        }
+    }
+
     // ── Main evaluation cycle ──
     async function runCycle() {
         // Kill Switch
@@ -529,6 +625,7 @@ async function main() {
 
                     // Signal evaluation
                     const signals = evaluateSignals(agent, prices, priceHistory, volumeHistory);
+                    const decisionLogs = []; // Collect decision log entries for this cycle
 
                     if (signals.length === 0) {
                         // Heartbeat update
@@ -549,6 +646,17 @@ async function main() {
                             riskStatus: rs, lastHeartbeatAt: new Date().toISOString(),
                             updatedAt: new Date().toISOString(),
                         });
+
+                        // Decision log: no signal
+                        decisionLogs.push({
+                            signal: { side: "none", asset: "-", reason: "No signals generated", strength: 0 },
+                            risk: { approved: true },
+                            marketSnapshot: { price: 0 },
+                        });
+
+                        // Write decision logs + daily PnL snapshot
+                        await writeDecisionLogs(db, agent, decisionLogs);
+                        await writeDailyPnlSnapshot(db, agent, totalValue, totalPnl, totalPnlPercent);
                         continue;
                     }
 
@@ -585,6 +693,11 @@ async function main() {
                             });
                             if (exceptions.blocked) {
                                 console.log(`[Worker] Agent ${agent.id} signal BLOCKED: ${exceptions.reasons.join("; ")}`);
+                                decisionLogs.push({
+                                    signal: { side, asset, reason, strength: 50 },
+                                    risk: { approved: false, layer: "Exception", rejectReason: exceptions.reasons.join("; ") },
+                                    marketSnapshot: { price },
+                                });
                                 continue;
                             }
 
@@ -602,6 +715,11 @@ async function main() {
                             const volResult = scaleOrderSize(orderBudget, assetCloses);
                             if (volResult.halted) {
                                 console.log(`[Worker] Agent ${agent.id} HALTED by Volatility Overlay: ${asset} bucket=${volResult.bucket}`);
+                                decisionLogs.push({
+                                    signal: { side, asset, reason, strength: 50 },
+                                    risk: { approved: false, layer: "L3_Volatility", rejectReason: `Extreme volatility (bucket=${volResult.bucket}, ATR ratio=${volResult.atrRatio?.toFixed(2)})` },
+                                    marketSnapshot: { price },
+                                });
                                 continue;
                             }
                             orderBudget = volResult.scaledSize;
@@ -664,6 +782,16 @@ async function main() {
                             });
                             agentTotalTrades++;
                             rs.todayTradeCount++;
+
+                            // Decision log: buy executed
+                            decisionLogs.push({
+                                signal: { side, asset, reason, strength: 60 },
+                                risk: { approved: true },
+                                execution: { orderId: orderResult.orderId, executedPrice: limitPrice, executedQty: quantity, fee },
+                                marketSnapshot: { price },
+                                volatilityOverlay: { bucket: volResult.bucket, scale: volResult.scale },
+                                exceptionRules: exceptions.reasons.length > 0 ? { active: exceptions.reasons, downtrendScale: exceptions.downtrendScale } : undefined,
+                            });
 
                             // Record trade
                             const tradeId = `lt_${agent.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -746,6 +874,14 @@ async function main() {
                                 exchange: agent.exchange || "upbit",
                                 timestamp: new Date().toISOString(),
                             });
+
+                            // Decision log: sell executed
+                            decisionLogs.push({
+                                signal: { side, asset, reason, strength: 60 },
+                                risk: { approved: true },
+                                execution: { orderId: orderResult.orderId, executedPrice: limitPrice, executedQty: pos.quantity, fee, pnl: tradePnl, pnlPercent: tradePnlPct },
+                                marketSnapshot: { price },
+                            });
                         }
                     }
 
@@ -776,6 +912,10 @@ async function main() {
                         lastTradeAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
                     });
+
+                    // Write decision logs + daily PnL snapshot
+                    await writeDecisionLogs(db, agent, decisionLogs);
+                    await writeDailyPnlSnapshot(db, agent, totalValue, totalPnl, totalPnlPercent);
 
                 } catch (agentErr) {
                     console.error(`[Worker] Agent ${agent.id} error:`, agentErr.message);
