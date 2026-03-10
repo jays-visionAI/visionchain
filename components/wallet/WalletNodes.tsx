@@ -322,21 +322,8 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                                 </div>
                                             </a>
                                         </div>
-                                        {/* macOS Gatekeeper fix */}
-                                        <div class="mt-2 px-3 py-2.5 bg-amber-500/[0.06] border border-amber-500/[0.12] rounded-xl">
-                                            <div class="flex items-start gap-2">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5">
-                                                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                                                    <line x1="12" y1="9" x2="12" y2="13" />
-                                                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                                                </svg>
-                                                <div>
-                                                    <div class="text-[10px] font-bold text-amber-300/90 mb-1">macOS: "damaged" warning fix</div>
-                                                    <div class="text-[10px] text-gray-400 leading-relaxed mb-1.5">Open Terminal and run:</div>
-                                                    <code class="block text-[10px] text-emerald-400 bg-black/40 px-2.5 py-1.5 rounded-lg font-mono select-all cursor-pointer" title="Click to select">xattr -cr /Applications/Vision\ Node.app</code>
-                                                </div>
-                                            </div>
-                                        </div>
+
+
                                     </div>
 
                                     {/* Windows */}
