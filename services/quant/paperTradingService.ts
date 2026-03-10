@@ -28,7 +28,7 @@ const COLLECTIONS = {
 
 // ─── Paper Agent CRUD ──────────────────────────────────────────────────────
 
-/** Create a new paper trading agent */
+/** Create a new trading agent (paper or live) */
 export async function createPaperAgent(config: {
     strategyId: string;
     strategyName: string;
@@ -37,6 +37,7 @@ export async function createPaperAgent(config: {
     budgetConfig: BudgetConfig;
     riskProfile: 'conservative' | 'balanced' | 'aggressive';
     seedCurrency: 'KRW' | 'USDT';
+    tradingMode?: 'paper' | 'live';
     competitionId?: string;
 }): Promise<PaperAgent> {
     const db = getFirebaseDb();
@@ -44,9 +45,13 @@ export async function createPaperAgent(config: {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
 
-    const seed = config.seedCurrency === 'KRW' ? PAPER_TRADING_SEED.KRW : PAPER_TRADING_SEED.USDT;
+    const mode = config.tradingMode || 'paper';
+    const seed = mode === 'paper'
+        ? (config.seedCurrency === 'KRW' ? PAPER_TRADING_SEED.KRW : PAPER_TRADING_SEED.USDT)
+        : (config.budgetConfig.totalBudgetEnabled ? config.budgetConfig.totalBudget : (config.seedCurrency === 'KRW' ? PAPER_TRADING_SEED.KRW : PAPER_TRADING_SEED.USDT));
     const now = new Date().toISOString();
-    const agentId = `pa_${user.uid}_${Date.now()}`;
+    const prefix = mode === 'live' ? 'la' : 'pa';
+    const agentId = `${prefix}_${user.uid}_${Date.now()}`;
 
     const agent: PaperAgent = {
         id: agentId,
@@ -61,6 +66,9 @@ export async function createPaperAgent(config: {
         params: config.params,
         budgetConfig: config.budgetConfig,
         riskProfile: config.riskProfile,
+
+        // Trading mode
+        tradingMode: mode,
 
         // Seed
         seed,
@@ -83,7 +91,7 @@ export async function createPaperAgent(config: {
 
         // Status
         status: 'running',
-        competitionId: config.competitionId || null,
+        competitionId: mode === 'paper' ? (config.competitionId || null) : null,
 
         // Timestamps
         createdAt: now,
@@ -193,7 +201,7 @@ export async function getPaperTrades(agentId: string, max = 50): Promise<PaperTr
 
 // ─── Competition ───────────────────────────────────────────────────────────
 
-/** Get active competition */
+/** Get active competition (returns first found) */
 export async function getActiveCompetition(): Promise<Competition | null> {
     const db = getFirebaseDb();
     const q = query(
@@ -203,6 +211,17 @@ export async function getActiveCompetition(): Promise<Competition | null> {
     );
     const snap = await getDocs(q);
     return snap.empty ? null : (snap.docs[0].data() as Competition);
+}
+
+/** Get all active competitions (for both divisions) */
+export async function getActiveCompetitions(): Promise<Competition[]> {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, COLLECTIONS.COMPETITIONS),
+        where('status', '==', 'active'),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data() as Competition);
 }
 
 /** Get all competitions */

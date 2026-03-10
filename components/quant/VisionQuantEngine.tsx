@@ -52,7 +52,7 @@ import {
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
 import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetition, joinCompetition, fetchPaperReport } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport } from '../../services/quant/paperTradingService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
 const QuantArenaLazy = lazy(() => import('./QuantArenaLeaderboard'));
@@ -140,7 +140,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [agentsLoading, setAgentsLoading] = createSignal(true);
     const [creatingAgent, setCreatingAgent] = createSignal(false);
     const [successToast, setSuccessToast] = createSignal<string | null>(null);
-    const [activeCompetition, setActiveCompetition] = createSignal<Competition | null>(null);
+    const [activeCompetitions, setActiveCompetitions] = createSignal<Competition[]>([]);
     const [expandedAgentId, setExpandedAgentId] = createSignal<string | null>(null);
     const [reportData, setReportData] = createSignal<PerformanceReport | null>(null);
     const [reportLoading, setReportLoading] = createSignal(false);
@@ -261,9 +261,9 @@ const VisionQuantEngine = (): JSX.Element => {
         });
         onCleanup(unsub);
 
-        // Load active competition
-        getActiveCompetition().then(comp => {
-            setActiveCompetition(comp);
+        // Load active competitions
+        getActiveCompetitions().then(comps => {
+            setActiveCompetitions(comps);
         }).catch(() => { /* silent */ });
     });
 
@@ -621,7 +621,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 <div class="flex items-center gap-2 mb-1">
                                                                     <div class={`w-2 h-2 rounded-full ${statusColor()} ${agent.status === 'running' ? 'animate-pulse' : ''}`} />
                                                                     <span class="text-xs font-black text-white">{agent.strategyName}</span>
-                                                                    <span class="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded text-[8px] font-black text-amber-400 uppercase tracking-wider">Paper</span>
+                                                                    <span class={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${agent.tradingMode === 'live' ? 'bg-cyan-500/15 border border-cyan-500/20 text-cyan-400' : 'bg-amber-500/15 border border-amber-500/20 text-amber-400'}`}>{agent.tradingMode === 'live' ? 'Live' : 'Paper'}</span>
                                                                 </div>
                                                                 <div class="text-[10px] text-gray-500">
                                                                     {agent.selectedAssets.join(', ')} · {agent.status === 'running' ? 'Running' : agent.status === 'paused' ? 'Paused' : agent.status === 'stopped' ? 'Stopped' : 'Completed'}
@@ -907,7 +907,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                             <div class="flex items-center gap-2 mb-2">
                                                                 <div class={`w-2 h-2 rounded-full ${agent.status === 'running' ? 'bg-green-400 animate-pulse' : agent.status === 'paused' ? 'bg-yellow-400' : 'bg-gray-400'}`} />
                                                                 <span class="text-xs font-black text-white">{agent.strategyName}</span>
-                                                                <span class="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded text-[8px] font-black text-amber-400 uppercase">Paper</span>
+                                                                <span class={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${agent.tradingMode === 'live' ? 'bg-cyan-500/15 border border-cyan-500/20 text-cyan-400' : 'bg-amber-500/15 border border-amber-500/20 text-amber-400'}`}>{agent.tradingMode === 'live' ? 'Live' : 'Paper'}</span>
                                                             </div>
                                                             <div class="flex items-center justify-between">
                                                                 <div class="text-[10px] text-gray-500">
@@ -1195,23 +1195,33 @@ const VisionQuantEngine = (): JSX.Element => {
                                             </div>
 
                                             {/* Competition Auto-Join Banner */}
-                                            <Show when={activeCompetition()}>
-                                                <div class="p-3 bg-cyan-500/[0.06] rounded-xl border border-cyan-500/15">
-                                                    <div class="flex items-center gap-2 mb-1">
-                                                        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                                                            <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
-                                                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                                                        </svg>
-                                                        <span class="text-[11px] font-bold text-cyan-400">{activeCompetition()!.title}</span>
-                                                        <span class="ml-auto text-[9px] font-bold text-cyan-400/70 bg-cyan-500/10 px-1.5 py-0.5 rounded">
-                                                            ~{new Date(activeCompetition()!.endDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
-                                                        </span>
-                                                    </div>
-                                                    <p class="text-[10px] text-gray-400 leading-relaxed">
-                                                        Creating a paper agent will automatically enroll you in the current competition. Compete with other traders for VCN + RP prizes!
-                                                    </p>
-                                                </div>
+                                            <Show when={activeCompetitions().length > 0}>
+                                                {(() => {
+                                                    const strategy = selectedStrategy()!;
+                                                    const matchComp = activeCompetitions().find(c =>
+                                                        c.division === (strategy.marketType === 'futures' ? 'futures' : 'spot')
+                                                    ) || activeCompetitions()[0];
+                                                    if (!matchComp) return null;
+                                                    const isSpot = matchComp.division !== 'futures';
+                                                    return (
+                                                        <div class={`p-3 rounded-xl border ${isSpot ? 'bg-emerald-500/[0.06] border-emerald-500/15' : 'bg-purple-500/[0.06] border-purple-500/15'}`}>
+                                                            <div class="flex items-center gap-2 mb-1">
+                                                                <svg viewBox="0 0 24 24" class={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-purple-400'}`} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                                                    <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                                                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                                                </svg>
+                                                                <span class={`text-[11px] font-bold ${isSpot ? 'text-emerald-400' : 'text-purple-400'}`}>{matchComp.title} - {isSpot ? 'Spot Division' : 'Futures Division'}</span>
+                                                                <span class={`ml-auto text-[9px] font-bold ${isSpot ? 'text-emerald-400/70 bg-emerald-500/10' : 'text-purple-400/70 bg-purple-500/10'} px-1.5 py-0.5 rounded`}>
+                                                                    ~{new Date(matchComp.endDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                                                                </span>
+                                                            </div>
+                                                            <p class="text-[10px] text-gray-400 leading-relaxed">
+                                                                Creating a paper agent will automatically enroll you in the {isSpot ? 'Spot' : 'Futures'} Division. Compete for 1,000 VCN prize pool!
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </Show>
 
                                             <div class="flex items-center gap-1.5 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
@@ -1693,20 +1703,32 @@ const VisionQuantEngine = (): JSX.Element => {
                                     </Show>
 
                                     {/* Competition Auto-Join Banner in Confirm */}
-                                    <Show when={tradingMode() === 'paper' && activeCompetition()}>
-                                        <div class="p-3 bg-cyan-500/[0.04] rounded-xl border border-cyan-500/15">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                                                    <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
-                                                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                                                </svg>
-                                                <span class="text-[10px] font-bold text-cyan-400">Auto-enrolled: {activeCompetition()!.title}</span>
-                                            </div>
-                                            <p class="text-[9px] text-gray-500">
-                                                Prize Pool: {activeCompetition()!.prizes.map(p => p.reward).join(' / ')} | Ends {new Date(activeCompetition()!.endDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
-                                            </p>
-                                        </div>
+                                    <Show when={tradingMode() === 'paper' && activeCompetitions().length > 0}>
+                                        {(() => {
+                                            const strategy = selectedStrategy()!;
+                                            const matchComp = activeCompetitions().find(c =>
+                                                c.division === (strategy.marketType === 'futures' ? 'futures' : 'spot')
+                                            ) || activeCompetitions()[0];
+                                            if (!matchComp) return null;
+                                            const isSpot = matchComp.division !== 'futures';
+                                            return (
+                                                <div class={`p-3 rounded-xl border ${isSpot ? 'bg-emerald-500/[0.04] border-emerald-500/15' : 'bg-purple-500/[0.04] border-purple-500/15'}`}>
+                                                    <div class="flex items-center gap-2 mb-1">
+                                                        <svg viewBox="0 0 24 24" class={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-purple-400'}`} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                                            <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                                        </svg>
+                                                        <span class={`text-[10px] font-bold ${isSpot ? 'text-emerald-400' : 'text-purple-400'}`}>
+                                                            Auto-enrolled: {matchComp.title} ({isSpot ? 'Spot Division' : 'Futures Division'})
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-[9px] text-gray-500">
+                                                        Prize Pool: 1,000 VCN | Ends {new Date(matchComp.endDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                                                    </p>
+                                                </div>
+                                            );
+                                        })()}
                                     </Show>
                                 </div>
 
@@ -1715,7 +1737,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                     <label class="flex items-start gap-3 cursor-pointer group">
                                         <div
                                             onClick={() => setAcceptedTerms(!acceptedTerms())}
-                                            class={`w-5 h-5 mt-0.5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${acceptedTerms() ? 'bg-cyan-500 border-cyan-500' : 'border-gray-600 group-hover:border-gray-400'
+                                            class={`w-5 h-5 mt-0.5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${acceptedTerms() ? 'bg-cyan-500 border-cyan-500' : 'bg-gray-500/40 border-gray-400 group-hover:border-gray-300'
                                                 }`}
                                         >
                                             <Show when={acceptedTerms()}>
@@ -1729,7 +1751,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                     <label class="flex items-start gap-3 cursor-pointer group">
                                         <div
                                             onClick={() => setAcceptedBeta(!acceptedBeta())}
-                                            class={`w-5 h-5 mt-0.5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${acceptedBeta() ? 'bg-cyan-500 border-cyan-500' : 'border-gray-600 group-hover:border-gray-400'
+                                            class={`w-5 h-5 mt-0.5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${acceptedBeta() ? 'bg-cyan-500 border-cyan-500' : 'bg-gray-500/40 border-gray-400 group-hover:border-gray-300'
                                                 }`}
                                         >
                                             <Show when={acceptedBeta()}>
@@ -1769,7 +1791,9 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 const isKrw = !firstCred || firstCred.exchange === 'upbit' || firstCred.exchange === 'bithumb';
                                                 const seedCurrency = isKrw ? 'KRW' as const : 'USDT' as const;
 
-                                                const comp = activeCompetition();
+                                                const comp = activeCompetitions().find(c =>
+                                                    c.division === (strategy.marketType === 'futures' ? 'futures' : 'spot')
+                                                ) || activeCompetitions()[0] || null;
                                                 const agent = await createPaperAgent({
                                                     strategyId: strategy.id,
                                                     strategyName: strategy.name,
@@ -1801,8 +1825,35 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 setCreatingAgent(false);
                                             }
                                         } else {
-                                            // Live trading - TODO
-                                            console.log('[Quant] Live agent creation not yet implemented');
+                                            // Live Trading Agent
+                                            setCreatingAgent(true);
+                                            try {
+                                                const strategy = selectedStrategy()!;
+                                                const creds = credentials();
+                                                const firstCred = creds[0];
+                                                const isKrw = !firstCred || firstCred.exchange === 'upbit' || firstCred.exchange === 'bithumb';
+                                                const seedCurrency = isKrw ? 'KRW' as const : 'USDT' as const;
+
+                                                await createPaperAgent({
+                                                    strategyId: strategy.id,
+                                                    strategyName: strategy.name,
+                                                    selectedAssets: selectedAssets(),
+                                                    params: customParams(),
+                                                    budgetConfig: budgetConfig(),
+                                                    riskProfile: riskProfile(),
+                                                    seedCurrency,
+                                                    tradingMode: 'live',
+                                                });
+
+                                                console.log('[Quant] Live agent created successfully');
+                                                setSuccessToast(`Live Agent "${strategy.name}" has been created and deployed.`);
+                                                setTimeout(() => setSuccessToast(null), 5000);
+                                            } catch (err) {
+                                                console.error('[Quant] Failed to create live agent:', err);
+                                                setSuccessToast(null);
+                                            } finally {
+                                                setCreatingAgent(false);
+                                            }
                                         }
 
                                         // Award quant_strategy_setup RP (fire-and-forget)

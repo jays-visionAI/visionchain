@@ -28,7 +28,7 @@ import { MetricCard } from './dashboard/MetricCard';
 import {
     TPSGauge,
     NodeHealthChart,
-    ActivityMap,
+    ActivityChart,
     TVLPieChart,
     NodeDistributionChart,
     ResourceMetricGroup,
@@ -72,6 +72,9 @@ export const AdminDashboard: Component = () => {
     const [vcnBurned, setVcnBurned] = createSignal(0);
     const [apr, setApr] = createSignal(0);
     const [dauData, setDauData] = createSignal<{ day: string; value: number }[]>([]);
+    const [wauData, setWauData] = createSignal<{ day: string; value: number }[]>([]);
+    const [mauData, setMauData] = createSignal<{ day: string; value: number }[]>([]);
+    const [activeUserTab, setActiveUserTab] = createSignal<'dau' | 'wau' | 'mau'>('dau');
     const [nodeData, setNodeData] = createSignal({
         authority: 5, // 5 Nodes in cluster
         consensus: 0,
@@ -252,6 +255,102 @@ export const AdminDashboard: Component = () => {
         }
     };
 
+    const fetchWAUData = async () => {
+        try {
+            const db = getFirebaseDb();
+            const result: { day: string; value: number }[] = [];
+            const now = new Date();
+
+            // Fetch last 4 weeks of WAU
+            for (let w = 3; w >= 0; w--) {
+                const weekEnd = new Date(now);
+                weekEnd.setDate(weekEnd.getDate() - w * 7);
+                const weekStart = new Date(weekEnd);
+                weekStart.setDate(weekStart.getDate() - 6);
+
+                const uniqueUsers = new Set<string>();
+
+                for (let d = 0; d < 7; d++) {
+                    const date = new Date(weekStart);
+                    date.setDate(date.getDate() + d);
+                    const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+                    const dateStr = kst.toISOString().split('T')[0];
+
+                    try {
+                        const snap = await getDocs(query(collection(db, 'user_activity_daily'), where('date', '==', dateStr)));
+                        snap.forEach(doc => {
+                            const data = doc.data();
+                            const users = data.users || [];
+                            users.forEach((u: string) => uniqueUsers.add(u));
+                            // Fallback: if no users array, use count
+                            if (!users.length && data.count) {
+                                uniqueUsers.add(`anon_${dateStr}_${data.count}`);
+                            }
+                        });
+                    } catch { /* skip */ }
+                }
+
+                const kstEnd = new Date(weekEnd.getTime() + 9 * 60 * 60 * 1000);
+                const label = `W${kstEnd.getMonth() + 1}/${kstEnd.getDate()}`;
+                result.push({ day: label, value: uniqueUsers.size || 0 });
+            }
+
+            setWauData(result);
+        } catch (e) {
+            console.error('Failed to fetch WAU data:', e);
+            setWauData([{ day: 'W1', value: 0 }, { day: 'W2', value: 0 }, { day: 'W3', value: 0 }, { day: 'W4', value: 0 }]);
+        }
+    };
+
+    const fetchMAUData = async () => {
+        try {
+            const db = getFirebaseDb();
+            const result: { day: string; value: number }[] = [];
+            const now = new Date();
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            // Fetch last 6 months
+            for (let m = 5; m >= 0; m--) {
+                const targetDate = new Date(now.getFullYear(), now.getMonth() - m, 1);
+                const yearMonth = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+                const label = months[targetDate.getMonth()];
+
+                try {
+                    // Try monthly aggregate first
+                    const snap = await getDocs(query(collection(db, 'user_activity_monthly'), where('month', '==', yearMonth)));
+                    let count = 0;
+                    snap.forEach(doc => { count = doc.data().count || 0; });
+
+                    if (count === 0) {
+                        // Fallback: sum daily counts for the month
+                        const daysInMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+                        const uniqueUsers = new Set<string>();
+                        for (let d = 1; d <= daysInMonth; d++) {
+                            const dateStr = `${yearMonth}-${String(d).padStart(2, '0')}`;
+                            try {
+                                const daySnap = await getDocs(query(collection(db, 'user_activity_daily'), where('date', '==', dateStr)));
+                                daySnap.forEach(doc => {
+                                    const data = doc.data();
+                                    if (data.count) uniqueUsers.add(`d_${dateStr}_${data.count}`);
+                                });
+                            } catch { /* skip */ }
+                        }
+                        count = uniqueUsers.size;
+                    }
+
+                    result.push({ day: label, value: count });
+                } catch {
+                    result.push({ day: label, value: 0 });
+                }
+            }
+
+            setMauData(result);
+        } catch (e) {
+            console.error('Failed to fetch MAU data:', e);
+            setMauData([]);
+        }
+    };
+
     const fetchNodeStats = async () => {
         try {
             const db = getFirebaseDb();
@@ -403,6 +502,8 @@ export const AdminDashboard: Component = () => {
         fetchUserStats();
         fetchTVLData();
         fetchDAUData();
+        fetchWAUData();
+        fetchMAUData();
         fetchNodeStats();
         fetchRPActivity();
 
@@ -648,19 +749,64 @@ export const AdminDashboard: Component = () => {
                         <ResourceMetricGroup gpuTflops={gpuTflops()} storageTb={storageTb()} />
                     </div>
 
-                    {/* User Activity Bar Chart */}
-                    <div class="h-64 bg-[#13161F] border border-white/5 rounded-2xl p-6">
+                    {/* User Activity Trends: DAU / WAU / MAU */}
+                    <div class="bg-[#13161F] border border-white/5 rounded-2xl p-6">
+                        {/* Header with Tabs */}
                         <div class="flex justify-between items-center mb-4">
-                            <div class="flex items-center gap-3">
-                                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Active User Trends (DAU)</h3>
-                                <Show when={dauData().length > 0}>
-                                    <span class="text-lg font-black text-white">{dauData()[dauData().length - 1]?.value || 0}</span>
+                            <div class="flex items-center gap-2">
+                                {/* Tab Switcher */}
+                                <div class="flex bg-white/[0.04] rounded-lg p-0.5">
+                                    {(['dau', 'wau', 'mau'] as const).map(tab => (
+                                        <button
+                                            onClick={() => setActiveUserTab(tab)}
+                                            class={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${activeUserTab() === tab
+                                                    ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                                                    : 'text-slate-600 hover:text-slate-400 border border-transparent'
+                                                }`}
+                                        >
+                                            {tab}
+                                        </button>
+                                    ))}
+                                </div>
+                                {/* Current value */}
+                                <Show when={activeUserTab() === 'dau' && dauData().length > 0}>
+                                    <span class="text-lg font-black text-white ml-2">{dauData()[dauData().length - 1]?.value || 0}</span>
                                     <span class="text-[10px] text-slate-600 font-bold">today</span>
+                                </Show>
+                                <Show when={activeUserTab() === 'wau' && wauData().length > 0}>
+                                    <span class="text-lg font-black text-white ml-2">{wauData()[wauData().length - 1]?.value || 0}</span>
+                                    <span class="text-[10px] text-slate-600 font-bold">this week</span>
+                                </Show>
+                                <Show when={activeUserTab() === 'mau' && mauData().length > 0}>
+                                    <span class="text-lg font-black text-white ml-2">{mauData()[mauData().length - 1]?.value || 0}</span>
+                                    <span class="text-[10px] text-slate-600 font-bold">this month</span>
                                 </Show>
                             </div>
                             <a href="/adminsystem/user-analytics" class="text-xs text-blue-400 hover:text-white transition-colors">View Report</a>
                         </div>
-                        <ActivityMap data={dauData()} />
+                        {/* Chart Area */}
+                        <div class="h-44">
+                            <Show when={activeUserTab() === 'dau'}>
+                                <ActivityChart data={dauData()} color="#6366f1" gradientId="dauGrad" />
+                            </Show>
+                            <Show when={activeUserTab() === 'wau'}>
+                                <ActivityChart data={wauData()} color="#06b6d4" gradientId="wauGrad" />
+                            </Show>
+                            <Show when={activeUserTab() === 'mau'}>
+                                <ActivityChart data={mauData()} color="#a855f7" gradientId="mauGrad" />
+                            </Show>
+                        </div>
+                        {/* Bottom Labels */}
+                        <div class="flex justify-between mt-2 text-[9px] font-bold text-slate-700">
+                            <span>{activeUserTab() === 'dau' ? 'Last 7 Days' : activeUserTab() === 'wau' ? 'Last 4 Weeks' : 'Last 6 Months'}</span>
+                            <span class="flex items-center gap-1">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3 text-green-500">
+                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                                    <polyline points="17 6 23 6 23 12" />
+                                </svg>
+                                Active User Trends
+                            </span>
+                        </div>
                     </div>
                 </div>
 

@@ -13,12 +13,14 @@ import {
     Trophy,
     Search,
     Award,
-    BarChart3
+    BarChart3,
+    Gamepad2
 } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
 
 import { WalletViewHeader } from './WalletViewHeader';
 import { ReferralLeaderboard } from './ReferralLeaderboard';
+import { GameDailyLeaderboard } from './GameDailyLeaderboard';
 import { useI18n } from '../../i18n/i18nContext';
 import { getRPConfig, RPConfig } from '../../services/firebaseService';
 
@@ -28,6 +30,8 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
     const [totalStaked, setTotalStaked] = createSignal('Loading...');
     const [myRank, setMyRank] = createSignal<number | null>(null);
     const [myReward, setMyReward] = createSignal(0);
+    const [myGameRank, setMyGameRank] = createSignal<number | null>(null);
+    const [myGameVCN, setMyGameVCN] = createSignal(0);
     const [rpConfig, setRpConfig] = createSignal<RPConfig | null>(null);
 
     // Fetch real staking data on mount
@@ -79,20 +83,38 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             footerIcon: Sparkles
         },
         {
-            id: 'staking',
-            title: t('campaign.validatorStaking'),
-            tag: t('campaign.activeNow'),
-            tagColor: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-            description: t('campaign.validatorStakingDesc'),
-            icon: TrendingUp,
-            accent: 'orange',
-            btnText: t('campaign.stakeNow'),
+            id: 'quant_arena',
+            title: t('campaign.quantArenaTitle'),
+            tag: t('campaign.quantArenaTag'),
+            tagColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+            description: t('campaign.quantArenaDesc'),
+            icon: BarChart3,
+            accent: 'blue',
+            btnText: t('campaign.quantArenaBtn'),
             stats: [
-                { label: t('campaign.currentApy'), value: '12~20%' },
-                { label: t('campaign.totalStaked'), value: totalStaked() }
+                { label: t('campaign.quantArenaPrize'), value: '2,000 VCN' },
+                { label: t('campaign.quantArenaSeed'), value: '10M KRW' },
+                { label: t('campaign.quantArenaEnds'), value: 'Mar 20' }
             ],
-            footerTag: t('campaign.activeNow'),
-            footerIcon: Target
+            footerTag: 'Round 1',
+            footerIcon: Trophy
+        },
+        {
+            id: 'game_daily',
+            title: 'Daily Game Challenge',
+            tag: 'Daily',
+            tagColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+            description: 'Play daily mini-games, earn VCN & RP, and compete for the top spot on today\'s leaderboard.',
+            icon: Gamepad2,
+            accent: 'amber',
+            btnText: 'View Leaderboard',
+            stats: [
+                { label: 'Games', value: 'Spin + Block' },
+                { label: 'Reset', value: 'Daily' },
+                { label: 'Rewards', value: 'VCN + RP' }
+            ],
+            footerTag: 'Play Daily',
+            footerIcon: Award
         },
         {
             id: 'airdrop',
@@ -124,22 +146,22 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             footerIcon: Award
         },
         {
-            id: 'quant_arena',
-            title: t('campaign.quantArenaTitle'),
-            tag: t('campaign.quantArenaTag'),
-            tagColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-            description: t('campaign.quantArenaDesc'),
-            icon: BarChart3,
-            accent: 'blue',
-            btnText: t('campaign.quantArenaBtn'),
+            id: 'staking',
+            title: t('campaign.validatorStaking'),
+            tag: 'Coming Soon',
+            tagColor: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+            description: t('campaign.validatorStakingDesc'),
+            icon: TrendingUp,
+            accent: 'orange',
+            btnText: t('campaign.stakeNow'),
+            disabled: true,
             stats: [
-                { label: t('campaign.quantArenaPrize'), value: '9,000 VCN' },
-                { label: t('campaign.quantArenaSeed'), value: '10M KRW' },
-                { label: t('campaign.quantArenaEnds'), value: 'Mar 20' }
+                { label: t('campaign.currentApy'), value: '12~20%' },
+                { label: t('campaign.totalStaked'), value: totalStaked() }
             ],
-            footerTag: 'Round 1',
-            footerIcon: Trophy
-        }
+            footerTag: 'Coming Soon',
+            footerIcon: Target
+        },
     ];
 
     return (
@@ -234,7 +256,41 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                         </Show>
 
                         {/* Placeholder for other quest sub-pages */}
-                        <Show when={selectedQuest() !== 'referral'}>
+                        <Show when={selectedQuest() === 'game_daily'}>
+                            <div class="space-y-6">
+                                <div class="bg-gradient-to-br from-amber-600/10 to-orange-600/10 border border-white/10 rounded-[32px] p-8 lg:p-12 relative overflow-hidden">
+                                    <div class="absolute top-0 right-0 p-12 opacity-5 scale-150">
+                                        <Gamepad2 class="w-64 h-64" />
+                                    </div>
+                                    <div class="relative z-10 max-w-2xl">
+                                        <span class="inline-block px-3 py-1 bg-amber-500 text-black text-[10px] font-black uppercase rounded mb-4">Daily Game</span>
+                                        <h1 class="text-4xl lg:text-5xl font-black italic text-white tracking-tighter mb-4">DAILY GAME CHALLENGE</h1>
+                                        <p class="text-lg text-gray-400 font-medium leading-relaxed mb-8">
+                                            Play mini-games every day to earn VCN and RP. Compete with other players for the top spot on today's leaderboard!
+                                        </p>
+                                        <div class="flex gap-4">
+                                            <div class="bg-black/40 border border-white/10 rounded-2xl px-6 py-4">
+                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Your Rank</div>
+                                                <div class="text-2xl font-black text-white italic">{myGameRank() !== null ? `#${myGameRank()}` : '#--'}</div>
+                                            </div>
+                                            <div class="bg-black/40 border border-white/10 rounded-2xl px-6 py-4">
+                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Today's VCN</div>
+                                                <div class="text-2xl font-black text-amber-400 italic">{myGameVCN() > 0 ? `${myGameVCN().toFixed(1)} VCN` : '0 VCN'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <GameDailyLeaderboard
+                                    currentUserEmail={props.userProfile()?.email || ''}
+                                    onUserStats={(rank, vcn) => {
+                                        setMyGameRank(rank);
+                                        setMyGameVCN(vcn);
+                                    }}
+                                />
+                            </div>
+                        </Show>
+
+                        <Show when={selectedQuest() !== 'referral' && selectedQuest() !== 'game_daily'}>
                             <div class="py-20 flex flex-col items-center justify-center text-center">
                                 <div class="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-600 mb-6">
                                     <Award class="w-10 h-10" />
@@ -265,6 +321,7 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                 {(quest) => (
                                     <div
                                         onClick={() => {
+                                            if ((quest as any).disabled) return;
                                             if (quest.id === 'staking' && props.onNavigate) {
                                                 props.onNavigate('staking');
                                             } else if (quest.id === 'quant_arena' && props.onNavigate) {
@@ -273,7 +330,7 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                                 setSelectedQuest(quest.id);
                                             }
                                         }}
-                                        class={`bg-[#111113] border border-white/[0.06] rounded-[32px] p-8 pb-10 hover:border-${quest.accent}-500/30 transition-all group flex flex-col h-full cursor-pointer relative`}
+                                        class={`bg-[#111113] border border-white/[0.06] rounded-[32px] p-8 pb-10 transition-all group flex flex-col h-full relative ${(quest as any).disabled ? 'opacity-50 grayscale cursor-not-allowed' : `hover:border-${quest.accent}-500/30 cursor-pointer`}`}
                                     >
                                         {/* Hover Glow - Moved to inner container to prevent clipping of button shadow */}
                                         <div class="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
@@ -326,14 +383,16 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
 
                                         <div class="space-y-6 mt-auto pr-1 pb-1">
                                             <button
-                                                class={`w-full py-4 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${quest.accent === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20 shadow-xl' :
-                                                    quest.accent === 'emerald' ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20 shadow-xl' :
-                                                        quest.accent === 'purple' ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-purple-500/20 shadow-xl' :
-                                                            quest.accent === 'orange' ? 'bg-orange-600 text-white hover:bg-orange-500 shadow-orange-500/20 shadow-xl' :
-                                                                'bg-white/5 text-gray-500 hover:bg-white/10'
+                                                disabled={(quest as any).disabled}
+                                                class={`w-full py-4 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${(quest as any).disabled ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed' :
+                                                    quest.accent === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20 shadow-xl' :
+                                                        quest.accent === 'emerald' ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20 shadow-xl' :
+                                                            quest.accent === 'purple' ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-purple-500/20 shadow-xl' :
+                                                                quest.accent === 'orange' ? 'bg-orange-600 text-white hover:bg-orange-500 shadow-orange-500/20 shadow-xl' :
+                                                                    'bg-white/5 text-gray-500 hover:bg-white/10'
                                                     }`}
                                             >
-                                                {quest.btnText}
+                                                {(quest as any).disabled ? 'Coming Soon' : quest.btnText}
                                                 <ChevronRight class="w-4 h-4" />
                                             </button>
 

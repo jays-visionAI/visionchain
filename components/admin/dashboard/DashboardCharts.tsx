@@ -91,12 +91,17 @@ export const NodeHealthChart: Component = () => {
     );
 };
 
-// ==================== Activity Map (Bar Chart) ====================
-interface ActivityMapProps {
+// ==================== Activity Chart (SVG Line + Area) ====================
+interface ActivityChartProps {
     data?: { day: string; value: number }[];
+    color?: string;       // e.g. '#6366f1'
+    gradientId?: string;
 }
 
-export const ActivityMap: Component<ActivityMapProps> = (props) => {
+export const ActivityChart: Component<ActivityChartProps> = (props) => {
+    const color = () => props.color || '#6366f1';
+    const gId = () => props.gradientId || 'activityGrad';
+
     const chartData = () => props.data && props.data.length > 0 ? props.data : [
         { day: 'Mon', value: 0 },
         { day: 'Tue', value: 0 },
@@ -108,19 +113,66 @@ export const ActivityMap: Component<ActivityMapProps> = (props) => {
     ];
     const maxVal = () => Math.max(...chartData().map(d => d.value), 1);
 
+    // SVG viewbox: width 300, height 120
+    const W = 300, H = 120, PAD_X = 10, PAD_Y = 10;
+    const usableW = W - PAD_X * 2;
+    const usableH = H - PAD_Y * 2;
+
+    const points = () => chartData().map((d, i) => {
+        const x = PAD_X + (i / Math.max(chartData().length - 1, 1)) * usableW;
+        const y = PAD_Y + usableH - (d.value / maxVal()) * usableH;
+        return { x, y, ...d };
+    });
+
+    const linePath = () => points().map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const areaPath = () => `${linePath()} L ${(PAD_X + usableW).toFixed(1)} ${(PAD_Y + usableH).toFixed(1)} L ${PAD_X} ${(PAD_Y + usableH).toFixed(1)} Z`;
+
     return (
-        <div class="flex items-end gap-2 h-full">
-            <For each={chartData()}>
-                {(item) => (
-                    <div class="flex-1 flex flex-col items-center gap-2">
-                        <div
-                            class="w-full bg-indigo-500 rounded-t-lg transition-all duration-300 hover:bg-indigo-400"
-                            style={{ height: `${(item.value / maxVal()) * 100}%`, 'min-height': '4px' }}
+        <div class="w-full h-full flex flex-col">
+            {/* SVG Chart */}
+            <div class="flex-1 min-h-0 relative">
+                <svg class="w-full h-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id={gId()} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color={color()} stop-opacity="0.35" />
+                            <stop offset="100%" stop-color={color()} stop-opacity="0" />
+                        </linearGradient>
+                    </defs>
+                    {/* Grid lines */}
+                    {[0.25, 0.5, 0.75].map(frac => (
+                        <line
+                            x1={PAD_X} y1={PAD_Y + usableH * (1 - frac)}
+                            x2={PAD_X + usableW} y2={PAD_Y + usableH * (1 - frac)}
+                            stroke="rgba(255,255,255,0.04)" stroke-width="0.5"
                         />
-                        <span class="text-[10px] font-bold text-slate-500">{item.day}</span>
-                    </div>
-                )}
-            </For>
+                    ))}
+                    {/* Area fill */}
+                    <path d={areaPath()} fill={`url(#${gId()})`} />
+                    {/* Line */}
+                    <path d={linePath()} fill="none" stroke={color()} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    {/* Data points + value labels */}
+                    <For each={points()}>
+                        {(p) => (
+                            <>
+                                <circle cx={p.x} cy={p.y} r="3.5" fill="#0a0a0f" stroke={color()} stroke-width="2" />
+                                <text
+                                    x={p.x} y={p.y - 8}
+                                    fill="rgba(255,255,255,0.7)"
+                                    font-size="7" font-weight="700" text-anchor="middle"
+                                >{p.value}</text>
+                            </>
+                        )}
+                    </For>
+                </svg>
+            </div>
+            {/* X-axis labels */}
+            <div class="flex justify-between px-2 pt-1">
+                <For each={chartData()}>
+                    {(item) => (
+                        <span class="text-[9px] font-bold text-slate-600 text-center" style={{ width: `${100 / chartData().length}%` }}>{item.day}</span>
+                    )}
+                </For>
+            </div>
         </div>
     );
 };

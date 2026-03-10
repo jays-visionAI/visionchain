@@ -26408,3 +26408,78 @@ exports.getPaperReport = onCall({
   return { success: true, report };
 });
 
+// =============================================================================
+// ARENA COMPETITION MANAGEMENT
+// =============================================================================
+
+exports.seedArenaCompetitions = onCall(async (request) => {
+  const now = new Date().toISOString();
+  const endDate = "2026-03-20T00:00:00+09:00";
+
+  const spotData = {
+    id: "arena_round1_spot",
+    title: "Vision Quant Arena - Round 1",
+    description: "Spot 전략 트레이딩 대회. 동일한 시드 자본으로 최고의 수익률을 달성하세요.",
+    division: "spot",
+    startDate: "2026-03-10T00:00:00+09:00",
+    endDate,
+    status: "active",
+    seed: 10000000,
+    seedCurrency: "KRW",
+    participantCount: 0,
+    prizes: [
+      { rankMin: 1, rankMax: 1, reward: "500 VCN", label: "1st Place" },
+      { rankMin: 2, rankMax: 2, reward: "300 VCN", label: "2nd Place" },
+      { rankMin: 3, rankMax: 3, reward: "100 VCN", label: "3rd Place" },
+      { rankMin: 4, rankMax: 5, reward: "50 VCN", label: "4th - 5th" },
+    ],
+    rules: [
+      "Paper Trading 모드에서 Spot 전략으로 에이전트를 생성하면 자동 참가됩니다.",
+      "시드 자본은 1,000만원(KRW)으로 동일합니다.",
+      "대회 종료 시 총 수익률(ROI) 기준으로 랭킹이 결정됩니다.",
+      "부정 행위 적발 시 실격 처리됩니다.",
+      "Spot 전략만 해당 Division에 참가할 수 있습니다.",
+    ],
+    createdAt: now,
+  };
+
+  const futuresData = {
+    id: "arena_round1_futures",
+    title: "Vision Quant Arena - Round 1",
+    description: "Futures 전략 트레이딩 대회. 레버리지를 활용한 전략으로 최고의 수익률을 달성하세요.",
+    division: "futures",
+    startDate: "2026-03-10T00:00:00+09:00",
+    endDate,
+    status: "active",
+    seed: 10000000,
+    seedCurrency: "KRW",
+    participantCount: 0,
+    prizes: [
+      { rankMin: 1, rankMax: 1, reward: "500 VCN", label: "1st Place" },
+      { rankMin: 2, rankMax: 2, reward: "300 VCN", label: "2nd Place" },
+      { rankMin: 3, rankMax: 3, reward: "100 VCN", label: "3rd Place" },
+      { rankMin: 4, rankMax: 5, reward: "50 VCN", label: "4th - 5th" },
+    ],
+    rules: [
+      "Paper Trading 모드에서 Futures 전략으로 에이전트를 생성하면 자동 참가됩니다.",
+      "시드 자본은 1,000만원(KRW)으로 동일합니다.",
+      "대회 종료 시 총 수익률(ROI) 기준으로 랭킹이 결정됩니다.",
+      "부정 행위 적발 시 실격 처리됩니다.",
+      "Futures 전략만 해당 Division에 참가할 수 있습니다.",
+    ],
+    createdAt: now,
+  };
+
+  await db.collection("competitions").doc("arena_round1_spot").set(spotData);
+  await db.collection("competitions").doc("arena_round1_futures").set(futuresData);
+
+  // Delete old single competition if it existed
+  try {
+    const oldDoc = await db.collection("competitions").doc("vision_quant_arena_round1").get();
+    if (oldDoc.exists) {
+      await db.collection("competitions").doc("vision_quant_arena_round1").delete();
+    }
+  } catch (e) { /* ignore */ }
+
+  return { success: true, message: "Spot & Futures competitions seeded" };
+});

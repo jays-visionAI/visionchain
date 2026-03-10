@@ -228,6 +228,9 @@ export interface PaperAgent {
     budgetConfig: BudgetConfig;
     riskProfile: 'conservative' | 'balanced' | 'aggressive';
 
+    // Trading mode
+    tradingMode: 'paper' | 'live';
+
     // Seed
     seed: number;
     seedCurrency: 'KRW' | 'USDT';
@@ -278,6 +281,7 @@ export interface PaperTrade {
 // ─── Competition Types ─────────────────────────────────────────────────────
 
 export type CompetitionStatus = 'upcoming' | 'active' | 'completed';
+export type CompetitionDivision = 'spot' | 'futures';
 
 export interface CompetitionPrize {
     rankMin: number;
@@ -290,6 +294,7 @@ export interface Competition {
     id: string;
     title: string;
     description: string;
+    division: CompetitionDivision;
     startDate: string;
     endDate: string;
     status: CompetitionStatus;
