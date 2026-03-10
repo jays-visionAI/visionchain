@@ -133,6 +133,22 @@ export async function deletePaperAgent(agentId: string): Promise<void> {
     await deleteDoc(doc(db, COLLECTIONS.PAPER_AGENTS, agentId));
 }
 
+/** Update paper agent configuration (assets, params, risk profile) */
+export async function updatePaperAgentConfig(agentId: string, updates: {
+    selectedAssets?: string[];
+    params?: Record<string, number | string | boolean>;
+    riskProfile?: 'conservative' | 'balanced' | 'aggressive';
+    budgetConfig?: BudgetConfig;
+}): Promise<void> {
+    const db = getFirebaseDb();
+    const data: Record<string, any> = { updatedAt: new Date().toISOString() };
+    if (updates.selectedAssets) data.selectedAssets = updates.selectedAssets;
+    if (updates.params) data.params = updates.params;
+    if (updates.riskProfile) data.riskProfile = updates.riskProfile;
+    if (updates.budgetConfig) data.budgetConfig = updates.budgetConfig;
+    await updateDoc(doc(db, COLLECTIONS.PAPER_AGENTS, agentId), data);
+}
+
 /** Subscribe to user's paper agents (realtime) */
 export function subscribeToPaperAgents(
     callback: (agents: PaperAgent[]) => void,

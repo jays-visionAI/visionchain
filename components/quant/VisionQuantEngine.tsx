@@ -52,7 +52,7 @@ import {
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
 import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, Competition } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, getActiveCompetition, joinCompetition } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetition, joinCompetition } from '../../services/quant/paperTradingService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
 const QuantArenaLazy = lazy(() => import('./QuantArenaLeaderboard'));
@@ -141,6 +141,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [creatingAgent, setCreatingAgent] = createSignal(false);
     const [successToast, setSuccessToast] = createSignal<string | null>(null);
     const [activeCompetition, setActiveCompetition] = createSignal<Competition | null>(null);
+    const [expandedAgentId, setExpandedAgentId] = createSignal<string | null>(null);
 
     // === Confirm State ===
     const [acceptedTerms, setAcceptedTerms] = createSignal(false);
@@ -604,90 +605,245 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 }
                                             };
 
+                                            const isExpanded = () => expandedAgentId() === agent.id;
+                                            const strategyInfo = () => getStrategyById(agent.strategyId);
+
                                             return (
-                                                <div class="p-5 bg-[#111113]/60 rounded-2xl border border-white/[0.06] hover:border-white/[0.1] transition-all">
-                                                    {/* Header */}
-                                                    <div class="flex items-start justify-between mb-4">
-                                                        <div>
-                                                            <div class="flex items-center gap-2 mb-1">
-                                                                <div class={`w-2 h-2 rounded-full ${statusColor()} ${agent.status === 'running' ? 'animate-pulse' : ''}`} />
-                                                                <span class="text-xs font-black text-white">{agent.strategyName}</span>
-                                                                <span class="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded text-[8px] font-black text-amber-400 uppercase tracking-wider">Paper</span>
+                                                <div class="bg-[#111113]/60 rounded-2xl border border-white/[0.06] hover:border-white/[0.1] transition-all overflow-hidden">
+                                                    {/* Card Header - clickable to expand */}
+                                                    <div class="p-5 cursor-pointer" onClick={() => setExpandedAgentId(isExpanded() ? null : agent.id)}>
+                                                        {/* Header */}
+                                                        <div class="flex items-start justify-between mb-4">
+                                                            <div>
+                                                                <div class="flex items-center gap-2 mb-1">
+                                                                    <div class={`w-2 h-2 rounded-full ${statusColor()} ${agent.status === 'running' ? 'animate-pulse' : ''}`} />
+                                                                    <span class="text-xs font-black text-white">{agent.strategyName}</span>
+                                                                    <span class="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 rounded text-[8px] font-black text-amber-400 uppercase tracking-wider">Paper</span>
+                                                                </div>
+                                                                <div class="text-[10px] text-gray-500">
+                                                                    {agent.selectedAssets.join(', ')} · {agent.status === 'running' ? 'Running' : agent.status === 'paused' ? 'Paused' : agent.status === 'stopped' ? 'Stopped' : 'Completed'}
+                                                                </div>
                                                             </div>
-                                                            <div class="text-[10px] text-gray-500">
-                                                                {agent.selectedAssets.join(', ')} · {agent.status === 'running' ? 'Running' : agent.status === 'paused' ? 'Paused' : agent.status === 'stopped' ? 'Stopped' : 'Completed'}
+                                                            <div class="flex items-center gap-3">
+                                                                <div class="text-right">
+                                                                    <div class={`text-sm font-black ${agent.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                        {pnlLabel()} ({agent.totalPnl >= 0 ? '+' : ''}{agent.totalPnlPercent.toFixed(2)}%)
+                                                                    </div>
+                                                                    <div class="text-[10px] text-gray-500">P&L</div>
+                                                                </div>
+                                                                <ChevronRight class={`w-4 h-4 text-gray-500 transition-transform ${isExpanded() ? 'rotate-90' : ''}`} />
                                                             </div>
                                                         </div>
-                                                        <div class="text-right">
-                                                            <div class={`text-sm font-black ${agent.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                                                {pnlLabel()} ({agent.totalPnl >= 0 ? '+' : ''}{agent.totalPnlPercent.toFixed(2)}%)
+
+                                                        {/* Stats Grid */}
+                                                        <div class="grid grid-cols-4 gap-3 mb-4">
+                                                            <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                                <div class="text-[9px] text-gray-500 uppercase mb-0.5">Seed</div>
+                                                                <div class="text-[11px] font-bold text-white">{seedLabel()}</div>
                                                             </div>
-                                                            <div class="text-[10px] text-gray-500">P&L</div>
+                                                            <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                                <div class="text-[9px] text-gray-500 uppercase mb-0.5">Value</div>
+                                                                <div class="text-[11px] font-bold text-white">{valueLabel()}</div>
+                                                            </div>
+                                                            <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                                <div class="text-[9px] text-gray-500 uppercase mb-0.5">Trades</div>
+                                                                <div class="text-[11px] font-bold text-white">{agent.totalTrades}</div>
+                                                            </div>
+                                                            <div class="p-2.5 bg-white/[0.02] rounded-lg">
+                                                                <div class="text-[9px] text-gray-500 uppercase mb-0.5">Win Rate</div>
+                                                                <div class="text-[11px] font-bold text-white">{agent.winRate.toFixed(1)}%</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Actions */}
+                                                        <div class="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                            <Show when={agent.status === 'running'}>
+                                                                <button
+                                                                    onClick={() => updatePaperAgentStatus(agent.id, 'paused')}
+                                                                    class="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 rounded-lg text-[10px] font-bold text-yellow-400 transition-colors"
+                                                                >
+                                                                    <Pause class="w-3 h-3" />
+                                                                    Pause
+                                                                </button>
+                                                            </Show>
+                                                            <Show when={agent.status === 'paused'}>
+                                                                <button
+                                                                    onClick={() => updatePaperAgentStatus(agent.id, 'running')}
+                                                                    class="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg text-[10px] font-bold text-green-400 transition-colors"
+                                                                >
+                                                                    <Play class="w-3 h-3" />
+                                                                    Resume
+                                                                </button>
+                                                            </Show>
+                                                            <Show when={agent.status === 'running' || agent.status === 'paused'}>
+                                                                <button
+                                                                    onClick={() => updatePaperAgentStatus(agent.id, 'stopped')}
+                                                                    class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-[10px] font-bold text-red-400 transition-colors"
+                                                                >
+                                                                    <Square class="w-3 h-3" />
+                                                                    Stop
+                                                                </button>
+                                                            </Show>
+                                                            <Show when={agent.status === 'stopped' || agent.status === 'completed'}>
+                                                                <button
+                                                                    onClick={() => deletePaperAgent(agent.id)}
+                                                                    class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg text-[10px] font-bold text-gray-400 transition-colors"
+                                                                >
+                                                                    <X class="w-3 h-3" />
+                                                                    Delete
+                                                                </button>
+                                                            </Show>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setExpandedAgentId(isExpanded() ? null : agent.id); }}
+                                                                class={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${isExpanded() ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25' : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-gray-400'}`}
+                                                            >
+                                                                <Settings class="w-3 h-3" />
+                                                                Config
+                                                            </button>
+                                                            <div class="ml-auto text-[9px] text-gray-600">
+                                                                Created {new Date(agent.createdAt).toLocaleDateString()}
+                                                            </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Stats Grid */}
-                                                    <div class="grid grid-cols-4 gap-3 mb-4">
-                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
-                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Seed</div>
-                                                            <div class="text-[11px] font-bold text-white">{seedLabel()}</div>
-                                                        </div>
-                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
-                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Value</div>
-                                                            <div class="text-[11px] font-bold text-white">{valueLabel()}</div>
-                                                        </div>
-                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
-                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Trades</div>
-                                                            <div class="text-[11px] font-bold text-white">{agent.totalTrades}</div>
-                                                        </div>
-                                                        <div class="p-2.5 bg-white/[0.02] rounded-lg">
-                                                            <div class="text-[9px] text-gray-500 uppercase mb-0.5">Win Rate</div>
-                                                            <div class="text-[11px] font-bold text-white">{agent.winRate.toFixed(1)}%</div>
-                                                        </div>
-                                                    </div>
+                                                    {/* ═══ Expanded Config Panel ═══ */}
+                                                    <Show when={isExpanded()}>
+                                                        <div class="border-t border-white/[0.04] p-5 space-y-4 bg-white/[0.01]">
+                                                            {/* Strategy Info */}
+                                                            <div>
+                                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Strategy</div>
+                                                                <div class="flex items-center gap-2 text-xs text-white">
+                                                                    <span class="font-bold">{agent.strategyName}</span>
+                                                                    <Show when={strategyInfo()}>
+                                                                        <span class="text-[10px] text-gray-500">({strategyInfo()!.nameKo})</span>
+                                                                    </Show>
+                                                                </div>
+                                                                <Show when={strategyInfo()}>
+                                                                    <p class="text-[10px] text-gray-500 mt-1 leading-relaxed">{strategyInfo()!.shortDescriptionKo}</p>
+                                                                </Show>
+                                                            </div>
 
-                                                    {/* Actions */}
-                                                    <div class="flex items-center gap-2">
-                                                        <Show when={agent.status === 'running'}>
-                                                            <button
-                                                                onClick={() => updatePaperAgentStatus(agent.id, 'paused')}
-                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 rounded-lg text-[10px] font-bold text-yellow-400 transition-colors"
-                                                            >
-                                                                <Pause class="w-3 h-3" />
-                                                                Pause
-                                                            </button>
-                                                        </Show>
-                                                        <Show when={agent.status === 'paused'}>
-                                                            <button
-                                                                onClick={() => updatePaperAgentStatus(agent.id, 'running')}
-                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg text-[10px] font-bold text-green-400 transition-colors"
-                                                            >
-                                                                <Play class="w-3 h-3" />
-                                                                Resume
-                                                            </button>
-                                                        </Show>
-                                                        <Show when={agent.status === 'running' || agent.status === 'paused'}>
-                                                            <button
-                                                                onClick={() => updatePaperAgentStatus(agent.id, 'stopped')}
-                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-[10px] font-bold text-red-400 transition-colors"
-                                                            >
-                                                                <Square class="w-3 h-3" />
-                                                                Stop
-                                                            </button>
-                                                        </Show>
-                                                        <Show when={agent.status === 'stopped' || agent.status === 'completed'}>
-                                                            <button
-                                                                onClick={() => deletePaperAgent(agent.id)}
-                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg text-[10px] font-bold text-gray-400 transition-colors"
-                                                            >
-                                                                <X class="w-3 h-3" />
-                                                                Delete
-                                                            </button>
-                                                        </Show>
-                                                        <div class="ml-auto text-[9px] text-gray-600">
-                                                            Created {new Date(agent.createdAt).toLocaleDateString()}
+                                                            {/* Selected Assets */}
+                                                            <div>
+                                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Target Assets</div>
+                                                                <div class="flex flex-wrap gap-1.5">
+                                                                    <For each={agent.selectedAssets}>
+                                                                        {(asset) => (
+                                                                            <span class="px-2 py-1 text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 rounded-lg">
+                                                                                {asset.replace('KRW-', '')}
+                                                                            </span>
+                                                                        )}
+                                                                    </For>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Risk Profile */}
+                                                            <div>
+                                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Risk Profile</div>
+                                                                <div class="flex gap-2">
+                                                                    {(['conservative', 'balanced', 'aggressive'] as const).map(rp => (
+                                                                        <div class={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${agent.riskProfile === rp
+                                                                                ? rp === 'conservative' ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
+                                                                                    : rp === 'balanced' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25'
+                                                                                        : 'bg-red-500/15 text-red-400 border-red-500/25'
+                                                                                : 'text-gray-600 border-white/[0.04]'}`}
+                                                                        >
+                                                                            {rp === 'conservative' ? 'Conservative' : rp === 'balanced' ? 'Balanced' : 'Aggressive'}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Parameters */}
+                                                            <Show when={agent.params && Object.keys(agent.params).length > 0}>
+                                                                <div>
+                                                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Parameters</div>
+                                                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                        <For each={Object.entries(agent.params)}>
+                                                                            {([key, value]) => {
+                                                                                const paramInfo = strategyInfo()?.parameters.find(p => p.key === key);
+                                                                                return (
+                                                                                    <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                                        <div class="text-[9px] text-gray-500 truncate">{paramInfo?.labelKo || paramInfo?.label || key}</div>
+                                                                                        <div class="text-[11px] font-bold text-white">{String(value)}</div>
+                                                                                    </div>
+                                                                                );
+                                                                            }}
+                                                                        </For>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Budget Config */}
+                                                            <Show when={agent.budgetConfig}>
+                                                                <div>
+                                                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Budget Settings</div>
+                                                                    <div class="grid grid-cols-2 gap-2">
+                                                                        <Show when={agent.budgetConfig.totalBudgetEnabled}>
+                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                                <div class="text-[9px] text-gray-500">Total Budget</div>
+                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.totalBudget.toLocaleString()}</div>
+                                                                            </div>
+                                                                        </Show>
+                                                                        <Show when={agent.budgetConfig.perAssetBudgetEnabled}>
+                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                                <div class="text-[9px] text-gray-500">Per Asset</div>
+                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.perAssetBudget.toLocaleString()}</div>
+                                                                            </div>
+                                                                        </Show>
+                                                                        <Show when={agent.budgetConfig.maxOrderSizeEnabled}>
+                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                                <div class="text-[9px] text-gray-500">Max Order</div>
+                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.maxOrderSize.toLocaleString()}</div>
+                                                                            </div>
+                                                                        </Show>
+                                                                        <Show when={agent.budgetConfig.dailyTradingLimitEnabled}>
+                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                                <div class="text-[9px] text-gray-500">Daily Limit</div>
+                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.dailyTradingLimit.toLocaleString()}</div>
+                                                                            </div>
+                                                                        </Show>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Positions */}
+                                                            <Show when={agent.positions && agent.positions.length > 0}>
+                                                                <div>
+                                                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Open Positions</div>
+                                                                    <div class="space-y-1.5">
+                                                                        <For each={agent.positions}>
+                                                                            {(pos) => (
+                                                                                <div class="flex items-center justify-between p-2 bg-white/[0.02] rounded-lg">
+                                                                                    <div>
+                                                                                        <span class="text-[11px] font-bold text-white">{pos.asset.replace('KRW-', '')}</span>
+                                                                                        <span class="text-[9px] text-gray-500 ml-1.5">qty: {pos.quantity.toFixed(4)}</span>
+                                                                                    </div>
+                                                                                    <div class={`text-[11px] font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                                        {pos.unrealizedPnl >= 0 ? '+' : ''}{pos.unrealizedPnlPercent.toFixed(2)}%
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </For>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Edit hint */}
+                                                            <Show when={agent.status === 'paused'}>
+                                                                <div class="flex items-center gap-2 px-3 py-2 bg-cyan-500/[0.06] border border-cyan-500/15 rounded-xl">
+                                                                    <Info class="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                                                                    <p class="text-[10px] text-cyan-300/70">Agent가 일시정지 상태일 때 설정을 변경하려면 Strategy 탭에서 동일 전략을 새로 Setup 하세요. 기존 Agent를 Stop 후 삭제하고 새로 생성할 수 있습니다.</p>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Agent ID & Metadata */}
+                                                            <div class="flex items-center justify-between pt-2 border-t border-white/[0.03]">
+                                                                <div class="text-[9px] text-gray-600 font-mono">{agent.id}</div>
+                                                                <div class="text-[9px] text-gray-600">Updated: {new Date(agent.updatedAt).toLocaleString()}</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    </Show>
                                                 </div>
                                             );
                                         }}
