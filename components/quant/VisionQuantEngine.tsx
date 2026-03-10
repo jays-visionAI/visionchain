@@ -50,6 +50,8 @@ import {
 import { DEFAULT_BUDGET_CONFIG } from '../../services/quant/types';
 import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
+import { lazy } from 'solid-js';
+const QuantReportLazy = lazy(() => import('./QuantReport'));
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -98,7 +100,7 @@ const BithumbIcon = () => (
 
 // ─── Tab Types ──────────────────────────────────────────────────────────────
 
-type QuantTab = 'strategies' | 'agents' | 'signals';
+type QuantTab = 'strategies' | 'agents' | 'signals' | 'reports';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -340,7 +342,7 @@ const VisionQuantEngine = (): JSX.Element => {
 
                         {/* Tab Navigation */}
                         <div class="flex items-center gap-1 bg-[#111113]/40 rounded-xl p-1 border border-white/[0.04]">
-                            {(['strategies', 'agents', 'signals'] as QuantTab[]).map(tab => (
+                            {(['strategies', 'agents', 'signals', 'reports'] as QuantTab[]).map(tab => (
                                 <button
                                     onClick={() => setActiveTab(tab)}
                                     class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === tab
@@ -351,6 +353,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                     {tab === 'strategies' && <StrategyIcon />}
                                     {tab === 'agents' && <BotIcon />}
                                     {tab === 'signals' && <Activity class="w-4 h-4" />}
+                                    {tab === 'reports' && <BarChart3 class="w-4 h-4" />}
                                     <span class="capitalize">{tab}</span>
                                 </button>
                             ))}
@@ -498,6 +501,11 @@ const VisionQuantEngine = (): JSX.Element => {
                                     에이전트가 활성화되면 실시간 시그널이 여기에 표시됩니다.
                                 </p>
                             </div>
+                        </Show>
+
+                        {/* ═══ REPORTS TAB ═══ */}
+                        <Show when={activeTab() === 'reports'}>
+                            <QuantReportLazy onBack={() => setActiveTab('strategies')} />
                         </Show>
                     </Show>
                 </Show>

@@ -4500,7 +4500,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             <Show when={activeView() === 'game'}>
                                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                                     <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                        <VCNGameCenter />
+                                        <VCNGameCenter userProfile={userProfile} />
                                     </Suspense>
                                 </div>
                             </Show>

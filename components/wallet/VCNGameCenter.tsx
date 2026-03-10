@@ -1,10 +1,77 @@
-import { createSignal, Show, For, onMount, createMemo, onCleanup } from 'solid-js';
+import { createSignal, Show, For, onMount, createMemo, onCleanup, Accessor } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useI18n } from '../../i18n/i18nContext';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 import { getFirebaseDb } from '../../services/firebaseService';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+
+// ─── Props ──────────────────────────────────────────────────────────────────
+interface GameCenterProps {
+    userProfile: Accessor<{ referralCode: string; email: string; referralCount?: number;[k: string]: any }>;
+}
+
+// ─── Sound Engine (Web Audio API) ───────────────────────────────────────────
+const SFX = {
+    _ctx: null as AudioContext | null,
+    _getCtx() { if (!this._ctx) this._ctx = new (window.AudioContext || (window as any).webkitAudioContext)(); return this._ctx; },
+    play(type: 'tick' | 'win' | 'jackpot' | 'tap' | 'break') {
+        try {
+            const ctx = this._getCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            const now = ctx.currentTime;
+            if (type === 'tick') {
+                osc.frequency.value = 800 + Math.random() * 400;
+                osc.type = 'sine'; gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+                osc.start(now); osc.stop(now + 0.06);
+            } else if (type === 'win') {
+                osc.type = 'sine';
+                [523, 659, 784].forEach((f, i) => { osc.frequency.setValueAtTime(f, now + i * 0.12); });
+                gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                osc.start(now); osc.stop(now + 0.4);
+            } else if (type === 'jackpot') {
+                [523, 659, 784, 1047, 784, 1047].forEach((f, i) => {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = i < 4 ? 'sine' : 'triangle';
+                    o.frequency.value = f; g.gain.setValueAtTime(0.12, now + i * 0.1);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.25);
+                    o.start(now + i * 0.1); o.stop(now + i * 0.1 + 0.25);
+                });
+                return;
+            } else if (type === 'tap') {
+                osc.frequency.value = 200 + Math.random() * 100; osc.type = 'square';
+                gain.gain.setValueAtTime(0.06, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(now); osc.stop(now + 0.05);
+            } else if (type === 'break') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(80, now + 0.3);
+                gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            }
+        } catch { /* Audio not supported */ }
+    }
+};
+
+// ─── Confetti Particles ─────────────────────────────────────────────────────
+function launchConfetti(container: HTMLElement) {
+    const colors = ['#EF4444', '#F59E0B', '#22D3EE', '#A855F7', '#10B981', '#F97316', '#EC4899'];
+    for (let i = 0; i < 60; i++) {
+        const el = document.createElement('div');
+        const size = 4 + Math.random() * 6;
+        el.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:${colors[i % colors.length]};border-radius:${Math.random() > 0.5 ? '50%' : '2px'};left:50%;top:50%;pointer-events:none;z-index:50;`;
+        container.appendChild(el);
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = 150 + Math.random() * 250;
+        const dx = Math.cos(angle) * velocity;
+        const dy = Math.sin(angle) * velocity - 200;
+        el.animate([
+            { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 400}px)) scale(0) rotate(${Math.random() * 720}deg)`, opacity: 0 }
+        ], { duration: 1200 + Math.random() * 600, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
+        setTimeout(() => el.remove(), 2000);
+    }
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface SpinSegment {
@@ -115,8 +182,9 @@ const VCNCoinIcon = (p: { class?: string }) => (
 );
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export const VCNGameCenter = () => {
+export const VCNGameCenter = (props: GameCenterProps) => {
     const { t } = useI18n();
+    let gameContainerRef: HTMLDivElement | undefined;
 
     // State
     const [activeGame, setActiveGame] = createSignal<'spin' | 'block' | 'scratch' | null>(null);
@@ -130,6 +198,9 @@ export const VCNGameCenter = () => {
         games: [],
     });
     const [isLoading, setIsLoading] = createSignal(true);
+    const [showJackpotCeremony, setShowJackpotCeremony] = createSignal(false);
+    const [jackpotSegment, setJackpotSegment] = createSignal<SpinSegment | null>(null);
+    const [inviteCopied, setInviteCopied] = createSignal(false);
 
     // Lucky Spin state
     const [isSpinning, setIsSpinning] = createSignal(false);
@@ -218,6 +289,27 @@ export const VCNGameCenter = () => {
         }
     };
 
+    const handleInviteFriend = async () => {
+        const refCode = props.userProfile().referralCode || props.userProfile().email;
+        const referralUrl = `https://visionchain.co/signup?ref=${refCode}`;
+        const message = `[Vision Chain] Play mini-games and earn VCN & RP! Join me: ${referralUrl}`;
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: 'Vision Chain Game', text: message, url: referralUrl });
+            } else {
+                await navigator.clipboard.writeText(message);
+            }
+            setInviteCopied(true);
+            setTimeout(() => setInviteCopied(false), 3000);
+        } catch {
+            await navigator.clipboard.writeText(message);
+            setInviteCopied(true);
+            setTimeout(() => setInviteCopied(false), 3000);
+        }
+    };
+
+    const allPlaysUsed = createMemo(() => spinsRemaining() <= 0 && blocksRemaining() <= 0);
+
     onMount(() => {
         loadDailyData();
         // Load RPConfig for game settings
@@ -234,22 +326,42 @@ export const VCNGameCenter = () => {
         setIsSpinning(true);
         setShowResult(false);
         setSpinResult(null);
+        setShowJackpotCeremony(false);
 
         const winIndex = pickSegment();
         const segmentAngle = 360 / SPIN_SEGMENTS.length;
-        // Land on the center of the winning segment
         const targetAngle = 360 - (winIndex * segmentAngle + segmentAngle / 2);
-        // Multiple full rotations + target
         const fullSpins = 5 + Math.floor(Math.random() * 3);
         const finalRotation = spinRotation() + fullSpins * 360 + targetAngle - (spinRotation() % 360);
 
         setSpinRotation(finalRotation);
 
+        // Tick sound during spinning
+        let tickCount = 0;
+        const tickInterval = setInterval(() => {
+            SFX.play('tick');
+            tickCount++;
+            if (tickCount > 30) clearInterval(tickInterval);
+        }, 120);
+
         // After spin animation completes
         setTimeout(() => {
+            clearInterval(tickInterval);
             const segment = SPIN_SEGMENTS[winIndex];
             setSpinResult(segment);
             setIsSpinning(false);
+
+            // Play result sound
+            const isJackpot = segment.vcn >= 10;
+            if (isJackpot) {
+                SFX.play('jackpot');
+                setJackpotSegment(segment);
+                setShowJackpotCeremony(true);
+                if (gameContainerRef) launchConfetti(gameContainerRef);
+                setTimeout(() => setShowJackpotCeremony(false), 4000);
+            } else {
+                SFX.play('win');
+            }
 
             // Animate reward count-up
             const duration = 800;
@@ -317,6 +429,7 @@ export const VCNGameCenter = () => {
         setBlockHP(newHP);
         setBlockCracks(prev => prev + 1);
         setBlockShake(true);
+        SFX.play('tap');
         setTimeout(() => setBlockShake(false), 150);
 
         // Particle effect on tap
@@ -329,6 +442,7 @@ export const VCNGameCenter = () => {
         if (newHP <= 0) {
             // Block broken!
             setBlockBroken(true);
+            SFX.play('break');
             const rewards = {
                 bronze: { vcn: 0.3 + Math.random() * 0.5, rp: 3 },
                 silver: { vcn: 1.0 + Math.random() * 1.5, rp: 7 },
@@ -366,7 +480,7 @@ export const VCNGameCenter = () => {
 
     // ─── Render ─────────────────────────────────────────────────────
     return (
-        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8" style="-webkit-overflow-scrolling: touch;">
+        <div ref={gameContainerRef} class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8 relative" style="-webkit-overflow-scrolling: touch;">
             <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
@@ -471,6 +585,52 @@ export const VCNGameCenter = () => {
                                     <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </Show>
+
+                {/* Invite Friend CTA -- shown when all plays exhausted */}
+                <Show when={allPlaysUsed() && activeGame() === null}>
+                    <div class="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-emerald-500/10">
+                        <div class="absolute inset-0 bg-[url('data:image/svg+xml,...')] opacity-5" />
+                        <div class="relative p-6 text-center">
+                            <div class="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2">No plays left today</div>
+                            <h3 class="text-lg font-black text-white mb-2">Invite a friend for bonus plays!</h3>
+                            <p class="text-xs text-gray-400 mb-5">Share your referral link and get extra game plays when they sign up</p>
+                            <button
+                                onClick={handleInviteFriend}
+                                class="inline-flex items-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-black rounded-2xl hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] active:scale-95 transition-all"
+                                style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; min-height: 52px;"
+                            >
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
+                                </svg>
+                                {inviteCopied() ? 'Link Copied!' : 'Invite & Get Bonus Plays'}
+                            </button>
+                        </div>
+                    </div>
+                </Show>
+
+                {/* ═══════════════════ JACKPOT CEREMONY OVERLAY ═══════════════════ */}
+                <Show when={showJackpotCeremony() && jackpotSegment()}>
+                    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-in fade-in duration-300" onClick={() => setShowJackpotCeremony(false)}>
+                        <div class="relative text-center p-8 max-w-sm animate-in zoom-in-75 duration-500">
+                            <div class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-red-400 to-amber-400 mb-4 animate-pulse">
+                                {jackpotSegment()!.label === 'MEGA' ? 'MEGA WIN!' : 'JACKPOT!'}
+                            </div>
+                            <div class="flex items-center justify-center gap-4 mb-4">
+                                <div class="flex items-center gap-2">
+                                    <VCNCoinIcon class="w-10 h-10" />
+                                    <span class="text-5xl font-black text-amber-400">+{jackpotSegment()!.vcn}</span>
+                                    <span class="text-lg text-amber-400/70 font-bold">VCN</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-center gap-2 mb-6">
+                                <svg viewBox="0 0 24 24" class="w-6 h-6 text-purple-400" fill="currentColor"><polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" /></svg>
+                                <span class="text-3xl font-black text-purple-400">+{jackpotSegment()!.rp}</span>
+                                <span class="text-sm text-purple-400/70 font-bold">RP</span>
+                            </div>
+                            <div class="text-xs text-gray-500">Tap anywhere to close</div>
                         </div>
                     </div>
                 </Show>
@@ -593,6 +753,12 @@ export const VCNGameCenter = () => {
                                             </div>
                                         </Show>
                                     </div>
+                                    <Show when={spinsRemaining() <= 0}>
+                                        <button onClick={handleInviteFriend} class="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500/15 text-emerald-400 font-bold text-sm rounded-xl hover:bg-emerald-500/25 active:scale-95 transition-all" style="touch-action: manipulation;">
+                                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
+                                            {inviteCopied() ? 'Link Copied!' : 'Invite Friend for Bonus'}
+                                        </button>
+                                    </Show>
                                 </div>
                             </Show>
                         </div>

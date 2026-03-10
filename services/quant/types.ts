@@ -227,3 +227,151 @@ export interface LeaderboardEntry {
     followerCount: number;
     isPublic: boolean;
 }
+
+// ─── Performance Report Types ──────────────────────────────────────────────
+
+export type ReportPeriod = 'weekly' | 'monthly' | 'annual';
+
+/** Individual trade record for report */
+export interface TradeRecord {
+    id: string;
+    asset: string;
+    side: 'buy' | 'sell';
+    price: number;
+    quantity: number;
+    value: number;
+    fee: number;
+    pnl: number;
+    pnlPercent: number;
+    strategy: string;
+    timestamp: string;
+    holdingPeriod?: number; // hours
+}
+
+/** Daily P&L data point for equity curve */
+export interface DailyPnL {
+    date: string;
+    pnl: number;
+    pnlPercent: number;
+    cumulativePnl: number;
+    cumulativeReturn: number;
+    portfolioValue: number;
+    benchmark: number; // BTC return for comparison
+}
+
+/** Per-asset performance breakdown */
+export interface AssetPerformance {
+    asset: string;
+    trades: number;
+    winRate: number;
+    totalPnl: number;
+    totalReturn: number;
+    avgHoldingPeriod: number; // hours
+    bestTrade: number;
+    worstTrade: number;
+    sharpeRatio: number;
+    allocation: number; // % of portfolio
+}
+
+/** Strategy-level performance */
+export interface StrategyPerformance {
+    strategyId: string;
+    strategyName: string;
+    trades: number;
+    winRate: number;
+    totalPnl: number;
+    totalReturn: number;
+    profitFactor: number;
+    avgWin: number;
+    avgLoss: number;
+    maxConsecutiveWins: number;
+    maxConsecutiveLosses: number;
+    signalsGenerated: number;
+    signalsExecuted: number;
+    signalsSkipped: number;
+}
+
+/** Drawdown analysis */
+export interface DrawdownEvent {
+    startDate: string;
+    endDate: string | null; // null if ongoing
+    depth: number; // max drawdown %
+    duration: number; // days
+    recovery: number | null; // days to recover, null if not recovered
+    peakValue: number;
+    troughValue: number;
+}
+
+/** Risk metrics for reports */
+export interface RiskMetrics {
+    sharpeRatio: number;
+    sortinoRatio: number;
+    calmarRatio: number;
+    maxDrawdown: number;
+    maxDrawdownDuration: number; // days
+    volatility: number; // annualized
+    beta: number; // vs BTC
+    alpha: number; // vs BTC
+    var95: number; // Value at Risk 95%
+    var99: number;
+    winRate: number;
+    profitFactor: number;
+    avgWinLossRatio: number;
+    expectancy: number; // avg pnl per trade
+    kellyFraction: number;
+}
+
+/** Monthly return entry for heatmap */
+export interface MonthlyReturn {
+    year: number;
+    month: number;
+    return: number;
+    trades: number;
+}
+
+/** The main report data structure */
+export interface PerformanceReport {
+    // Meta
+    reportId: string;
+    userId: string;
+    period: ReportPeriod;
+    startDate: string;
+    endDate: string;
+    generatedAt: string;
+    currency: 'KRW' | 'USD';
+
+    // Summary KPIs
+    summary: {
+        startingCapital: number;
+        endingCapital: number;
+        netPnl: number;
+        totalReturn: number;
+        annualizedReturn: number;
+        totalTrades: number;
+        winningTrades: number;
+        losingTrades: number;
+        winRate: number;
+        bestDay: { date: string; pnl: number; pnlPercent: number };
+        worstDay: { date: string; pnl: number; pnlPercent: number };
+        avgDailyReturn: number;
+        totalFees: number;
+        netAfterFees: number;
+    };
+
+    // Detailed data
+    dailyPnl: DailyPnL[];
+    trades: TradeRecord[];
+    assetPerformance: AssetPerformance[];
+    strategyPerformance: StrategyPerformance[];
+    riskMetrics: RiskMetrics;
+    drawdowns: DrawdownEvent[];
+    monthlyReturns: MonthlyReturn[];
+
+    // Benchmark comparison
+    benchmarks: {
+        btcReturn: number;
+        ethReturn: number;
+        marketAvg: number;
+        outperformance: number; // vs BTC
+    };
+}
