@@ -1,7 +1,7 @@
 // Service Worker for Vision Chain PWA
 // Version: 1.0.0 - Cache control for proper data fetching
 
-const CACHE_NAME = 'vision-chain-v3';
+const CACHE_NAME = 'vision-chain-v4';
 const STATIC_ASSETS = [
     '/pwa-icon-192.png',
     '/pwa-icon-512.png',
@@ -83,39 +83,47 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // HTML and JS files - Network first, fallback to cache
-    // This ensures users always get the latest version
-    event.respondWith(
-        fetch(event.request)
-            .then((response) => {
-                // Clone the response because it can only be consumed once
-                const responseClone = response.clone();
-
-                // Only cache successful responses
-                if (response.status === 200) {
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseClone);
-                    });
-                }
-
-                return response;
-            })
-            .catch(() => {
-                // Network failed, try cache
-                return caches.match(event.request).then((cachedResponse) => {
-                    if (cachedResponse) {
-                        return cachedResponse;
-                    }
-                    // Return offline fallback for HTML
-                    if (event.request.headers.get('accept')?.includes('text/html')) {
-                        return new Response('Offline - Please check your connection', {
-                            status: 503,
-                            headers: { 'Content-Type': 'text/html' }
-                        });
-                    }
-                    return new Response('Offline', { status: 503 });
+    // HTML navigation requests - ALWAYS network first, NEVER serve stale cached HTML
+    // Stale HTML references old chunk hashes that no longer exist on CDN
+    if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+        event.respondWith(
+            fetch(event.request).catch(() => {
+                return new Response('Offline - Please check your connection and refresh the page', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html' }
                 });
             })
+        );
+        return;
+    }
+
+    // JS/CSS assets with hashes in filename (e.g. chunk-AbCd1234.js)
+    // These are immutable (content-addressed), safe to cache
+    if (url.pathname.match(/\/assets\/.*-[a-zA-Z0-9]{8,}\.(js|css)$/)) {
+        event.respondWith(
+            caches.match(event.request).then((cachedResponse) => {
+                if (cachedResponse) return cachedResponse;
+                return fetch(event.request).then((response) => {
+                    if (response.status === 200) {
+                        const responseClone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
+    // All other requests - Network first, no caching
+    event.respondWith(
+        fetch(event.request).catch(() => {
+            return caches.match(event.request).then((cachedResponse) => {
+                return cachedResponse || new Response('Offline', { status: 503 });
+            });
+        })
     );
 });
 
