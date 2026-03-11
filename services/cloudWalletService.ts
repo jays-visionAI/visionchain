@@ -286,7 +286,7 @@ export const CloudWalletService = {
             if (!strength.isStrongEnough) {
                 return {
                     success: false,
-                    error: 'Your wallet password is too weak for cloud backup. Please change your wallet password to 10+ characters with uppercase, lowercase, and numbers first (Settings > Password tab), then try again.',
+                    error: 'Your wallet password is too weak for cloud backup. Please change your password in Settings > Password tab (this will also update your wallet encryption). Then return here and try again.',
                 };
             }
 

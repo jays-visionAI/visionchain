@@ -240,6 +240,41 @@ export function WalletSettings(props: { onBack?: () => void }) {
             // Step 3: Update to new password
             await updatePassword(user, newPassword());
 
+            // Step 4: Re-encrypt wallet with new password
+            // The wallet is encrypted with the wallet password (set during creation).
+            // When a user changes their login password, we must also re-encrypt the
+            // local wallet so both passwords stay in sync.
+            try {
+                const userEmail = user.email || '';
+                const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
+                if (encryptedWallet) {
+                    // Decrypt with old (current) password
+                    const mnemonic = await WalletService.decrypt(encryptedWallet, currentPassword());
+                    // Re-encrypt with new password
+                    const reEncrypted = await WalletService.encrypt(mnemonic, newPassword());
+                    WalletService.saveEncryptedWallet(reEncrypted, userEmail);
+                    console.log('[ChangePassword] Wallet re-encrypted with new password');
+
+                    // Re-sync to cloud if cloud wallet exists (non-blocking)
+                    CloudWalletService.hasCloudWallet().then(cloudCheck => {
+                        if (cloudCheck.exists) {
+                            const address = WalletService.getAddressHint(userEmail) || '';
+                            CloudWalletService.saveToCloud(mnemonic, newPassword(), address, userEmail)
+                                .then(r => {
+                                    if (r.success) console.log('[ChangePassword] Cloud wallet re-synced');
+                                    else console.warn('[ChangePassword] Cloud re-sync failed:', r.error);
+                                })
+                                .catch(e => console.warn('[ChangePassword] Cloud re-sync error:', e));
+                        }
+                    }).catch(e => console.warn('[ChangePassword] Cloud check failed:', e));
+                }
+            } catch (reEncryptErr) {
+                console.error('[ChangePassword] Wallet re-encryption failed:', reEncryptErr);
+                // Firebase password was changed but wallet wasn't re-encrypted.
+                // This can happen if the wallet was created with a different password.
+                // Not a blocking error — user can still use the app.
+            }
+
             // Success
             setPasswordSuccess(true);
 

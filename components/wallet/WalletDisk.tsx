@@ -490,11 +490,14 @@ export const WalletDisk = (props: {
 
     onMount(() => {
         if (email()) loadData();
-        // Load nodeId from mobile_nodes
-        fetch('https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'mobile_node.status', email: email() }),
-        }).then(r => r.json()).then(d => { if (d.success && d.node_id) setNodeId(d.node_id); }).catch(() => { });
+        // Load nodeId from mobile_nodes (requires vcn_mn_ API key from localStorage)
+        const mnApiKey = localStorage.getItem('mn_api_key');
+        if (mnApiKey) {
+            fetch('https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'mobile_node.status', api_key: mnApiKey }),
+            }).then(r => r.json()).then(d => { if (d.success && d.node_id) setNodeId(d.node_id); }).catch(() => { });
+        }
         // Check biometric availability and existing passkey
         isBiometricAvailable().then(avail => {
             setBiometricAvailable(avail);
