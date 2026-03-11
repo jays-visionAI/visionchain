@@ -67,10 +67,24 @@ export default function Login() {
             console.error('Login error:', err);
 
             // Error mapping
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+            if (err.code === 'auth/user-not-found') {
                 setError(t('auth.login.errorNotFound'));
-            } else if (err.code === 'auth/wrong-password') {
-                setError(t('auth.login.errorWrongPassword'));
+            } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+                // Firebase bundles wrong-password into invalid-credential.
+                // Check Firestore to distinguish email-not-found vs wrong-password.
+                try {
+                    const userData = await getUserData(emailVal);
+                    if (userData) {
+                        // Email exists in Firestore → password is wrong
+                        setError(t('auth.login.errorWrongPassword'));
+                    } else {
+                        // Email not in Firestore → account doesn't exist
+                        setError(t('auth.login.errorNotFound'));
+                    }
+                } catch {
+                    // Firestore check failed, show generic credential error
+                    setError(t('auth.login.errorWrongPassword'));
+                }
             } else if (err.code === 'auth/invalid-email') {
                 setError(t('auth.login.errorInvalidEmail'));
             } else {
