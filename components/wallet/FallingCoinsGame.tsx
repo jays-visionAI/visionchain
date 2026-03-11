@@ -210,7 +210,8 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
         // Move objects + check collisions
         const basketLeft = basketX() - BASKET_WIDTH / 2 - CATCH_TOLERANCE;
         const basketRight = basketX() + BASKET_WIDTH / 2 + CATCH_TOLERANCE;
-        const basketTop = 100 - BASKET_HEIGHT;
+        const basketBottom = 12; // basket is 12% above bottom
+        const basketTop = 100 - BASKET_HEIGHT - basketBottom;
 
         setObjects(prev => {
             const updated: FallingObject[] = [];
@@ -220,7 +221,7 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
                 const newY = obj.y + obj.speed * phase.speed * dt * 60;
 
                 // Check if caught by basket
-                if (newY >= basketTop && newY <= 100 && obj.x >= basketLeft && obj.x <= basketRight) {
+                if (newY >= basketTop && newY <= basketTop + BASKET_HEIGHT + CATCH_TOLERANCE && obj.x >= basketLeft && obj.x <= basketRight) {
                     handleCatch(obj);
                     continue;
                 }
@@ -374,10 +375,10 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
 
     // ── Render ──
     return (
-        <div class="space-y-5">
+        <div class="flex flex-col h-full" style="padding-top: env(safe-area-inset-top, 0px);">
             {/* Back button */}
             <button onClick={() => { GameAudio.stopBGM(); cancelAnimationFrame(animFrameId); props.onBack(); }}
-                class="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors py-2"
+                class="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors py-2 px-4 shrink-0"
                 style="touch-action: manipulation;">
                 <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -387,7 +388,7 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
 
             {/* Beat This Banner */}
             <Show when={props.todayBest && props.todayBest > 0 && gameState() !== 'done'}>
-                <div class="flex items-center gap-3 px-4 py-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl">
+                <div class="flex items-center gap-3 px-4 py-2.5 mx-4 bg-amber-500/5 border border-amber-500/15 rounded-xl shrink-0">
                     <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
                         <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
@@ -401,7 +402,7 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
 
             {/* Ready / Countdown */}
             <Show when={gameState() === 'ready' || gameState() === 'countdown'}>
-                <div class="flex flex-col items-center justify-center py-16 gap-6">
+                <div class="flex-1 flex flex-col items-center justify-center gap-6 px-4">
                     <div class="w-20 h-20 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-3xl flex items-center justify-center">
                         <svg viewBox="0 0 32 32" class="w-12 h-12">
                             <circle cx="16" cy="16" r="14" fill="#F59E0B" />
@@ -428,9 +429,9 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
 
             {/* Game Area */}
             <Show when={gameState() === 'playing'}>
-                <div>
+                <div class="flex-1 flex flex-col min-h-0 px-2 pb-2">
                     {/* HUD */}
-                    <div class="flex items-center justify-between px-4 py-2.5 bg-[#111113]/60 rounded-xl border border-white/[0.04] mb-3">
+                    <div class="flex items-center justify-between px-4 py-2.5 bg-[#111113]/60 rounded-xl border border-white/[0.04] mb-2 shrink-0">
                         <div class="flex items-center gap-2">
                             <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
@@ -459,8 +460,8 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
                     {/* Play Field */}
                     <div
                         ref={containerRef}
-                        class={`relative w-full rounded-2xl border overflow-hidden select-none ${isFever() ? 'border-orange-500/40 bg-gradient-to-b from-orange-900/10 to-[#0a0a0b]' : 'border-white/[0.06] bg-[#0a0a0b]'} ${screenShake() ? 'animate-shake' : ''}`}
-                        style="aspect-ratio: 3/4; max-height: 500px; touch-action: none; -webkit-user-select: none;"
+                        class={`relative w-full flex-1 rounded-2xl border overflow-hidden select-none ${isFever() ? 'border-orange-500/40 bg-gradient-to-b from-orange-900/10 to-[#0a0a0b]' : 'border-white/[0.06] bg-[#0a0a0b]'} ${screenShake() ? 'animate-shake' : ''}`}
+                        style="touch-action: none; -webkit-user-select: none;"
                         onPointerMove={handlePointerMove}
                         onTouchMove={(e) => { e.preventDefault(); handlePointerMove(e); }}
                     >
@@ -503,9 +504,11 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
 
                         {/* Basket */}
                         <div
-                            class="absolute bottom-0 transition-none"
+                            class="absolute transition-none"
+                            
                             style={{
                                 left: `${basketX()}%`,
+                                bottom: '12%',
                                 width: `${BASKET_WIDTH}%`,
                                 height: `${BASKET_HEIGHT}%`,
                                 transform: 'translateX(-50%)',
@@ -529,7 +532,7 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
             {/* Result Screen */}
             <Show when={gameState() === 'done' && result()}>
                 {(r) => (
-                    <div class="flex flex-col items-center gap-6 py-8 animate-in fade-in zoom-in-75 duration-500">
+                    <div class="flex-1 flex flex-col items-center justify-center gap-6 px-4 animate-in fade-in zoom-in-75 duration-500">
                         {/* Grade */}
                         <div class="flex flex-col items-center gap-2">
                             <div class={`text-5xl font-black ${r().grade === 'S' ? 'text-amber-400' : r().grade === 'A' ? 'text-cyan-400' : r().grade === 'B' ? 'text-green-400' : 'text-gray-400'}`}>

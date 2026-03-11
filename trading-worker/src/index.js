@@ -571,29 +571,58 @@ async function main() {
 
         // Process each exchange group
         for (const [exchange, exchangeAgents] of Object.entries(byExchange)) {
-            // Collect all markets for this exchange
-            const allMarkets = new Set();
+            // Collect all raw asset symbols for this exchange
+            const allAssets = new Set();
             for (const agent of exchangeAgents) {
-                for (const asset of (agent.selectedAssets || [])) allMarkets.add(asset);
-                for (const pos of (agent.positions || [])) allMarkets.add(pos.asset);
+                for (const asset of (agent.selectedAssets || [])) allAssets.add(asset);
+                for (const pos of (agent.positions || [])) allAssets.add(pos.asset);
             }
-            const markets = [...allMarkets];
+            const rawAssets = [...allAssets];
 
-            // Fetch prices
-            const prices = await fetchPrices(exchange, markets);
-            if (Object.keys(prices).length === 0) {
+            // Convert raw assets to exchange-specific market codes
+            // e.g., "BTC" -> "KRW-BTC" (upbit), "BTCUSDT" (binance)
+            const assetToMarket = {};  // BTC -> KRW-BTC
+            const marketToAsset = {};  // KRW-BTC -> BTC
+            const defaultQuote = exchange === "upbit" || exchange === "bithumb" || exchange === "coinone" ? "KRW" : "USDT";
+
+            for (const asset of rawAssets) {
+                let market;
+                // Only consider as pre-formatted if it has a separator or is long enough (e.g., BTCUSDT=7 chars)
+                if (asset.includes("-") || asset.includes("_") || (asset.length >= 6 && (asset.endsWith("USDT") || asset.endsWith("KRW")))) {
+                    // Already formatted (KRW-BTC, BTCUSDT, etc.)
+                    market = asset;
+                } else {
+                    // Bare symbol (BTC, ETH, USDT) -> needs conversion
+                    market = toExchangeMarket(exchange, `${defaultQuote}-${asset}`);
+                }
+                assetToMarket[asset] = market;
+                marketToAsset[market] = asset;
+            }
+
+            const markets = Object.values(assetToMarket);
+
+            // Fetch prices (using exchange-formatted market codes)
+            const rawPrices = await fetchPrices(exchange, markets);
+            if (Object.keys(rawPrices).length === 0) {
                 console.warn(`[Worker] No prices for ${exchange}, skipping`);
                 continue;
             }
 
-            // Fetch candle data
+            // Map prices back to original asset names
+            const prices = {};
+            for (const [market, price] of Object.entries(rawPrices)) {
+                const asset = marketToAsset[market] || market;
+                prices[asset] = price;
+            }
+
+            // Fetch candle data (using exchange-formatted market codes)
             const priceHistory = {};
             const volumeHistory = {};
-            for (const market of markets) {
-                const isFutures = exchange !== "upbit" && exchange !== "bithumb" && exchange !== "coinone";
+            for (const asset of rawAssets) {
+                const market = assetToMarket[asset];
                 const data = await getCandleData(exchange, market, false);
-                priceHistory[market] = data.closes;
-                volumeHistory[market] = data.volumes;
+                priceHistory[asset] = data.closes;
+                volumeHistory[asset] = data.volumes;
                 await new Promise(r => setTimeout(r, 100)); // Rate limit
             }
 
@@ -937,9 +966,15 @@ async function main() {
     console.log("[Worker] Starting main loop...");
     await loadAgents();
 
+    let lastCycleAt = null;
+    let cycleCount = 0;
+    const startedAt = new Date().toISOString();
+
     setInterval(async () => {
         try {
             await runCycle();
+            lastCycleAt = new Date().toISOString();
+            cycleCount++;
         } catch (err) {
             console.error("[Worker] Cycle error:", err.message);
         }
@@ -948,11 +983,40 @@ async function main() {
     // Run first cycle immediately
     try {
         await runCycle();
+        lastCycleAt = new Date().toISOString();
+        cycleCount++;
     } catch (err) {
         console.error("[Worker] Initial cycle error:", err.message);
     }
 
     console.log(`[Worker] Running. Cycle interval: ${LOOP_INTERVAL_MS / 1000}s`);
+
+    // ── HTTP Health Check (required for Cloud Run) ──
+    const http = require("http");
+    const PORT = process.env.PORT || 8080;
+
+    const server = http.createServer((req, res) => {
+        if (req.url === "/health" || req.url === "/") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+                status: "ok",
+                service: "vision-quant-live-worker",
+                version: "1.0.0",
+                agents: agents.length,
+                cycleCount,
+                lastCycleAt,
+                startedAt,
+                uptimeSeconds: Math.floor(process.uptime()),
+            }));
+        } else {
+            res.writeHead(404);
+            res.end("Not found");
+        }
+    });
+
+    server.listen(PORT, () => {
+        console.log(`[Worker] Health check server on port ${PORT}`);
+    });
 }
 
 // ── Entry Point ──

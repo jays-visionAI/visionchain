@@ -1,8 +1,9 @@
 /**
  * Firebase Admin SDK Client
  *
- * Connects to Firestore using service account credentials.
- * Railway environment variable: FIREBASE_SERVICE_ACCOUNT (JSON string)
+ * Connects to Firestore using:
+ * 1. FIREBASE_SERVICE_ACCOUNT env var (JSON string) - for Railway/standalone
+ * 2. Application Default Credentials (ADC) - for Cloud Run/GCP (automatic)
  */
 
 const admin = require("firebase-admin");
@@ -13,20 +14,26 @@ function initFirebase() {
     if (_db) return _db;
 
     const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!serviceAccountJson) {
-        throw new Error(
-            "FIREBASE_SERVICE_ACCOUNT environment variable not set. " +
-            "Set it to the JSON string of your Firebase service account key."
-        );
+    const projectId = process.env.FIREBASE_PROJECT_ID || "visionchain-d19ed";
+
+    if (serviceAccountJson) {
+        // Option 1: Explicit service account key (Railway, local dev)
+        const serviceAccount = JSON.parse(serviceAccountJson);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+        console.log("[Firebase] Connected via Service Account key");
+    } else {
+        // Option 2: Application Default Credentials (Cloud Run, GCE, GKE)
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId,
+        });
+        console.log("[Firebase] Connected via Application Default Credentials");
     }
 
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-    });
-
     _db = admin.firestore();
-    console.log("[Firebase] Connected to Firestore");
+    console.log(`[Firebase] Firestore ready (project: ${projectId})`);
     return _db;
 }
 

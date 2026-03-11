@@ -362,6 +362,12 @@ export const VCNGameCenter = (props: GameCenterProps) => {
 
     const allPlaysUsed = createMemo(() => spinsRemaining() <= 0 && blocksRemaining() <= 0 && memoryRemaining() <= 0 && fallingRemaining() <= 0 && predictRemaining() <= 0);
 
+    // Fullscreen immersive mode for interactive games
+    const isFullscreenGame = createMemo(() => {
+        const g = activeGame();
+        return g === 'falling' || g === 'memory' || g === 'predict';
+    });
+
     onMount(() => {
         loadDailyData();
         // Load RPConfig for game settings
@@ -588,8 +594,17 @@ export const VCNGameCenter = (props: GameCenterProps) => {
 
     // ─── Render ─────────────────────────────────────────────────────
     return (
-        <div ref={gameContainerRef} class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8 relative" style="-webkit-overflow-scrolling: touch;">
-            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div ref={gameContainerRef}
+            class={isFullscreenGame()
+                ? 'fixed inset-0 z-40 bg-[#09090b] flex flex-col overflow-hidden'
+                : 'flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8 relative'
+            }
+            style={isFullscreenGame() ? 'touch-action: none;' : '-webkit-overflow-scrolling: touch;'}
+        >
+            <div class={isFullscreenGame()
+                ? 'flex-1 flex flex-col min-h-0'
+                : 'max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700'
+            }>
 
                 {/* Header */}
                 <WalletViewHeader

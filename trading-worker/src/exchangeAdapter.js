@@ -15,6 +15,12 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 
+// Common headers to avoid cloud IP blocking
+const COMMON_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+};
+
 // ─── Exchange WebSocket URLs ────────────────────────────────────────────────
 
 const WS_URLS = {
@@ -116,7 +122,7 @@ async function fetchCandles(exchange, market, count = 100) {
             case "upbit": {
                 const resp = await axios.get(
                     `${REST_URLS.upbit}/candles/minutes/60?market=${market}&count=${count}`,
-                    { timeout: 10000 }
+                    { timeout: 10000, headers: COMMON_HEADERS }
                 );
                 const candles = resp.data.reverse();
                 closes = candles.map(c => c.trade_price);
@@ -223,12 +229,67 @@ async function fetchPrices(exchange, markets) {
         switch (exchange) {
             case "upbit": {
                 const marketStr = markets.join(",");
-                const resp = await axios.get(
-                    `${REST_URLS.upbit}/ticker?markets=${marketStr}`,
-                    { timeout: 10000 }
-                );
-                for (const t of resp.data) {
-                    prices[t.market] = t.trade_price;
+                console.log(`[ExchangeAdapter] Upbit fetchPrices: ${marketStr}`);
+                try {
+                    const resp = await axios.get(
+                        `${REST_URLS.upbit}/ticker?markets=${marketStr}`,
+                        { timeout: 10000, headers: COMMON_HEADERS }
+                    );
+                    for (const t of resp.data) {
+                        prices[t.market] = t.trade_price;
+                    }
+                } catch (upbitErr) {
+                    const status = upbitErr.response?.status;
+                    console.warn(`[ExchangeAdapter] Upbit ${status} error - falling back to Binance`);
+
+                    // Fallback: Fetch prices from Binance and convert to KRW
+                    try {
+                        // 1. Get USDT/KRW rate from Upbit (may also fail)
+                        let usdtKrw = 1420; // Default fallback
+                        try {
+                            const rateResp = await axios.get(
+                                `${REST_URLS.upbit}/ticker?markets=KRW-USDT`,
+                                { timeout: 5000, headers: COMMON_HEADERS }
+                            );
+                            if (rateResp.data?.[0]) {
+                                usdtKrw = rateResp.data[0].trade_price;
+                            }
+                        } catch {
+                            console.warn(`[ExchangeAdapter] Using default USDT/KRW rate: ${usdtKrw}`);
+                        }
+
+                        // 2. Extract base symbols from KRW-XXX format
+                        const baseSymbols = markets
+                            .filter(m => m.startsWith("KRW-"))
+                            .map(m => m.replace("KRW-", ""));
+
+                        if (baseSymbols.length > 0) {
+                            // 3. Fetch from Binance in USDT
+                            const binanceResp = await axios.get(
+                                `${REST_URLS.binance}/ticker/price`,
+                                { timeout: 10000 }
+                            );
+                            const binancePrices = {};
+                            for (const t of binanceResp.data) {
+                                binancePrices[t.symbol] = parseFloat(t.price);
+                            }
+
+                            // 4. Convert to KRW and map to Upbit market format
+                            for (const sym of baseSymbols) {
+                                const binanceSymbol = `${sym}USDT`;
+                                if (binancePrices[binanceSymbol]) {
+                                    const krwPrice = binancePrices[binanceSymbol] * usdtKrw;
+                                    prices[`KRW-${sym}`] = Math.round(krwPrice);
+                                }
+                            }
+
+                            if (Object.keys(prices).length > 0) {
+                                console.log(`[ExchangeAdapter] Binance fallback: got ${Object.keys(prices).length} prices (USDT/KRW=${usdtKrw})`);
+                            }
+                        }
+                    } catch (fallbackErr) {
+                        console.error(`[ExchangeAdapter] Binance fallback also failed:`, fallbackErr.message);
+                    }
                 }
                 break;
             }
