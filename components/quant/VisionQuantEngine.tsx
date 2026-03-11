@@ -892,15 +892,26 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                     Stop
                                                                 </button>
                                                             </Show>
-                                                            <Show when={agent.status === 'stopped' || agent.status === 'completed'}>
-                                                                <button
-                                                                    onClick={() => deletePaperAgent(agent.id)}
-                                                                    class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg text-[10px] font-bold text-gray-400 transition-colors"
-                                                                >
-                                                                    <X class="w-3 h-3" />
-                                                                    Delete
-                                                                </button>
-                                                            </Show>
+                                                            {/* Delete - always available with confirmation */}
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (confirm(`정말 이 에이전트를 삭제하시겠습니까?\n\n전략: ${agent.strategyName}\n상태: ${agent.status}\n\n삭제 후 복구할 수 없습니다.`)) {
+                                                                        if (agent.status === 'running' || agent.status === 'active') {
+                                                                            updatePaperAgentStatus(agent.id, 'stopped').then(() => {
+                                                                                deletePaperAgent(agent.id);
+                                                                            });
+                                                                        } else {
+                                                                            deletePaperAgent(agent.id);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-red-500/10 border border-white/[0.06] hover:border-red-500/20 rounded-lg text-[10px] font-bold text-gray-500 hover:text-red-400 transition-colors"
+                                                            >
+                                                                <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                                    <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                                </svg>
+                                                                Delete
+                                                            </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setExpandedAgentId(isExpanded() ? null : agent.id); }}
                                                                 class={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${isExpanded() ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25' : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-gray-400'}`}
@@ -945,19 +956,35 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Risk Profile */}
+                                                            {/* Risk Profile - Editable */}
                                                             <div>
-                                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Risk Profile</div>
+                                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                                    Risk Profile
+                                                                    <Show when={agent.status !== 'running' && agent.status !== 'active'}>
+                                                                        <span class="text-[8px] font-normal text-cyan-400/60">(click to change)</span>
+                                                                    </Show>
+                                                                </div>
                                                                 <div class="flex gap-2">
                                                                     {(['conservative', 'balanced', 'aggressive'] as const).map(rp => (
-                                                                        <div class={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${agent.riskProfile === rp
-                                                                            ? rp === 'conservative' ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
-                                                                                : rp === 'balanced' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25'
-                                                                                    : 'bg-red-500/15 text-red-400 border-red-500/25'
-                                                                            : 'text-gray-600 border-white/[0.04]'}`}
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (agent.status === 'running' || agent.status === 'active') return;
+                                                                                updatePaperAgentConfig(agent.id, { riskProfile: rp }).then(() => {
+                                                                                    setSuccessToast(`Risk Profile changed to ${rp}`);
+                                                                                    setTimeout(() => setSuccessToast(null), 3000);
+                                                                                });
+                                                                            }}
+                                                                            disabled={agent.status === 'running' || agent.status === 'active'}
+                                                                            class={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${agent.riskProfile === rp
+                                                                                ? rp === 'conservative' ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
+                                                                                    : rp === 'balanced' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25'
+                                                                                        : 'bg-red-500/15 text-red-400 border-red-500/25'
+                                                                                : (agent.status === 'running' || agent.status === 'active')
+                                                                                    ? 'text-gray-700 border-white/[0.03] cursor-not-allowed'
+                                                                                    : 'text-gray-500 border-white/[0.04] hover:border-white/[0.1] cursor-pointer'}`}
                                                                         >
                                                                             {rp === 'conservative' ? 'Conservative' : rp === 'balanced' ? 'Balanced' : 'Aggressive'}
-                                                                        </div>
+                                                                        </button>
                                                                     ))}
                                                                 </div>
                                                             </div>
@@ -982,35 +1009,108 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 </div>
                                                             </Show>
 
-                                                            {/* Budget Config */}
+                                                            {/* Budget Config - Editable when not running */}
                                                             <Show when={agent.budgetConfig}>
                                                                 <div>
-                                                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Budget Settings</div>
+                                                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                                        Budget Settings
+                                                                        <Show when={agent.status !== 'running' && agent.status !== 'active'}>
+                                                                            <span class="text-[8px] font-normal text-cyan-400/60">(editable)</span>
+                                                                        </Show>
+                                                                    </div>
                                                                     <div class="grid grid-cols-2 gap-2">
-                                                                        <Show when={agent.budgetConfig.totalBudgetEnabled}>
-                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
-                                                                                <div class="text-[9px] text-gray-500">Total Budget</div>
-                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.totalBudget.toLocaleString()}</div>
-                                                                            </div>
-                                                                        </Show>
-                                                                        <Show when={agent.budgetConfig.perAssetBudgetEnabled}>
-                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
-                                                                                <div class="text-[9px] text-gray-500">Per Asset</div>
-                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.perAssetBudget.toLocaleString()}</div>
-                                                                            </div>
-                                                                        </Show>
-                                                                        <Show when={agent.budgetConfig.maxOrderSizeEnabled}>
-                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
-                                                                                <div class="text-[9px] text-gray-500">Max Order</div>
-                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.maxOrderSize.toLocaleString()}</div>
-                                                                            </div>
-                                                                        </Show>
-                                                                        <Show when={agent.budgetConfig.dailyTradingLimitEnabled}>
-                                                                            <div class="p-2 bg-white/[0.02] rounded-lg">
-                                                                                <div class="text-[9px] text-gray-500">Daily Limit</div>
-                                                                                <div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.dailyTradingLimit.toLocaleString()}</div>
-                                                                            </div>
-                                                                        </Show>
+                                                                        {/* Total Budget */}
+                                                                        <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Total Budget {agent.budgetConfig.totalBudgetEnabled ? '' : '(off)'}</div>
+                                                                            <Show when={agent.status !== 'running' && agent.status !== 'active'}
+                                                                                fallback={<div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.totalBudget.toLocaleString()}</div>}>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={agent.budgetConfig.totalBudget}
+                                                                                    onBlur={(e) => {
+                                                                                        const val = Number(e.currentTarget.value);
+                                                                                        if (val !== agent.budgetConfig.totalBudget) {
+                                                                                            updatePaperAgentConfig(agent.id, {
+                                                                                                budgetConfig: { ...agent.budgetConfig, totalBudget: val, totalBudgetEnabled: val > 0 }
+                                                                                            }).then(() => {
+                                                                                                setSuccessToast('Budget updated');
+                                                                                                setTimeout(() => setSuccessToast(null), 2000);
+                                                                                            });
+                                                                                        }
+                                                                                    }}
+                                                                                    class="w-full bg-transparent text-[11px] font-bold text-white outline-none border-b border-cyan-500/30 focus:border-cyan-500 pb-0.5 transition-colors"
+                                                                                />
+                                                                            </Show>
+                                                                        </div>
+                                                                        {/* Max Order */}
+                                                                        <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Max Order {agent.budgetConfig.maxOrderSizeEnabled ? '' : '(off)'}</div>
+                                                                            <Show when={agent.status !== 'running' && agent.status !== 'active'}
+                                                                                fallback={<div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.maxOrderSize.toLocaleString()}</div>}>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={agent.budgetConfig.maxOrderSize}
+                                                                                    onBlur={(e) => {
+                                                                                        const val = Number(e.currentTarget.value);
+                                                                                        if (val !== agent.budgetConfig.maxOrderSize) {
+                                                                                            updatePaperAgentConfig(agent.id, {
+                                                                                                budgetConfig: { ...agent.budgetConfig, maxOrderSize: val, maxOrderSizeEnabled: val > 0 }
+                                                                                            }).then(() => {
+                                                                                                setSuccessToast('Budget updated');
+                                                                                                setTimeout(() => setSuccessToast(null), 2000);
+                                                                                            });
+                                                                                        }
+                                                                                    }}
+                                                                                    class="w-full bg-transparent text-[11px] font-bold text-white outline-none border-b border-cyan-500/30 focus:border-cyan-500 pb-0.5 transition-colors"
+                                                                                />
+                                                                            </Show>
+                                                                        </div>
+                                                                        {/* Daily Limit */}
+                                                                        <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Daily Limit {agent.budgetConfig.dailyTradingLimitEnabled ? '' : '(off)'}</div>
+                                                                            <Show when={agent.status !== 'running' && agent.status !== 'active'}
+                                                                                fallback={<div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.dailyTradingLimit.toLocaleString()}</div>}>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={agent.budgetConfig.dailyTradingLimit}
+                                                                                    onBlur={(e) => {
+                                                                                        const val = Number(e.currentTarget.value);
+                                                                                        if (val !== agent.budgetConfig.dailyTradingLimit) {
+                                                                                            updatePaperAgentConfig(agent.id, {
+                                                                                                budgetConfig: { ...agent.budgetConfig, dailyTradingLimit: val, dailyTradingLimitEnabled: val > 0 }
+                                                                                            }).then(() => {
+                                                                                                setSuccessToast('Budget updated');
+                                                                                                setTimeout(() => setSuccessToast(null), 2000);
+                                                                                            });
+                                                                                        }
+                                                                                    }}
+                                                                                    class="w-full bg-transparent text-[11px] font-bold text-white outline-none border-b border-cyan-500/30 focus:border-cyan-500 pb-0.5 transition-colors"
+                                                                                />
+                                                                            </Show>
+                                                                        </div>
+                                                                        {/* Per Asset */}
+                                                                        <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                                            <div class="text-[9px] text-gray-500 mb-1">Per Asset {agent.budgetConfig.perAssetBudgetEnabled ? '' : '(off)'}</div>
+                                                                            <Show when={agent.status !== 'running' && agent.status !== 'active'}
+                                                                                fallback={<div class="text-[11px] font-bold text-white">{agent.budgetConfig.currency === 'KRW' ? '\u20a9' : '$'}{agent.budgetConfig.perAssetBudget.toLocaleString()}</div>}>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={agent.budgetConfig.perAssetBudget}
+                                                                                    onBlur={(e) => {
+                                                                                        const val = Number(e.currentTarget.value);
+                                                                                        if (val !== agent.budgetConfig.perAssetBudget) {
+                                                                                            updatePaperAgentConfig(agent.id, {
+                                                                                                budgetConfig: { ...agent.budgetConfig, perAssetBudget: val, perAssetBudgetEnabled: val > 0 }
+                                                                                            }).then(() => {
+                                                                                                setSuccessToast('Budget updated');
+                                                                                                setTimeout(() => setSuccessToast(null), 2000);
+                                                                                            });
+                                                                                        }
+                                                                                    }}
+                                                                                    class="w-full bg-transparent text-[11px] font-bold text-white outline-none border-b border-cyan-500/30 focus:border-cyan-500 pb-0.5 transition-colors"
+                                                                                />
+                                                                            </Show>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </Show>
