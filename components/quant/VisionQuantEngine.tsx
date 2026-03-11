@@ -1647,17 +1647,23 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                             ? 'bg-cyan-500/10 border border-cyan-500/25'
                                                                             : 'bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.1]'}`}
                                                                     >
+                                                                        {/* Checkbox */}
+                                                                        <div class={`w-4 h-4 rounded flex-shrink-0 border flex items-center justify-center transition-all ${isSelected()
+                                                                            ? 'bg-cyan-500 border-cyan-500'
+                                                                            : 'border-gray-600 bg-transparent'}`}>
+                                                                            <Show when={isSelected()}>
+                                                                                <svg viewBox="0 0 24 24" class="w-3 h-3 text-black" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                                </svg>
+                                                                            </Show>
+                                                                        </div>
                                                                         <div class="w-3 h-3 rounded-full flex-shrink-0" style={`background:${meta()?.color || '#666'}`} />
                                                                         <div class="flex-1 min-w-0">
                                                                             <div class={`text-[11px] font-bold ${isSelected() ? 'text-white' : 'text-gray-400'}`}>{meta()?.name || cred.exchange}</div>
                                                                             <div class="text-[9px] text-gray-600">{cred.label}</div>
                                                                         </div>
-                                                                        <div class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cred.status === 'active' ? 'bg-green-400' : 'bg-red-400'}`} />
                                                                         <Show when={meta()?.futures}>
                                                                             <span class="text-[7px] font-bold text-purple-400 bg-purple-400/10 px-1 py-0.5 rounded">F</span>
-                                                                        </Show>
-                                                                        <Show when={isSelected()}>
-                                                                            <Check class="w-3.5 h-3.5 text-cyan-400" />
                                                                         </Show>
                                                                     </button>
                                                                 );
