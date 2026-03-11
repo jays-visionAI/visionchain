@@ -24992,7 +24992,7 @@ exports.dailyRPDigest = onSchedule({
 // ═══ WEEKLY RP SUMMARY EMAIL ══════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
 
-function buildWeeklyRPSummaryEmail(userEmail, events, streak, rank, totalUsers, weekStart, weekEnd) {
+function buildWeeklyRPSummaryEmail(userEmail, events, streak, rank, totalUsers, weekStart, weekEnd, agents = []) {
   const username = userEmail.split('@')[0];
   const totalRP = events.reduce((s, e) => s + (e.amount || 0), 0);
 
@@ -25113,6 +25113,57 @@ function buildWeeklyRPSummaryEmail(userEmail, events, streak, rank, totalUsers, 
       </div>
     ` : ''}
 
+    ${agents.length > 0 ? `
+      <!-- Trading Agent Report -->
+      <div style="margin-bottom:20px; padding:20px; background:rgba(20,184,166,0.04); border:1px solid rgba(20,184,166,0.1); border-radius:16px;">
+        <div style="font-size:10px; font-weight:800; color:#14b8a6; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:14px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:middle; margin-right:6px;">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#14b8a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          Trading Agent Report
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <tr>
+            <td style="padding:6px 8px; font-size:10px; font-weight:700; color:#4b5563; text-transform:uppercase; letter-spacing:0.5px;">Strategy</td>
+            <td style="padding:6px 8px; font-size:10px; font-weight:700; color:#4b5563; text-align:center; text-transform:uppercase; letter-spacing:0.5px;">Mode</td>
+            <td style="padding:6px 8px; font-size:10px; font-weight:700; color:#4b5563; text-align:right; text-transform:uppercase; letter-spacing:0.5px;">PnL</td>
+            <td style="padding:6px 8px; font-size:10px; font-weight:700; color:#4b5563; text-align:right; text-transform:uppercase; letter-spacing:0.5px;">Trades</td>
+          </tr>
+          ${agents.map(a => {
+            const pnlColor = a.totalPnl >= 0 ? '#22c55e' : '#ef4444';
+            const pnlSign = a.totalPnl >= 0 ? '+' : '';
+            const modeColor = a.tradingMode === 'live' ? '#ef4444' : '#22c55e';
+            const modeLabel = a.tradingMode === 'live' ? 'LIVE' : 'PAPER';
+            return `
+              <tr style="border-top:1px solid rgba(255,255,255,0.03);">
+                <td style="padding:8px 8px;">
+                  <div style="font-size:12px; font-weight:700; color:#e5e7eb;">${a.strategyName || 'Custom'}</div>
+                  <div style="font-size:10px; color:#6b7280; margin-top:2px;">${(a.selectedAssets || []).slice(0, 3).join(', ')}${(a.selectedAssets || []).length > 3 ? '...' : ''}</div>
+                </td>
+                <td style="padding:8px 8px; text-align:center;">
+                  <span style="font-size:9px; font-weight:800; color:${modeColor}; background:rgba(${a.tradingMode === 'live' ? '239,68,68' : '34,197,94'},0.1); padding:2px 8px; border-radius:10px; letter-spacing:0.5px;">${modeLabel}</span>
+                </td>
+                <td style="padding:8px 8px; text-align:right;">
+                  <div style="font-size:13px; font-weight:800; color:${pnlColor};">${pnlSign}${a.totalPnlPercent != null ? a.totalPnlPercent.toFixed(2) : '0.00'}%</div>
+                  <div style="font-size:10px; color:#6b7280; margin-top:1px;">${pnlSign}${Number(a.totalPnl || 0).toLocaleString()} ${a.seedCurrency || 'KRW'}</div>
+                </td>
+                <td style="padding:8px 8px; text-align:right;">
+                  <div style="font-size:12px; font-weight:700; color:#d1d5db;">${a.totalTrades || 0}</div>
+                  <div style="font-size:10px; color:#6b7280; margin-top:1px;">WR ${((a.winRate || 0) * 100).toFixed(0)}%</div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </table>
+        ${agents.length > 0 ? `
+          <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.04); text-align:center;">
+            <span style="font-size:11px; color:#6b7280;">Total Portfolio: </span>
+            <span style="font-size:13px; font-weight:800; color:#e5e7eb;">${Number(agents.reduce((s, a) => s + (a.totalValue || 0), 0)).toLocaleString()} ${agents[0].seedCurrency || 'KRW'}</span>
+          </div>
+        ` : ''}
+      </div>
+    ` : ''}
+
     <!-- Goal -->
     <div style="text-align:center; padding:16px; background:rgba(6,182,212,0.04); border:1px solid rgba(6,182,212,0.1); border-radius:12px; margin-bottom:20px;">
       <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:6px;">This Week's Goal</div>
@@ -25196,7 +25247,18 @@ exports.weeklyRPSummary = onSchedule({
           const events = userEvents[email] || [];
           const rank = rankMap[email] || 0;
 
-          const html = buildWeeklyRPSummaryEmail(email, events, streak, rank, totalActiveUsers || usersSnap.size, weekStart, weekEnd);
+          // Query user's active trading agents
+          let userAgents = [];
+          try {
+            const agentSnap = await db.collection("paperAgents")
+              .where("userEmail", "==", email)
+              .get();
+            userAgents = agentSnap.docs
+              .map(d => d.data())
+              .filter(a => !['terminated', 'draft'].includes(a.status));
+          } catch { /* no agents */ }
+
+          const html = buildWeeklyRPSummaryEmail(email, events, streak, rank, totalActiveUsers || usersSnap.size, weekStart, weekEnd, userAgents);
           await sendSecurityEmail(email, "Vision Chain - Weekly RP Summary", html);
           sentCount++;
         } catch (e) {
@@ -28221,5 +28283,123 @@ exports.zynkAPI = onRequest({ cors: true, invoker: "public", timeoutSeconds: 30,
   } catch (err) {
     console.error("[zynkAPI] Error:", err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// TRADING AGENT SETUP NOTIFICATION EMAIL
+// =============================================================================
+
+/**
+ * Build HTML email for agent setup confirmation
+ */
+function buildAgentSetupEmail(data) {
+  const {
+    userEmail, agentId, strategyName, tradingMode,
+    exchange, selectedAssets, riskProfile, seedCurrency, seed,
+  } = data;
+
+  const username = userEmail.split("@")[0];
+  const modeLabel = tradingMode === "live" ? "Live Trading" : "Paper Trading";
+  const modeColor = tradingMode === "live" ? "#ef4444" : "#22c55e";
+  const exchangeLabel = exchange ? exchange.charAt(0).toUpperCase() + exchange.slice(1) : "N/A";
+  const assetsLabel = (selectedAssets || []).join(", ") || "None";
+  const riskLabels = { conservative: "Conservative", balanced: "Balanced", aggressive: "Aggressive" };
+  const riskLabel = riskLabels[riskProfile] || riskProfile || "Balanced";
+  const riskColor = riskProfile === "aggressive" ? "#ef4444" : riskProfile === "conservative" ? "#22c55e" : "#f59e0b";
+  const seedLabel = seed ? `${Number(seed).toLocaleString()} ${seedCurrency || "KRW"}` : "Default";
+
+  const body = `
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="display:inline-block; width:56px; height:56px; border-radius:16px; background:rgba(${tradingMode === "live" ? "239,68,68" : "34,197,94"},0.1); border:1px solid rgba(${tradingMode === "live" ? "239,68,68" : "34,197,94"},0.2); line-height:56px; margin-bottom:16px;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="${modeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div style="font-size:22px; font-weight:900; color:#ffffff; margin-bottom:4px;">Trading Agent Activated</div>
+      <div style="font-size:13px; color:#9ca3af;">Hello, ${username}</div>
+    </div>
+
+    <div style="text-align:center; margin-bottom:24px;">
+      <span style="display:inline-block; font-size:11px; font-weight:800; color:${modeColor}; background:rgba(${tradingMode === "live" ? "239,68,68" : "34,197,94"},0.12); padding:6px 16px; border-radius:20px; letter-spacing:1px; text-transform:uppercase;">${modeLabel}</span>
+    </div>
+
+    ${emailComponents.infoCard([
+      ["Strategy", strategyName || "Custom", true],
+      ["Mode", modeLabel, false],
+      ...(tradingMode === "live" ? [["Exchange", exchangeLabel, false]] : []),
+      ["Assets", assetsLabel, false],
+      ["Risk Profile", riskLabel, false],
+      ["Seed Capital", seedLabel, false],
+    ], modeColor)}
+
+    ${tradingMode === "live"
+      ? emailComponents.alertBox(
+          "<strong>Live Trading Active</strong><br/>This agent will execute real trades on your connected exchange. Monitor your positions regularly.",
+          "warning"
+        )
+      : emailComponents.alertBox(
+          "<strong>Paper Trading Mode</strong><br/>This agent uses virtual funds to simulate trades. No real orders will be placed.",
+          "info"
+        )
+    }
+
+    <div style="margin:20px 0; padding:16px; background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.1); border-radius:12px;">
+      <div style="font-size:10px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Agent ID</div>
+      <div style="font-family:'SF Mono',monospace; font-size:11px; color:#a855f7; word-break:break-all;">${agentId}</div>
+    </div>
+
+    ${emailComponents.button("View My Agent", "https://visionchain.co/wallet?tab=quant")}
+
+    <div style="text-align:center; margin-top:8px;">
+      <span style="font-size:11px; color:#6b7280;">You will receive weekly performance reports for this agent.</span>
+    </div>
+  `;
+
+  return emailBaseLayout(body, `Your ${modeLabel} agent is now active - ${strategyName}`);
+}
+
+/**
+ * sendAgentSetupEmail - Send notification email when a trading agent is created
+ */
+exports.sendAgentSetupEmail = onCall({
+  region: "us-central1",
+  memory: "256MiB",
+  secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async (request) => {
+  try {
+    const {
+      userEmail, agentId, strategyName, tradingMode,
+      exchange, selectedAssets, riskProfile, seedCurrency, seed,
+    } = request.data;
+
+    if (!userEmail || !agentId) {
+      throw new HttpsError("invalid-argument", "userEmail and agentId are required");
+    }
+
+    // Check opt-in (use weeklyReport preference as proxy)
+    const optedIn = await checkEmailOptIn(userEmail, "weeklyReport");
+    if (!optedIn) {
+      console.log(`[AgentEmail] User ${userEmail} opted out, skipping.`);
+      return { success: true, skipped: true };
+    }
+
+    const html = buildAgentSetupEmail({
+      userEmail, agentId, strategyName, tradingMode,
+      exchange, selectedAssets, riskProfile, seedCurrency, seed,
+    });
+
+    const subject = tradingMode === "live"
+      ? `Vision Chain - Live Trading Agent Activated`
+      : `Vision Chain - Paper Trading Agent Created`;
+
+    await sendSecurityEmail(userEmail, subject, html);
+    console.log(`[AgentEmail] Setup email sent to ${userEmail} for agent ${agentId}`);
+
+    return { success: true };
+  } catch (err) {
+    console.error("[AgentEmail] Failed:", err);
+    if (err instanceof HttpsError) throw err;
+    return { success: false, error: err.message };
   }
 });

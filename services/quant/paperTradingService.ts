@@ -388,3 +388,25 @@ export async function fetchPaperReport(
         return null;
     }
 }
+
+/** Fire-and-forget: send agent setup notification email via Cloud Function */
+export async function sendAgentSetupNotification(agent: PaperAgent): Promise<void> {
+    try {
+        const functions = getFunctions();
+        const callable = httpsCallable(functions, 'sendAgentSetupEmail');
+        await callable({
+            userEmail: agent.userEmail,
+            agentId: agent.id,
+            strategyName: agent.strategyName,
+            tradingMode: agent.tradingMode,
+            exchange: agent.exchange || null,
+            selectedAssets: agent.selectedAssets,
+            riskProfile: agent.riskProfile,
+            seedCurrency: agent.seedCurrency,
+            seed: agent.seed,
+        });
+        console.log('[AgentEmail] Setup notification sent for', agent.id);
+    } catch (err: any) {
+        console.warn('[AgentEmail] Failed to send setup notification:', err.message);
+    }
+}

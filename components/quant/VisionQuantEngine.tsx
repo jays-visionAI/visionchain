@@ -52,7 +52,7 @@ import {
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
 import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, PaperTrade, DecisionLogEntry, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades, subscribeToDecisionLogs } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades, subscribeToDecisionLogs, sendAgentSetupNotification } from '../../services/quant/paperTradingService';
 import { type SupportedExchange } from '../../services/quant/exchangeKeyService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
@@ -2281,6 +2281,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 }
 
                                                 console.log('[Quant] Paper agent created successfully');
+                                                sendAgentSetupNotification(agent).catch(() => {});
                                                 setSuccessToast(`Trading Agent "${strategy.name}" has been created and deployed.`);
                                                 setTimeout(() => setSuccessToast(null), 5000);
                                             } catch (err) {
@@ -2300,7 +2301,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 const krwExchanges = ['upbit', 'bithumb', 'coinone'];
                                                 const seedCurrency = krwExchanges.includes(ex) ? 'KRW' as const : 'USDT' as const;
 
-                                                await createPaperAgent({
+                                                const liveAgent = await createPaperAgent({
                                                     strategyId: strategy.id,
                                                     strategyName: strategy.name,
                                                     selectedAssets: selectedAssets(),
@@ -2314,6 +2315,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 });
 
                                                 console.log('[Quant] Live agent created successfully');
+                                                sendAgentSetupNotification(liveAgent).catch(() => {});
                                                 setSuccessToast(`Live Agent "${strategy.name}" has been created and deployed.`);
                                                 setTimeout(() => setSuccessToast(null), 5000);
                                             } catch (err) {
