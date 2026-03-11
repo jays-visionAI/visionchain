@@ -1198,7 +1198,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-16 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64 min-w-0" style="box-sizing: border-box;">
+                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-20 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64 min-w-0" style="box-sizing: border-box;">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -1623,7 +1623,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     {/* Collapsed State - Always show mini bar when collapsed */}
                     <Show when={!bottomSheetExpanded()}>
                         <div
-                            class="px-5 pb-6 flex items-center gap-3"
+                            class="px-4 pb-6 flex items-center gap-3"
                             onClick={() => setBottomSheetExpanded(true)}
                         >
                             <div class="flex-1 bg-[#1a1a1c] rounded-2xl px-5 py-3 text-gray-400 text-base border border-white/10">
@@ -1639,7 +1639,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                     {/* Expanded State - Full Input */}
                     <Show when={bottomSheetExpanded()}>
-                        <div class="px-5 pb-6">
+                        <div class="px-4 pb-6">
                             {/* Mobile Agent Desk - Show when there are active agents or bridge monitoring possible */}
                             <Show when={activeTimeTasks().length > 0 || activeBatchAgents().length > 0 || props.userProfile()?.address}>
                                 <div class="mb-3">
