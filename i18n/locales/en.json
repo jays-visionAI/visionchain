@@ -766,10 +766,10 @@
         "learnMore": "Learn More"
     },
     "cex": {
-        "tag": "Exchange Portfolio",
-        "title": "CEX",
-        "titleAccent": "PORTFOLIO",
-        "description": "Connect your exchange accounts and view your complete portfolio with AI-powered analysis.",
+        "tag": "Quant Trading",
+        "title": "Quant",
+        "titleAccent": "",
+        "description": "Connect your exchange API and set up strategy-based trading agents.",
         "sync": "Sync",
         "connect": "Connect",
         "connectedExchanges": "Connected Exchanges",

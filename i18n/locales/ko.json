@@ -766,10 +766,10 @@
         "learnMore": "더 알아보기"
     },
     "cex": {
-        "tag": "거래소 포트폴리오",
-        "title": "거래소",
-        "titleAccent": "포트폴리오",
-        "description": "거래소 계정을 연결하고 AI 분석과 함께 전체 포트폴리오를 확인하세요.",
+        "tag": "퀀트 트레이딩",
+        "title": "Quant",
+        "titleAccent": "",
+        "description": "거래소 API를 연결하고 전략 기반 자동매매 에이전트를 설정하세요.",
         "sync": "동기화",
         "connect": "연결",
         "connectedExchanges": "연결된 거래소",

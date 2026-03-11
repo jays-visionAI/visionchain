@@ -155,7 +155,7 @@ const Bridge = lazyWithRetry(() => import('./Bridge'));
 const ValidatorStaking = lazyWithRetry(() => import('./ValidatorStaking'));
 const WalletCexPortfolio = lazyWithRetry(() => import('./wallet/WalletCexPortfolio'));
 const VisionQuantEngine = lazyWithRetry(() => import('./quant/VisionQuantEngine'));
-const AgentHosting = lazyWithRetry(() => import('./wallet/AgentHosting'));
+const AgentHosting = lazyWithRetry(() => import('./wallet/AgentHosting')); // kept for potential future use
 const VisionInsight = lazyWithRetry(() => import('./wallet/VisionInsight'));
 const VCNGameCenter = lazyWithRetry(() => import('./wallet/VCNGameCenter'));
 const VisionMarket = lazyWithRetry(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
@@ -170,7 +170,7 @@ const PhoneAccountResolver = lazyWithRetry(() => import('./auth/PhoneAccountReso
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'quant' | 'agent' | 'insight' | 'disk' | 'market' | 'game';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'quant' | 'insight' | 'disk' | 'market' | 'game';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -4573,14 +4573,6 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 </div>
                             </Show>
 
-                            {/* Agent Hosting View */}
-                            <Show when={activeView() === 'agent'}>
-                                <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                        <AgentHosting walletAddress={walletAddress} userEmail={() => userProfile()?.email || ''} />
-                                    </Suspense>
-                                </div>
-                            </Show>
 
                             {/* Vision Insight View */}
                             <Show when={activeView() === 'insight'}>

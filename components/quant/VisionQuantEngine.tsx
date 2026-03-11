@@ -27,7 +27,8 @@ import {
     AlertTriangle,
     Eye
 } from 'lucide-solid';
-import { WalletViewHeader } from '../wallet/WalletViewHeader';
+
+import { t, isKorean } from '../../services/localeUtil';
 import {
     listCexApiKeys,
     getCexPortfolio,
@@ -352,16 +353,16 @@ const VisionQuantEngine = (): JSX.Element => {
         const totalRef = cfg.currency === 'KRW' ? totalPortfolioValue() : totalPortfolioValueUsd();
 
         if (cfg.totalBudgetEnabled && cfg.totalBudget > totalRef && totalRef > 0) {
-            warnings.push('전체 운용 한도가 보유 자산을 초과합니다.');
+            warnings.push(t('Total budget exceeds portfolio value.', '전체 운용 한도가 보유 자산을 초과합니다.'));
         }
         if (cfg.totalBudgetEnabled && cfg.perAssetBudgetEnabled && cfg.perAssetBudget > cfg.totalBudget && cfg.totalBudget > 0) {
-            warnings.push('종목당 한도가 전체 한도보다 큽니다.');
+            warnings.push(t('Per-asset limit exceeds total budget.', '종목당 한도가 전체 한도보다 큽니다.'));
         }
         if (cfg.perAssetBudgetEnabled && cfg.maxOrderSizeEnabled && cfg.maxOrderSize > cfg.perAssetBudget && cfg.perAssetBudget > 0) {
-            warnings.push('1회 주문 한도가 종목당 한도보다 큽니다.');
+            warnings.push(t('Max order size exceeds per-asset limit.', '1회 주문 한도가 종목당 한도보다 큽니다.'));
         }
         if (cfg.dailyTradingLimitEnabled && cfg.maxOrderSizeEnabled && cfg.dailyTradingLimit < cfg.maxOrderSize) {
-            warnings.push('일일 거래 한도가 1회 주문 한도보다 작습니다.');
+            warnings.push(t('Daily trading limit is below max order size.', '일일 거래 한도가 1회 주문 한도보다 작습니다.'));
         }
         return warnings;
     });
@@ -488,25 +489,6 @@ const VisionQuantEngine = (): JSX.Element => {
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
             <div class="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-                {/* Header */}
-                <WalletViewHeader
-                    tag="QUANT"
-                    title="Vision"
-                    titleAccent="Quant Engine"
-                    description="Apply verified strategy modules to your CEX assets and monitor signals in real-time."
-                />
-
-                {/* Beta Warning Banner */}
-                <div class="flex items-start gap-3 px-4 py-3 bg-amber-500/[0.06] border border-amber-500/15 rounded-2xl">
-                    <AlertTriangle class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                        <p class="text-xs font-bold text-amber-400 mb-0.5">Beta Service Notice</p>
-                        <p class="text-[10px] text-amber-400/70 leading-relaxed">
-                            본 서비스는 베타로 제공됩니다. 자동매매 전략은 시장 상황, 거래소 상태, 유동성, 슬리피지, 시스템 지연 등에 따라 예상과 다르게 동작할 수 있습니다. 자동매매로 인해 발생하는 손실에 대해 비전체인은 책임지지 않습니다.
-                        </p>
-                    </div>
-                </div>
-
                 {/* Error Banner */}
                 <Show when={error()}>
                     <div class="flex items-center gap-3 px-4 py-3 bg-red-500/8 border border-red-500/15 rounded-2xl">
@@ -530,9 +512,9 @@ const VisionQuantEngine = (): JSX.Element => {
                     <Show when={!hasCredentials()}>
                         <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
                             <QuantIcon />
-                            <h3 class="text-lg font-black text-white mt-6 mb-2">Connect Exchange First</h3>
+                            <h3 class="text-lg font-black text-white mt-6 mb-2">{t('Connect Exchange First', '거래소 연결이 필요합니다')}</h3>
                             <p class="text-sm text-gray-500 text-center max-w-sm mb-6">
-                                Vision Quant Engine을 사용하려면 먼저 CEX Portfolio에서 거래소를 연결하세요.
+                                {t('To use Vision Quant Engine, connect your exchange first in CEX Portfolio.', 'Vision Quant Engine을 사용하려면 먼저 CEX Portfolio에서 거래소를 연결하세요.')}
                             </p>
                         </div>
                     </Show>
@@ -646,8 +628,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                             <div class="p-4 pb-3">
                                                 <div class="flex items-start justify-between mb-2">
                                                     <div class="flex-1 min-w-0">
-                                                        <h4 class="text-sm font-black text-white truncate">{strategy.name}</h4>
-                                                        <p class="text-[10px] text-gray-500 mt-0.5">{strategy.nameKo}</p>
+                                                        <h4 class="text-sm font-black text-white truncate">{isKorean() ? strategy.nameKo : strategy.name}</h4>
+                                                        <p class="text-[10px] text-gray-500 mt-0.5">{isKorean() ? strategy.name : strategy.nameKo}</p>
                                                     </div>
                                                     <span class={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getRiskLevelColor(strategy.riskLevel)}`}>
                                                         {getRiskLevelLabel(strategy.riskLevel)}
@@ -655,13 +637,13 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 </div>
 
                                                 <p class="text-[11px] text-gray-400 leading-relaxed line-clamp-2 mb-3">
-                                                    {strategy.shortDescriptionKo}
+                                                    {isKorean() ? strategy.shortDescriptionKo : strategy.shortDescription}
                                                 </p>
 
                                                 {/* Tags */}
                                                 <div class="flex items-center gap-2 flex-wrap">
                                                     <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-white/[0.04] text-gray-400 border border-white/[0.06]">
-                                                        {getCategoryLabelKo(strategy.category)}
+                                                        {isKorean() ? getCategoryLabelKo(strategy.category) : getCategoryLabel(strategy.category)}
                                                     </span>
                                                     <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-white/[0.04] text-gray-400 border border-white/[0.06]">
                                                         {strategy.recommendedTimeframe.toUpperCase()}
@@ -895,7 +877,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                             {/* Delete - always available with confirmation */}
                                                             <button
                                                                 onClick={() => {
-                                                                    if (confirm(`정말 이 에이전트를 삭제하시겠습니까?\n\n전략: ${agent.strategyName}\n상태: ${agent.status}\n\n삭제 후 복구할 수 없습니다.`)) {
+                                                                    if (confirm(t(`Are you sure you want to delete this agent?\n\nStrategy: ${agent.strategyName}\nStatus: ${agent.status}\n\nThis action cannot be undone.`, `정말 이 에이전트를 삭제하시겠습니까?\n\n전략: ${agent.strategyName}\n상태: ${agent.status}\n\n삭제 후 복구할 수 없습니다.`))) {
                                                                         if (agent.status === 'running' || agent.status === 'active') {
                                                                             updatePaperAgentStatus(agent.id, 'stopped').then(() => {
                                                                                 deletePaperAgent(agent.id);
@@ -1217,7 +1199,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                             <Show when={agent.status === 'paused'}>
                                                                 <div class="flex items-center gap-2 px-3 py-2 bg-cyan-500/[0.06] border border-cyan-500/15 rounded-xl">
                                                                     <Info class="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                                                                    <p class="text-[10px] text-cyan-300/70">Agent가 일시정지 상태일 때 설정을 변경하려면 Strategy 탭에서 동일 전략을 새로 Setup 하세요. 기존 Agent를 Stop 후 삭제하고 새로 생성할 수 있습니다.</p>
+                                                                    <p class="text-[10px] text-cyan-300/70">{t('To change settings, go to the Strategies tab and set up the same strategy again. You can stop and delete the existing agent and create a new one.', 'Agent가 일시정지 상태일 때 설정을 변경하려면 Strategy 탭에서 동일 전략을 새로 Setup 하세요. 기존 Agent를 Stop 후 삭제하고 새로 생성할 수 있습니다.')}</p>
                                                                 </div>
                                                             </Show>
 
@@ -1284,8 +1266,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <Activity class="w-6 h-6 text-gray-600" />
                                         <h3 class="text-base font-black text-white mt-4 mb-2">No Signals Yet</h3>
                                         <p class="text-xs text-gray-500 text-center max-w-sm">
-                                            Agent를 활성화하면 실시간 시그널이 여기에 표시됩니다.
-                                            Strategies 탭에서 전략을 설정하고 Agent를 생성하세요.
+                                            {t('Activate an agent to see real-time signals here. Set up a strategy in the Strategies tab to create an agent.', 'Agent를 활성화하면 실시간 시그널이 여기에 표시됩니다. Strategies 탭에서 전략을 설정하고 Agent를 생성하세요.')}
                                         </p>
                                     </div>
                                 }>
@@ -1370,7 +1351,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                             <svg viewBox="0 0 24 24" class="w-6 h-6 text-gray-600 mb-4" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
                                             <h3 class="text-base font-black text-white mb-2">No Agents</h3>
                                             <p class="text-xs text-gray-500 text-center max-w-sm">
-                                                먼저 Strategies 탭에서 전략을 설정하고 에이전트를 생성하세요. 트레이딩 데이터가 쌓이면 리포트를 확인할 수 있습니다.
+                                                {t('First set up a strategy in the Strategies tab and create an agent. Trading reports will be available once enough data is collected.', '먼저 Strategies 탭에서 전략을 설정하고 에이전트를 생성하세요. 트레이딩 데이터가 쌓이면 리포트를 확인할 수 있습니다.')}
                                             </p>
                                         </div>
                                     }>
@@ -1560,7 +1541,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <span class="text-[10px] font-bold text-amber-400">Risk Notice</span>
                                     </div>
                                     <p class="text-[10px] text-amber-400/60 leading-relaxed">
-                                        과거 성과는 미래 수익을 보장하지 않습니다. 시장 상황에 따라 전략의 유효성이 달라질 수 있습니다.
+                                                                                {t('Past performance does not guarantee future returns. Strategy effectiveness may vary depending on market conditions.', '과거 성과는 미래 수익을 보장하지 않습니다. 시장 상황에 따라 전략의 유효성이 달라질 수 있습니다.')}
                                     </p>
                                 </div>
                             </div>
@@ -1639,7 +1620,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 <span class={`text-xs font-black ${tradingMode() === 'paper' ? 'text-amber-400' : 'text-gray-400'}`}>Paper Trading</span>
                                             </div>
                                             <p class="text-[10px] text-gray-500 leading-relaxed">
-                                                모의 거래로 전략 테스트. 실제 자산 사용 없음.
+                                                                                                {t('Simulated trading to test strategies. No real assets used.', '모의 거래로 전략 테스트. 실제 자산 사용 없음.')}
                                             </p>
                                         </button>
                                         <button
@@ -1653,7 +1634,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 <span class={`text-xs font-black ${tradingMode() === 'live' ? 'text-cyan-400' : 'text-gray-400'}`}>Live Trading</span>
                                             </div>
                                             <p class="text-[10px] text-gray-500 leading-relaxed">
-                                                실제 거래소 자산으로 자동 매매.
+                                                                                                {t('Automated trading with real exchange assets.', '실제 거래소 자산으로 자동 매매.')}
                                             </p>
                                         </button>
                                     </div>
@@ -1712,7 +1693,7 @@ const VisionQuantEngine = (): JSX.Element => {
 
                                             <div class="flex items-center gap-1.5 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
                                                 <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
-                                                <span class="text-[10px] text-amber-400">모의 거래는 실제 주문을 실행하지 않으며, 시장 가격 기반으로 시뮬레이션됩니다.</span>
+                                                <span class="text-[10px] text-amber-400">{t('Paper trading does not execute real orders. It is simulated based on market prices.', '모의 거래는 실제 주문을 실행하지 않으며, 시장 가격 기반으로 시뮬레이션됩니다.')}</span>
                                             </div>
                                         </div>
                                     </Show>
@@ -1780,10 +1761,9 @@ const VisionQuantEngine = (): JSX.Element => {
                                                         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                                                         <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                                                     </svg>
-                                                    <div class="text-[11px] font-bold text-amber-400 mb-1">거래소 연결이 필요합니다</div>
+                                                    <div class="text-[11px] font-bold text-amber-400 mb-1">{t('Exchange Connection Required', '거래소 연결이 필요합니다')}</div>
                                                     <div class="text-[10px] text-gray-500 leading-relaxed">
-                                                        CEX Portfolio에서 먼저 거래소 API를 등록하세요.
-                                                        등록된 거래소만 Live Trading에 사용할 수 있습니다.
+                                                        {t('Please register an exchange API in CEX Portfolio first. Only connected exchanges can be used for Live Trading.', 'CEX Portfolio에서 먼저 거래소 API를 등록하세요. 등록된 거래소만 Live Trading에 사용할 수 있습니다.')}
                                                     </div>
                                                 </div>
                                             </Show>
@@ -1791,7 +1771,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                             {/* Live Trading Warning */}
                                             <div class="flex items-center gap-1.5 p-2 bg-red-500/5 rounded-lg border border-red-500/10">
                                                 <AlertTriangle class="w-3 h-3 text-red-400 flex-shrink-0" />
-                                                <span class="text-[10px] text-red-400">Live Trading은 실제 자산으로 거래합니다. 충분한 Paper Trading 테스트 후 사용하세요.</span>
+                                                <span class="text-[10px] text-red-400">{t('Live Trading uses real assets. Please test thoroughly with Paper Trading first.', 'Live Trading은 실제 자산으로 거래합니다. 충분한 Paper Trading 테스트 후 사용하세요.')}</span>
                                             </div>
                                         </div>
                                     </Show>
@@ -1936,8 +1916,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                             <div class={`p-4 rounded-xl border transition-all ${budgetConfig().totalBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
                                                 <div class="flex items-center justify-between mb-2">
                                                     <div>
-                                                        <div class="text-xs font-bold text-white">전체 운용 한도</div>
-                                                        <div class="text-[10px] text-gray-500">에이전트가 사용할 최대 총 금액</div>
+                                                        <div class="text-xs font-bold text-white">{t('Total Budget Limit', '전체 운용 한도')}</div>
+                                                        <div class="text-[10px] text-gray-500">{t('Maximum total amount the agent can use', '에이전트가 사용할 최대 총 금액')}</div>
                                                     </div>
                                                     <button
                                                         onClick={() => updateBudgetField('totalBudgetEnabled', !budgetConfig().totalBudgetEnabled)}
@@ -1955,7 +1935,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 min="0"
                                                                 value={budgetConfig().totalBudget || ''}
                                                                 onInput={(e) => updateBudgetField('totalBudget', Number(e.currentTarget.value) || 0)}
-                                                                placeholder="금액 입력"
+                                                                placeholder={t('Enter amount', '금액 입력')}
                                                                 class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
                                                             />
                                                             <Show when={budgetConfig().totalBudget > 0}>
@@ -1984,8 +1964,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                             <div class={`p-4 rounded-xl border transition-all ${budgetConfig().perAssetBudgetEnabled ? 'bg-cyan-500/[0.04] border-cyan-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
                                                 <div class="flex items-center justify-between mb-2">
                                                     <div>
-                                                        <div class="text-xs font-bold text-white">종목당 운용 한도</div>
-                                                        <div class="text-[10px] text-gray-500">개별 코인에 투입할 최대 금액</div>
+                                                        <div class="text-xs font-bold text-white">{t('Per Asset Limit', '종목당 운용 한도')}</div>
+                                                        <div class="text-[10px] text-gray-500">{t('Maximum amount to invest per individual coin', '개별 코인에 투입할 최대 금액')}</div>
                                                     </div>
                                                     <button
                                                         onClick={() => updateBudgetField('perAssetBudgetEnabled', !budgetConfig().perAssetBudgetEnabled)}
@@ -2003,7 +1983,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 min="0"
                                                                 value={budgetConfig().perAssetBudget || ''}
                                                                 onInput={(e) => updateBudgetField('perAssetBudget', Number(e.currentTarget.value) || 0)}
-                                                                placeholder="금액 입력"
+                                                                placeholder={t('Enter amount', '금액 입력')}
                                                                 class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
                                                             />
                                                             <Show when={budgetConfig().perAssetBudget > 0 && budgetConfig().totalBudgetEnabled && budgetConfig().totalBudget > 0}>
@@ -2034,8 +2014,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 <div class={`p-4 rounded-xl border transition-all ${budgetConfig().maxOrderSizeEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
                                                     <div class="flex items-center justify-between mb-2">
                                                         <div>
-                                                            <div class="text-xs font-bold text-white">1회 주문 최대 금액</div>
-                                                            <div class="text-[10px] text-gray-500">한 번 주문에 넣을 수 있는 최대 금액</div>
+                                                            <div class="text-xs font-bold text-white">{t('Max Order Size', '1회 주문 최대 금액')}</div>
+                                                            <div class="text-[10px] text-gray-500">{t('Maximum amount per single order', '한 번 주문에 넣을 수 있는 최대 금액')}</div>
                                                         </div>
                                                         <button
                                                             onClick={() => updateBudgetField('maxOrderSizeEnabled', !budgetConfig().maxOrderSizeEnabled)}
@@ -2053,7 +2033,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                     min="0"
                                                                     value={budgetConfig().maxOrderSize || ''}
                                                                     onInput={(e) => updateBudgetField('maxOrderSize', Number(e.currentTarget.value) || 0)}
-                                                                    placeholder="금액 입력"
+                                                                    placeholder={t('Enter amount', '금액 입력')}
                                                                     class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
                                                                 />
                                                             </div>
@@ -2065,8 +2045,8 @@ const VisionQuantEngine = (): JSX.Element => {
                                                 <div class={`p-4 rounded-xl border transition-all ${budgetConfig().dailyTradingLimitEnabled ? 'bg-purple-500/[0.04] border-purple-500/15' : 'bg-white/[0.01] border-white/[0.04]'}`}>
                                                     <div class="flex items-center justify-between mb-2">
                                                         <div>
-                                                            <div class="text-xs font-bold text-white">일일 거래 한도</div>
-                                                            <div class="text-[10px] text-gray-500">하루 총 거래 금액 상한</div>
+                                                            <div class="text-xs font-bold text-white">{t('Daily Trading Limit', '일일 거래 한도')}</div>
+                                                            <div class="text-[10px] text-gray-500">{t('Maximum total trading amount per day', '하루 총 거래 금액 상한')}</div>
                                                         </div>
                                                         <button
                                                             onClick={() => updateBudgetField('dailyTradingLimitEnabled', !budgetConfig().dailyTradingLimitEnabled)}
@@ -2084,7 +2064,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                     min="0"
                                                                     value={budgetConfig().dailyTradingLimit || ''}
                                                                     onInput={(e) => updateBudgetField('dailyTradingLimit', Number(e.currentTarget.value) || 0)}
-                                                                    placeholder="금액 입력"
+                                                                    placeholder={t('Enter amount', '금액 입력')}
                                                                     class="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm font-bold text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
                                                                 />
                                                             </div>
@@ -2149,7 +2129,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                     <Show when={selectedAssets().length > 0 && Number(customParams()['max_position'] || selectedStrategy()!.riskRules.maxPositionPct) > 25}>
                                         <div class="flex items-center gap-1.5 mt-3 p-2 bg-amber-500/5 rounded-lg border border-amber-500/10">
                                             <AlertTriangle class="w-3 h-3 text-amber-400 flex-shrink-0" />
-                                            <span class="text-[10px] text-amber-400">종목당 비중이 25%를 초과하여 리스크가 커질 수 있습니다.</span>
+                                            <span class="text-[10px] text-amber-400">{t('Per-asset allocation exceeds 25%, which may increase risk.', '종목당 비중이 25%를 초과하여 리스크가 커질 수 있습니다.')}</span>
                                         </div>
                                     </Show>
                                 </div>
@@ -2316,7 +2296,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                             </Show>
                                         </div>
                                         <span class="text-[11px] text-gray-400 leading-relaxed">
-                                            [필수] 본 전략 설정 내용을 확인했습니다.
+                                                                                        {t('[Required] I have reviewed the strategy configuration.', '[필수] 본 전략 설정 내용을 확인했습니다.')}
                                         </span>
                                     </label>
                                     <label class="flex items-start gap-3 cursor-pointer group">
@@ -2330,7 +2310,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                             </Show>
                                         </div>
                                         <span class="text-[11px] text-gray-400 leading-relaxed">
-                                            [필수] 본인은 자동매매 전략의 작동 원리와 위험성을 이해하였으며, 베타 서비스 특성상 주문 지연, 체결 오차, 전략 오작동 또는 시장 급변에 따른 손실이 발생할 수 있음을 인지합니다. 이에 따라 자동매매 운용 결과에 대한 책임은 본인에게 있으며, 비전체인은 해당 손실에 대해 책임지지 않습니다.
+                                                                                        {t('[Required] I understand the operating principles and risks of automated trading strategies. Due to the nature of the beta service, losses may occur from order delays, execution errors, strategy malfunctions, or sudden market changes. I acknowledge that I am responsible for the results of automated trading, and Vision Chain is not liable for any such losses.', '[필수] 본인은 자동매매 전략의 작동 원리와 위험성을 이해하였으며, 베타 서비스 특성상 주문 지연, 체결 오차, 전략 오작동 또는 시장 급변에 따른 손실이 발생할 수 있음을 인지합니다. 이에 따라 자동매매 운용 결과에 대한 책임은 본인에게 있으며, 비전체인은 해당 손실에 대해 책임지지 않습니다.')}
                                         </span>
                                     </label>
                                 </div>
