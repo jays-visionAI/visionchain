@@ -1567,7 +1567,7 @@ export const addRewardPoints = async (
         type,
         amount,
         source,
-        roundId,
+        ...(roundId !== undefined && { roundId }),
         timestamp: new Date().toISOString()
     };
     await addDoc(collection(db, 'rp_history'), entry);
