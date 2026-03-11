@@ -116,37 +116,57 @@ import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
 import type { Component } from 'solid-js';
 
+// Auto-reload wrapper for lazy imports - handles stale chunks after deployment
+function lazyWithRetry<T extends { default: any }>(factory: () => Promise<T>) {
+    return lazy(() =>
+        factory().catch((err: any) => {
+            console.warn('[LazyLoad] Chunk load failed, reloading page...', err);
+            const hasReloaded = sessionStorage.getItem('chunk_reload');
+            if (!hasReloaded) {
+                sessionStorage.setItem('chunk_reload', '1');
+                window.location.reload();
+            }
+            throw err;
+        })
+    );
+}
+
+// Clear reload flag on successful load
+if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('chunk_reload');
+}
+
 // Lazy-loaded by view - only load when user navigates to that screen
-const WalletDashboard = lazy(() => import('./wallet/WalletDashboard').then(m => ({ default: m.WalletDashboard })));
-const WalletAssets = lazy(() => import('./wallet/WalletAssets').then(m => ({ default: m.WalletAssets })));
-const WalletCampaign = lazy(() => import('./wallet/WalletCampaign').then(m => ({ default: m.WalletCampaign })));
-const WalletMint = lazy(() => import('./wallet/WalletMint').then(m => ({ default: m.WalletMint })));
-const WalletNodes = lazy(() => import('./wallet/WalletNodes').then(m => ({ default: m.WalletNodes })));
-const WalletContacts = lazy(() => import('./wallet/WalletContacts').then(m => ({ default: m.WalletContacts })));
-const WalletSettings = lazy(() => import('./wallet/WalletSettings').then(m => ({ default: m.WalletSettings })));
-const WalletNotifications = lazy(() => import('./wallet/WalletNotifications').then(m => ({ default: m.WalletNotifications })));
-const WalletReferral = lazy(() => import('./wallet/WalletReferral').then(m => ({ default: m.WalletReferral })));
-const WalletActivity = lazy(() => import('./wallet/WalletActivity').then(m => ({ default: m.WalletActivity })));
-const WalletFlowModals = lazy(() => import('./wallet/WalletFlowModals').then(m => ({ default: m.WalletFlowModals })));
-const WalletSend = lazy(() => import('./wallet/WalletSend').then(m => ({ default: m.WalletSend })));
-const WalletReceive = lazy(() => import('./wallet/WalletReceive').then(m => ({ default: m.WalletReceive })));
-const WalletReferralDocs = lazy(() => import('./wallet/WalletReferralDocs').then(m => ({ default: m.WalletReferralDocs })));
-const Bridge = lazy(() => import('./Bridge'));
-const ValidatorStaking = lazy(() => import('./ValidatorStaking'));
-const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
-const VisionQuantEngine = lazy(() => import('./quant/VisionQuantEngine'));
-const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
-const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
-const VCNGameCenter = lazy(() => import('./wallet/VCNGameCenter'));
-const VisionMarket = lazy(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
-const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{
+const WalletDashboard = lazyWithRetry(() => import('./wallet/WalletDashboard').then(m => ({ default: m.WalletDashboard })));
+const WalletAssets = lazyWithRetry(() => import('./wallet/WalletAssets').then(m => ({ default: m.WalletAssets })));
+const WalletCampaign = lazyWithRetry(() => import('./wallet/WalletCampaign').then(m => ({ default: m.WalletCampaign })));
+const WalletMint = lazyWithRetry(() => import('./wallet/WalletMint').then(m => ({ default: m.WalletMint })));
+const WalletNodes = lazyWithRetry(() => import('./wallet/WalletNodes').then(m => ({ default: m.WalletNodes })));
+const WalletContacts = lazyWithRetry(() => import('./wallet/WalletContacts').then(m => ({ default: m.WalletContacts })));
+const WalletSettings = lazyWithRetry(() => import('./wallet/WalletSettings').then(m => ({ default: m.WalletSettings })));
+const WalletNotifications = lazyWithRetry(() => import('./wallet/WalletNotifications').then(m => ({ default: m.WalletNotifications })));
+const WalletReferral = lazyWithRetry(() => import('./wallet/WalletReferral').then(m => ({ default: m.WalletReferral })));
+const WalletActivity = lazyWithRetry(() => import('./wallet/WalletActivity').then(m => ({ default: m.WalletActivity })));
+const WalletFlowModals = lazyWithRetry(() => import('./wallet/WalletFlowModals').then(m => ({ default: m.WalletFlowModals })));
+const WalletSend = lazyWithRetry(() => import('./wallet/WalletSend').then(m => ({ default: m.WalletSend })));
+const WalletReceive = lazyWithRetry(() => import('./wallet/WalletReceive').then(m => ({ default: m.WalletReceive })));
+const WalletReferralDocs = lazyWithRetry(() => import('./wallet/WalletReferralDocs').then(m => ({ default: m.WalletReferralDocs })));
+const Bridge = lazyWithRetry(() => import('./Bridge'));
+const ValidatorStaking = lazyWithRetry(() => import('./ValidatorStaking'));
+const WalletCexPortfolio = lazyWithRetry(() => import('./wallet/WalletCexPortfolio'));
+const VisionQuantEngine = lazyWithRetry(() => import('./quant/VisionQuantEngine'));
+const AgentHosting = lazyWithRetry(() => import('./wallet/AgentHosting'));
+const VisionInsight = lazyWithRetry(() => import('./wallet/VisionInsight'));
+const VCNGameCenter = lazyWithRetry(() => import('./wallet/VCNGameCenter'));
+const VisionMarket = lazyWithRetry(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
+const WalletDisk = lazyWithRetry(() => import('./wallet/WalletDisk')) as Component<{
     privateKey?: string;
     walletAddress?: string;
     networkMode?: string;
     onRequestUnlock?: () => void;
     isWalletMissing?: boolean;
 }>;
-const PhoneAccountResolver = lazy(() => import('./auth/PhoneAccountResolver'));
+const PhoneAccountResolver = lazyWithRetry(() => import('./auth/PhoneAccountResolver'));
 
 
 
