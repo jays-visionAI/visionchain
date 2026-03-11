@@ -17,9 +17,20 @@ type SFXType =
     // Price Predict  
     | 'heartbeat' | 'selectUp' | 'selectDown' | 'correct' | 'wrong' | 'streakFire'
     // Dice Bet
-    | 'diceRoll' | 'diceWin' | 'diceLose';
+    | 'diceRoll' | 'diceWin' | 'diceLose'
+    // Tower Climb
+    | 'doorOpen' | 'floorClear' | 'towerFall' | 'towerCashOut'
+    // Mine Sweeper
+    | 'gemReveal' | 'mineExplode' | 'mineCashOut'
+    // Flappy VCN
+    | 'flap' | 'pipePass' | 'crash'
+    // Crypto Slots
+    | 'slotSpin' | 'slotStop' | 'slotWin'
+    // Crash Game
+    | 'rocketLaunch' | 'rocketCashOut' | 'rocketCrash';
 
-type BGMTheme = 'lobby' | 'memory' | 'falling' | 'predict' | 'fever';
+type BGMTheme = 'lobby' | 'memory' | 'falling' | 'predict' | 'fever'
+    | 'tower' | 'mine' | 'flappy' | 'slots' | 'crash';
 
 interface BGMState {
     nodes: (OscillatorNode | AudioBufferSourceNode)[];
@@ -470,6 +481,173 @@ class GameAudioEngine {
                     });
                     break;
                 }
+
+                // ── Tower Climb ──
+                case 'doorOpen': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                    o.frequency.setValueAtTime(400, now); o.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                    g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                    o.start(now); o.stop(now + 0.2);
+                    break;
+                }
+                case 'floorClear': {
+                    [NOTE.C5, NOTE.E5, NOTE.G5].forEach((f, i) => {
+                        const o = ctx.createOscillator(); const g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination); o.type = 'triangle';
+                        o.frequency.value = f; g.gain.setValueAtTime(vol, now + i * 0.08);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.15);
+                        o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.15);
+                    });
+                    break;
+                }
+                case 'towerFall': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sawtooth';
+                    o.frequency.setValueAtTime(600, now); o.frequency.exponentialRampToValueAtTime(60, now + 0.8);
+                    g.gain.setValueAtTime(vol * 1.5, now); g.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+                    o.start(now); o.stop(now + 1.0);
+                    break;
+                }
+                case 'towerCashOut': {
+                    [NOTE.G4, NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6].forEach((f, i) => {
+                        const o = ctx.createOscillator(); const g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                        o.frequency.value = f; g.gain.setValueAtTime(vol * 1.2, now + i * 0.08);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+                        o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.2);
+                    });
+                    break;
+                }
+
+                // ── Mine Sweeper ──
+                case 'gemReveal': {
+                    const pitch = 600 + Math.random() * 600;
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                    o.frequency.value = pitch;
+                    g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                    o.start(now); o.stop(now + 0.12);
+                    break;
+                }
+                case 'mineExplode': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sawtooth';
+                    o.frequency.setValueAtTime(200, now); o.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+                    g.gain.setValueAtTime(vol * 2, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+                    o.start(now); o.stop(now + 0.6);
+                    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+                    const ns = ctx.createBufferSource(); ns.buffer = buf;
+                    const ng = ctx.createGain(); ns.connect(ng); ng.connect(ctx.destination);
+                    ng.gain.setValueAtTime(vol, now); ng.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    ns.start(now); ns.stop(now + 0.3);
+                    break;
+                }
+                case 'mineCashOut': {
+                    [NOTE.E5, NOTE.G5, NOTE.C6].forEach((f, i) => {
+                        const o = ctx.createOscillator(); const g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination); o.type = 'triangle';
+                        o.frequency.value = f; g.gain.setValueAtTime(vol * 1.2, now + i * 0.1);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.2);
+                        o.start(now + i * 0.1); o.stop(now + i * 0.1 + 0.2);
+                    });
+                    break;
+                }
+
+                // ── Flappy VCN ──
+                case 'flap': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                    o.frequency.setValueAtTime(300, now); o.frequency.exponentialRampToValueAtTime(500, now + 0.08);
+                    g.gain.setValueAtTime(vol * 0.6, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                    o.start(now); o.stop(now + 0.1);
+                    break;
+                }
+                case 'pipePass': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'triangle';
+                    o.frequency.value = 880;
+                    g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                    o.start(now); o.stop(now + 0.08);
+                    break;
+                }
+                case 'crash': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'square';
+                    o.frequency.setValueAtTime(400, now); o.frequency.exponentialRampToValueAtTime(80, now + 0.4);
+                    g.gain.setValueAtTime(vol * 1.5, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                    o.start(now); o.stop(now + 0.5);
+                    break;
+                }
+
+                // ── Crypto Slots ──
+                case 'slotSpin': {
+                    for (let i = 0; i < 8; i++) {
+                        const o = ctx.createOscillator(); const g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                        o.frequency.value = 300 + (i % 3) * 200;
+                        const t = now + i * 0.06;
+                        g.gain.setValueAtTime(vol * 0.4, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+                        o.start(t); o.stop(t + 0.06);
+                    }
+                    break;
+                }
+                case 'slotStop': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                    o.frequency.value = 500;
+                    g.gain.setValueAtTime(vol * 0.8, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                    o.start(now); o.stop(now + 0.1);
+                    break;
+                }
+                case 'slotWin': {
+                    [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6, NOTE.G5, NOTE.E5, NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6].forEach((f, i) => {
+                        const o = ctx.createOscillator(); const g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination); o.type = 'triangle';
+                        o.frequency.value = f; g.gain.setValueAtTime(vol, now + i * 0.08);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.12);
+                        o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.12);
+                    });
+                    break;
+                }
+
+                // ── Crash Game ──
+                case 'rocketLaunch': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sawtooth';
+                    o.frequency.setValueAtTime(80, now); o.frequency.exponentialRampToValueAtTime(400, now + 0.5);
+                    g.gain.setValueAtTime(vol * 0.5, now); g.gain.exponentialRampToValueAtTime(vol * 0.3, now + 0.5);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+                    o.start(now); o.stop(now + 1.0);
+                    break;
+                }
+                case 'rocketCashOut': {
+                    [NOTE.E5, NOTE.G5, NOTE.C6, NOTE.E6].forEach((f, i) => {
+                        const o = ctx.createOscillator(); const g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+                        o.frequency.value = f; g.gain.setValueAtTime(vol * 1.5, now + i * 0.07);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.2);
+                        o.start(now + i * 0.07); o.stop(now + i * 0.07 + 0.2);
+                    });
+                    break;
+                }
+                case 'rocketCrash': {
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.connect(g); g.connect(ctx.destination); o.type = 'sawtooth';
+                    o.frequency.setValueAtTime(500, now); o.frequency.exponentialRampToValueAtTime(40, now + 0.6);
+                    g.gain.setValueAtTime(vol * 2, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                    o.start(now); o.stop(now + 0.8);
+                    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.4, ctx.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+                    const ns = ctx.createBufferSource(); ns.buffer = buf;
+                    const ng = ctx.createGain(); ns.connect(ng); ng.connect(ctx.destination);
+                    ng.gain.setValueAtTime(vol * 1.2, now + 0.1); ng.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                    ns.start(now + 0.1); ns.stop(now + 0.5);
+                    break;
+                }
             }
         } catch { /* Audio not supported */ }
     }
@@ -491,6 +669,11 @@ class GameAudioEngine {
                 case 'falling': this._bgmFalling(ctx); break;
                 case 'predict': this._bgmPredict(ctx); break;
                 case 'fever': this._bgmFever(ctx); break;
+                case 'tower': this._bgmTower(ctx); break;
+                case 'mine': this._bgmMine(ctx); break;
+                case 'flappy': this._bgmFlappy(ctx); break;
+                case 'slots': this._bgmSlots(ctx); break;
+                case 'crash': this._bgmCrash(ctx); break;
             }
         } catch { /* Audio not supported */ }
     }
@@ -731,6 +914,138 @@ class GameAudioEngine {
 
         playArp();
         this._bgm.interval = setInterval(playArp, beatDur * 1000);
+    }
+
+    // ── BGM Theme: Tower (Tense Ascending) ──
+    private _bgmTower(ctx: AudioContext): void {
+        const vol = this._bgmVolume;
+        const notes = [NOTE.A3, NOTE.C4, NOTE.E4, NOTE.A4, NOTE.C4, NOTE.E4, NOTE.G4, NOTE.A4];
+        const beatDur = 60 / 110;
+        let noteIdx = 0;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = vol; masterGain.connect(ctx.destination);
+        this._bgm.gains.push(masterGain);
+        const playNote = () => {
+            if (this._bgm.theme !== 'tower') return;
+            const now = ctx.currentTime;
+            const freq = notes[noteIdx % notes.length]; noteIdx++;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(masterGain); o.type = 'triangle';
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(0.5, now); g.gain.exponentialRampToValueAtTime(0.01, now + beatDur * 0.8);
+            o.start(now); o.stop(now + beatDur);
+            this._bgm.nodes.push(o);
+        };
+        playNote();
+        this._bgm.interval = setInterval(playNote, beatDur * 1000);
+    }
+
+    // ── BGM Theme: Mine (Suspenseful Ambient) ──
+    private _bgmMine(ctx: AudioContext): void {
+        const vol = this._bgmVolume;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = vol; masterGain.connect(ctx.destination);
+        this._bgm.gains.push(masterGain);
+        const drone = ctx.createOscillator(); const dg = ctx.createGain();
+        drone.connect(dg); dg.connect(masterGain); drone.type = 'sine';
+        drone.frequency.value = 65; dg.gain.value = 0.4;
+        drone.start(); this._bgm.nodes.push(drone); this._bgm.gains.push(dg);
+        const notes = [NOTE.E4, NOTE.G4, NOTE.A4, NOTE.B4, NOTE.A4, NOTE.G4];
+        let idx = 0;
+        const beatDur = 60 / 60;
+        const play = () => {
+            if (this._bgm.theme !== 'mine') return;
+            const now = ctx.currentTime;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(masterGain); o.type = 'sine';
+            o.frequency.value = notes[idx % notes.length]; idx++;
+            g.gain.setValueAtTime(0.25, now); g.gain.exponentialRampToValueAtTime(0.01, now + beatDur * 0.9);
+            o.start(now); o.stop(now + beatDur);
+            this._bgm.nodes.push(o);
+        };
+        play();
+        this._bgm.interval = setInterval(play, beatDur * 1000);
+    }
+
+    // ── BGM Theme: Flappy (Chiptune) ──
+    private _bgmFlappy(ctx: AudioContext): void {
+        const vol = this._bgmVolume;
+        const melody = [NOTE.C5, NOTE.D5, NOTE.E5, NOTE.G5, NOTE.E5, NOTE.D5, NOTE.C5, NOTE.G4];
+        const beatDur = 60 / 150;
+        let idx = 0;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = vol; masterGain.connect(ctx.destination);
+        this._bgm.gains.push(masterGain);
+        const play = () => {
+            if (this._bgm.theme !== 'flappy') return;
+            const now = ctx.currentTime;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(masterGain); o.type = 'square';
+            o.frequency.value = melody[idx % melody.length]; idx++;
+            g.gain.setValueAtTime(0.35, now); g.gain.exponentialRampToValueAtTime(0.01, now + beatDur * 0.6);
+            o.start(now); o.stop(now + beatDur * 0.7);
+            this._bgm.nodes.push(o);
+        };
+        play();
+        this._bgm.interval = setInterval(play, beatDur * 1000);
+    }
+
+    // ── BGM Theme: Slots (Casino Lounge) ──
+    private _bgmSlots(ctx: AudioContext): void {
+        const vol = this._bgmVolume;
+        const notes = [NOTE.C4, NOTE.E4, NOTE.G4, NOTE.A4, NOTE.G4, NOTE.E4];
+        const beatDur = 60 / 120;
+        let idx = 0;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = vol; masterGain.connect(ctx.destination);
+        this._bgm.gains.push(masterGain);
+        const play = () => {
+            if (this._bgm.theme !== 'slots') return;
+            const now = ctx.currentTime;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(masterGain); o.type = 'sine';
+            o.frequency.value = notes[idx % notes.length]; idx++;
+            g.gain.setValueAtTime(0.4, now); g.gain.exponentialRampToValueAtTime(0.01, now + beatDur * 0.8);
+            o.start(now); o.stop(now + beatDur);
+            this._bgm.nodes.push(o);
+            // Soft bass
+            const b = ctx.createOscillator(); const bg = ctx.createGain();
+            b.connect(bg); bg.connect(masterGain); b.type = 'sine';
+            b.frequency.value = notes[idx % notes.length] / 2;
+            bg.gain.setValueAtTime(0.2, now); bg.gain.exponentialRampToValueAtTime(0.01, now + beatDur);
+            b.start(now); b.stop(now + beatDur);
+            this._bgm.nodes.push(b);
+        };
+        play();
+        this._bgm.interval = setInterval(play, beatDur * 1000);
+    }
+
+    // ── BGM Theme: Crash (Building Tension) ──
+    private _bgmCrash(ctx: AudioContext): void {
+        const vol = this._bgmVolume;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = vol; masterGain.connect(ctx.destination);
+        this._bgm.gains.push(masterGain);
+        // Rising drone
+        const drone = ctx.createOscillator(); const dg = ctx.createGain();
+        drone.connect(dg); dg.connect(masterGain); drone.type = 'sawtooth';
+        drone.frequency.value = 40; dg.gain.value = 0.25;
+        drone.start(); this._bgm.nodes.push(drone); this._bgm.gains.push(dg);
+        // Pulse
+        let beat = true;
+        const beatDur = 60 / 130;
+        const play = () => {
+            if (this._bgm.theme !== 'crash') return;
+            const now = ctx.currentTime;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(masterGain); o.type = 'sine';
+            o.frequency.value = beat ? 220 : 165; beat = !beat;
+            g.gain.setValueAtTime(0.3, now); g.gain.exponentialRampToValueAtTime(0.01, now + beatDur * 0.4);
+            o.start(now); o.stop(now + beatDur * 0.5);
+            this._bgm.nodes.push(o);
+        };
+        play();
+        this._bgm.interval = setInterval(play, beatDur * 1000);
     }
 }
 

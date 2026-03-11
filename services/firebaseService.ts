@@ -1164,11 +1164,17 @@ export interface RPConfig {
     game_spin_rp: number;
     game_block_rp: number;
     game_scratch_rp: number;
+    game_daily_scratch: number;
     game_daily_spins: number;
     game_daily_blocks: number;
     game_daily_memory: number;
     game_daily_falling: number;
     game_daily_predict: number;
+    game_daily_tower: number;
+    game_daily_mine: number;
+    game_daily_flappy: number;
+    game_daily_slots: number;
+    game_daily_crash: number;
 }
 
 const DEFAULT_RP_CONFIG: RPConfig = {
@@ -1213,11 +1219,17 @@ const DEFAULT_RP_CONFIG: RPConfig = {
     game_spin_rp: 3,
     game_block_rp: 5,
     game_scratch_rp: 10,
+    game_daily_scratch: 3,
     game_daily_spins: 3,
     game_daily_blocks: 2,
     game_daily_memory: 3,
     game_daily_falling: 3,
     game_daily_predict: 3,
+    game_daily_tower: 3,
+    game_daily_mine: 3,
+    game_daily_flappy: 3,
+    game_daily_slots: 5,
+    game_daily_crash: 3,
 };
 
 let _rpConfigCache: RPConfig | null = null;

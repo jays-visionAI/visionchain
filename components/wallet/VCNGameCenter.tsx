@@ -5,10 +5,15 @@ import { MemoryMatchGame } from './MemoryMatchGame';
 import { FallingCoinsGame } from './FallingCoinsGame';
 import { PricePredictGame } from './PricePredictGame';
 import { DiceBetGame } from './DiceBetGame';
+import { TowerClimbGame } from './TowerClimbGame';
+import { MineSweeperGame } from './MineSweeperGame';
+import { FlappyVCNGame } from './FlappyVCNGame';
+import { CryptoSlotsGame } from './CryptoSlotsGame';
+import { CrashGame } from './CrashGame';
 import { useI18n } from '../../i18n/i18nContext';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 import { getFirebaseDb } from '../../services/firebaseService';
-import { doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, increment as firestoreIncrement, arrayRemove } from 'firebase/firestore';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface GameCenterProps {
@@ -93,7 +98,7 @@ interface GamePlayRecord {
     vcn: number;
     rp: number;
     timestamp: string;
-    game: 'spin' | 'block' | 'scratch' | 'memory' | 'falling' | 'predict';
+    game: 'spin' | 'block' | 'scratch' | 'memory' | 'falling' | 'predict' | 'tower' | 'mine' | 'flappy' | 'slots' | 'crash';
 }
 
 interface DailyGameData {
@@ -104,21 +109,62 @@ interface DailyGameData {
     memoryUsed: number;
     fallingUsed: number;
     predictUsed: number;
+    towerUsed: number;
+    mineUsed: number;
+    flappyUsed: number;
+    slotsUsed: number;
+    crashUsed: number;
     totalVCN: number;
     totalRP: number;
     bestBlockTime: number;
     bestMemoryTime: number;
     bestFallingScore: number;
     bestPredictStreak: number;
+    bestTowerFloor: number;
+    bestMineReveals: number;
+    bestFlappyScore: number;
     games: GamePlayRecord[];
 }
 
 // ─── Default Constants (overridden by RPConfig) ────────────────────────────
 const DEFAULT_DAILY_SPINS = 3;
 const DEFAULT_DAILY_BLOCKS = 2;
+const DEFAULT_DAILY_SCRATCH = 3;
 const DEFAULT_DAILY_MEMORY = 3;
 const DEFAULT_DAILY_FALLING = 3;
 const DEFAULT_DAILY_PREDICT = 3;
+const DEFAULT_DAILY_TOWER = 3;
+const DEFAULT_DAILY_MINE = 3;
+const DEFAULT_DAILY_FLAPPY = 3;
+const DEFAULT_DAILY_SLOTS = 5;
+const DEFAULT_DAILY_CRASH = 3;
+
+// Scratch Card reward tiers
+interface ScratchReward {
+    label: string;
+    vcn: number;
+    rp: number;
+    tier: 'common' | 'rare' | 'epic' | 'legendary';
+    probability: number;
+}
+const SCRATCH_REWARDS: ScratchReward[] = [
+    { label: '0.1 VCN', vcn: 0.1, rp: 2, tier: 'common', probability: 0.35 },
+    { label: '0.5 VCN', vcn: 0.5, rp: 3, tier: 'common', probability: 0.25 },
+    { label: '1.0 VCN', vcn: 1.0, rp: 5, tier: 'rare', probability: 0.18 },
+    { label: '2.0 VCN', vcn: 2.0, rp: 8, tier: 'rare', probability: 0.10 },
+    { label: '5.0 VCN', vcn: 5.0, rp: 15, tier: 'epic', probability: 0.07 },
+    { label: '10 VCN', vcn: 10.0, rp: 30, tier: 'epic', probability: 0.03 },
+    { label: 'JACKPOT', vcn: 25.0, rp: 50, tier: 'legendary', probability: 0.02 },
+];
+function pickScratchReward(): ScratchReward {
+    const r = Math.random();
+    let cum = 0;
+    for (const reward of SCRATCH_REWARDS) {
+        cum += reward.probability;
+        if (r <= cum) return reward;
+    }
+    return SCRATCH_REWARDS[0];
+}
 
 const SPIN_SEGMENTS: SpinSegment[] = [
     { label: '0.1 VCN', vcn: 0.1, rp: 1, color: '#374151', glowColor: '#6B7280', probability: 0.25 },
@@ -154,6 +200,23 @@ const GameCenterIcon = (p: { class?: string }) => (
         <path d="M8 14l-2 4" stroke-dasharray="2 2" />
         <path d="M16 14l2 4" stroke-dasharray="2 2" />
     </svg>
+);
+
+// Heart Button Component for game cards
+const HeartBtn = (p: { gameName: string; hearts: Record<string, number>; hearted: Set<string>; onToggle: (n: string) => void }) => (
+    <button
+        onClick={(e) => { e.stopPropagation(); p.onToggle(p.gameName); }}
+        class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] transition-all z-10"
+        style="touch-action: manipulation;"
+    >
+        <svg viewBox="0 0 24 24" class={`w-3.5 h-3.5 transition-all ${p.hearted.has(p.gameName) ? 'text-red-400 scale-110' : 'text-gray-600'}`}
+            fill={p.hearted.has(p.gameName) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+        </svg>
+        <span class={`text-[10px] font-bold tabular-nums ${p.hearted.has(p.gameName) ? 'text-red-400' : 'text-gray-600'}`}>
+            {p.hearts[p.gameName] || 0}
+        </span>
+    </button>
 );
 
 const SpinWheelIcon = (p: { class?: string }) => (
@@ -202,7 +265,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     let gameContainerRef: HTMLDivElement | undefined;
 
     // State
-    const [activeGame, setActiveGame] = createSignal<'spin' | 'block' | 'scratch' | 'memory' | 'falling' | 'predict' | null>(null);
+    const [activeGame, setActiveGame] = createSignal<'spin' | 'block' | 'scratch' | 'memory' | 'falling' | 'predict' | 'tower' | 'mine' | 'flappy' | 'slots' | 'crash' | null>(null);
     const [dailyData, setDailyData] = createSignal<DailyGameData>({
         date: getTodayStr(),
         spinsUsed: 0,
@@ -211,12 +274,20 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         memoryUsed: 0,
         fallingUsed: 0,
         predictUsed: 0,
+        towerUsed: 0,
+        mineUsed: 0,
+        flappyUsed: 0,
+        slotsUsed: 0,
+        crashUsed: 0,
         totalVCN: 0,
         totalRP: 0,
         bestBlockTime: 0,
         bestMemoryTime: 0,
         bestFallingScore: 0,
         bestPredictStreak: 0,
+        bestTowerFloor: 0,
+        bestMineReveals: 0,
+        bestFlappyScore: 0,
         games: [],
     });
     const [isLoading, setIsLoading] = createSignal(true);
@@ -251,18 +322,42 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     // Dice Bet state
     const [diceBetPending, setDiceBetPending] = createSignal<{ rpAmount: number; gameName: string } | null>(null);
 
+    // Scratch Card state
+    const [scratchReward, setScratchReward] = createSignal<ScratchReward | null>(null);
+    const [scratchRevealed, setScratchRevealed] = createSignal(false);
+    const [scratchProgress, setScratchProgress] = createSignal(0);
+    let scratchCanvasRef: HTMLCanvasElement | undefined;
+    let scratchCtx: CanvasRenderingContext2D | null = null;
+    let isScratchingRef = false;
+
     // RPConfig loaded values
     const [maxSpins, setMaxSpins] = createSignal(DEFAULT_DAILY_SPINS);
     const [maxBlocks, setMaxBlocks] = createSignal(DEFAULT_DAILY_BLOCKS);
+    const [maxScratch, setMaxScratch] = createSignal(DEFAULT_DAILY_SCRATCH);
     const [maxMemory, setMaxMemory] = createSignal(DEFAULT_DAILY_MEMORY);
     const [maxFalling, setMaxFalling] = createSignal(DEFAULT_DAILY_FALLING);
     const [maxPredict, setMaxPredict] = createSignal(DEFAULT_DAILY_PREDICT);
+    const [maxTower, setMaxTower] = createSignal(DEFAULT_DAILY_TOWER);
+    const [maxMine, setMaxMine] = createSignal(DEFAULT_DAILY_MINE);
+    const [maxFlappy, setMaxFlappy] = createSignal(DEFAULT_DAILY_FLAPPY);
+    const [maxSlots, setMaxSlots] = createSignal(DEFAULT_DAILY_SLOTS);
+    const [maxCrash, setMaxCrash] = createSignal(DEFAULT_DAILY_CRASH);
 
     const spinsRemaining = createMemo(() => Math.max(0, maxSpins() - dailyData().spinsUsed));
     const blocksRemaining = createMemo(() => Math.max(0, maxBlocks() - dailyData().blocksUsed));
+    const scratchRemaining = createMemo(() => Math.max(0, maxScratch() - dailyData().scratchCards));
     const memoryRemaining = createMemo(() => Math.max(0, maxMemory() - dailyData().memoryUsed));
     const fallingRemaining = createMemo(() => Math.max(0, maxFalling() - dailyData().fallingUsed));
     const predictRemaining = createMemo(() => Math.max(0, maxPredict() - dailyData().predictUsed));
+    const towerRemaining = createMemo(() => Math.max(0, maxTower() - dailyData().towerUsed));
+    const mineRemaining = createMemo(() => Math.max(0, maxMine() - dailyData().mineUsed));
+    const flappyRemaining = createMemo(() => Math.max(0, maxFlappy() - dailyData().flappyUsed));
+    const slotsRemaining = createMemo(() => Math.max(0, maxSlots() - dailyData().slotsUsed));
+    const crashRemaining = createMemo(() => Math.max(0, maxCrash() - dailyData().crashUsed));
+
+    // Heart system
+    const [gameHearts, setGameHearts] = createSignal<Record<string, number>>({});
+    const [userHearted, setUserHearted] = createSignal<Set<string>>(new Set());
 
     // ─── Firestore persistence ──────────────────────────────────────
     const loadDailyData = async () => {
@@ -285,6 +380,14 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 if (!d.bestFallingScore) d.bestFallingScore = 0;
                 if (!d.predictUsed) d.predictUsed = 0;
                 if (!d.bestPredictStreak) d.bestPredictStreak = 0;
+                if (!d.towerUsed) d.towerUsed = 0;
+                if (!d.mineUsed) d.mineUsed = 0;
+                if (!d.flappyUsed) d.flappyUsed = 0;
+                if (!d.slotsUsed) d.slotsUsed = 0;
+                if (!d.crashUsed) d.crashUsed = 0;
+                if (!d.bestTowerFloor) d.bestTowerFloor = 0;
+                if (!d.bestMineReveals) d.bestMineReveals = 0;
+                if (!d.bestFlappyScore) d.bestFlappyScore = 0;
                 setDailyData(d);
                 if (d.bestBlockTime > 0) setBestTime(d.bestBlockTime);
             } else {
@@ -296,12 +399,20 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     memoryUsed: 0,
                     fallingUsed: 0,
                     predictUsed: 0,
+                    towerUsed: 0,
+                    mineUsed: 0,
+                    flappyUsed: 0,
+                    slotsUsed: 0,
+                    crashUsed: 0,
                     totalVCN: 0,
                     totalRP: 0,
                     bestBlockTime: 0,
                     bestMemoryTime: 0,
                     bestFallingScore: 0,
                     bestPredictStreak: 0,
+                    bestTowerFloor: 0,
+                    bestMineReveals: 0,
+                    bestFlappyScore: 0,
                     games: [],
                 });
             }
@@ -360,12 +471,11 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         }
     };
 
-    const allPlaysUsed = createMemo(() => spinsRemaining() <= 0 && blocksRemaining() <= 0 && memoryRemaining() <= 0 && fallingRemaining() <= 0 && predictRemaining() <= 0);
+    const allPlaysUsed = createMemo(() => spinsRemaining() <= 0 && blocksRemaining() <= 0 && scratchRemaining() <= 0 && memoryRemaining() <= 0 && fallingRemaining() <= 0 && predictRemaining() <= 0 && towerRemaining() <= 0 && mineRemaining() <= 0 && flappyRemaining() <= 0 && slotsRemaining() <= 0 && crashRemaining() <= 0);
 
-    // Fullscreen immersive mode for interactive games
+    // Fullscreen immersive mode for ALL games
     const isFullscreenGame = createMemo(() => {
-        const g = activeGame();
-        return g === 'falling' || g === 'memory' || g === 'predict';
+        return activeGame() !== null;
     });
 
     onMount(() => {
@@ -374,11 +484,99 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         getRPConfig().then(cfg => {
             if (cfg.game_daily_spins) setMaxSpins(cfg.game_daily_spins);
             if (cfg.game_daily_blocks) setMaxBlocks(cfg.game_daily_blocks);
+            if (cfg.game_daily_scratch) setMaxScratch(cfg.game_daily_scratch as number);
             if (cfg.game_daily_memory) setMaxMemory(cfg.game_daily_memory);
             if (cfg.game_daily_falling) setMaxFalling(cfg.game_daily_falling);
             if (cfg.game_daily_predict) setMaxPredict(cfg.game_daily_predict);
+            if (cfg.game_daily_tower) setMaxTower(cfg.game_daily_tower);
+            if (cfg.game_daily_mine) setMaxMine(cfg.game_daily_mine);
+            if (cfg.game_daily_flappy) setMaxFlappy(cfg.game_daily_flappy);
+            if (cfg.game_daily_slots) setMaxSlots(cfg.game_daily_slots);
+            if (cfg.game_daily_crash) setMaxCrash(cfg.game_daily_crash);
         }).catch(() => { });
+        loadGameHearts();
     });
+
+    // ─── Heart System ───────────────────────────────────────────────
+    const loadGameHearts = async () => {
+        try {
+            const db = getFirebaseDb();
+            const heartsRef = doc(db, 'game_hearts', 'global');
+            const snap = await getDoc(heartsRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                const counts: Record<string, number> = {};
+                Object.keys(data.games || {}).forEach(k => {
+                    counts[k] = data.games[k]?.count || 0;
+                });
+                setGameHearts(counts);
+            }
+            // Load user's hearts
+            const auth = getFirebaseAuth();
+            const user = auth.currentUser;
+            if (user?.email) {
+                const userHeartsRef = doc(db, 'game_hearts_users', user.email.toLowerCase());
+                const userSnap = await getDoc(userHeartsRef);
+                if (userSnap.exists()) {
+                    setUserHearted(new Set<string>((userSnap.data().games || []) as string[]));
+                }
+            }
+        } catch (e) {
+            console.error('[Hearts] Failed to load:', e);
+        }
+    };
+
+    const toggleGameHeart = async (gameName: string) => {
+        try {
+            const auth = getFirebaseAuth();
+            const user = auth.currentUser;
+            if (!user?.email) return;
+
+            const db = getFirebaseDb();
+            const email = user.email.toLowerCase();
+            const hearted = userHearted();
+            const isHearted = hearted.has(gameName);
+
+            // Update global count
+            const heartsRef = doc(db, 'game_hearts', 'global');
+            const snap = await getDoc(heartsRef);
+            if (snap.exists()) {
+                await updateDoc(heartsRef, {
+                    [`games.${gameName}.count`]: firestoreIncrement(isHearted ? -1 : 1),
+                });
+            } else {
+                await setDoc(heartsRef, {
+                    games: { [gameName]: { count: 1 } },
+                });
+            }
+
+            // Update user's hearts
+            const userHeartsRef = doc(db, 'game_hearts_users', email);
+            const userSnap = await getDoc(userHeartsRef);
+            if (userSnap.exists()) {
+                if (isHearted) {
+                    await updateDoc(userHeartsRef, { games: arrayRemove(gameName) });
+                } else {
+                    await updateDoc(userHeartsRef, { games: arrayUnion(gameName) });
+                }
+            } else {
+                await setDoc(userHeartsRef, { games: [gameName] });
+            }
+
+            // Update local state
+            const newHearted = new Set(hearted);
+            if (isHearted) {
+                newHearted.delete(gameName);
+                setGameHearts(prev => ({ ...prev, [gameName]: Math.max(0, (prev[gameName] || 0) - 1) }));
+            } else {
+                newHearted.add(gameName);
+                setGameHearts(prev => ({ ...prev, [gameName]: (prev[gameName] || 0) + 1 }));
+            }
+            setUserHearted(newHearted);
+        } catch (e) {
+            console.error('[Hearts] Toggle failed:', e);
+        }
+    };
 
     // ─── Lucky Spin Logic ───────────────────────────────────────────
     const handleSpin = () => {
@@ -454,7 +652,11 @@ export const VCNGameCenter = (props: GameCenterProps) => {
             };
             setDailyData(updated);
             saveDailyData(updated);
-            awardRewards(segment.vcn, segment.rp, 'Lucky Spin');
+            // Trigger dice bet for RP (VCN is awarded immediately)
+            awardRewards(segment.vcn, 0, 'Lucky Spin');
+            if (segment.rp > 0) {
+                setDiceBetPending({ rpAmount: segment.rp, gameName: 'Lucky Spin' });
+            }
         }, 4000);
     };
 
@@ -588,7 +790,140 @@ export const VCNGameCenter = (props: GameCenterProps) => {
             };
             setDailyData(updated);
             saveDailyData(updated);
-            awardRewards(reward.vcn, reward.rp, 'Block Breaker');
+            // Trigger dice bet for RP (VCN is awarded immediately)
+            awardRewards(reward.vcn, 0, 'Block Breaker');
+            if (reward.rp > 0) {
+                setDiceBetPending({ rpAmount: reward.rp, gameName: 'Block Breaker' });
+            }
+        }
+    };
+
+    // ─── Scratch Card Logic ─────────────────────────────────────────
+    const startScratch = () => {
+        if (scratchRemaining() <= 0) return;
+        const reward = pickScratchReward();
+        setScratchReward(reward);
+        setScratchRevealed(false);
+        setScratchProgress(0);
+        isScratchingRef = false;
+        setActiveGame('scratch');
+
+        // Initialize canvas after render
+        setTimeout(() => {
+            if (!scratchCanvasRef) return;
+            const canvas = scratchCanvasRef;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            scratchCtx = ctx;
+
+            // Set canvas resolution
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            ctx.scale(2, 2);
+
+            // Draw scratch coating
+            const gradient = ctx.createLinearGradient(0, 0, rect.width, rect.height);
+            gradient.addColorStop(0, '#6D28D9');
+            gradient.addColorStop(0.5, '#A855F7');
+            gradient.addColorStop(1, '#EC4899');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, rect.width, rect.height);
+
+            // Add shimmer pattern
+            ctx.globalAlpha = 0.15;
+            for (let i = 0; i < 20; i++) {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(
+                    Math.random() * rect.width,
+                    Math.random() * rect.height,
+                    2 + Math.random() * 6,
+                    0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // Add "SCRATCH HERE" text
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = `bold ${rect.width * 0.08}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('SCRATCH HERE', rect.width / 2, rect.height / 2);
+        }, 50);
+    };
+
+    const handleScratchMove = (clientX: number, clientY: number) => {
+        if (!scratchCanvasRef || !scratchCtx || scratchRevealed()) return;
+        const rect = scratchCanvasRef.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        scratchCtx.globalCompositeOperation = 'destination-out';
+        scratchCtx.beginPath();
+        scratchCtx.arc(x, y, 20, 0, Math.PI * 2);
+        scratchCtx.fill();
+
+        // Calculate scratch progress
+        const imageData = scratchCtx.getImageData(0, 0, scratchCanvasRef.width, scratchCanvasRef.height);
+        let cleared = 0;
+        for (let i = 3; i < imageData.data.length; i += 4) {
+            if (imageData.data[i] === 0) cleared++;
+        }
+        const progress = cleared / (imageData.data.length / 4);
+        setScratchProgress(progress);
+
+        // Auto-reveal at 60%
+        if (progress >= 0.6 && !scratchRevealed()) {
+            revealScratchCard();
+        }
+    };
+
+    const revealScratchCard = () => {
+        if (scratchRevealed()) return;
+        setScratchRevealed(true);
+
+        const reward = scratchReward();
+        if (!reward) return;
+
+        // Clear canvas with animation
+        if (scratchCanvasRef && scratchCtx) {
+            scratchCtx.globalCompositeOperation = 'destination-out';
+            const rect = scratchCanvasRef.getBoundingClientRect();
+            scratchCtx.fillStyle = '#000';
+            scratchCtx.fillRect(0, 0, rect.width, rect.height);
+        }
+
+        // Play sound
+        if (reward.tier === 'legendary') {
+            SFX.play('jackpot');
+            if (gameContainerRef) launchConfetti(gameContainerRef);
+        } else if (reward.tier === 'epic') {
+            SFX.play('jackpot');
+        } else {
+            SFX.play('win');
+        }
+
+        // Save game data
+        const prev = dailyData();
+        const record: GamePlayRecord = {
+            score: 0, vcn: reward.vcn, rp: reward.rp,
+            timestamp: new Date().toISOString(), game: 'scratch'
+        };
+        const updated: DailyGameData = {
+            ...prev,
+            scratchCards: prev.scratchCards + 1,
+            totalVCN: prev.totalVCN + reward.vcn,
+            totalRP: prev.totalRP + reward.rp,
+            games: [...prev.games, record],
+        };
+        setDailyData(updated);
+        saveDailyData(updated);
+        // Trigger dice bet for RP (VCN is awarded immediately)
+        awardRewards(reward.vcn, 0, `Scratch Card (${reward.tier})`);
+        if (reward.rp > 0) {
+            setDiceBetPending({ rpAmount: reward.rp, gameName: `Scratch Card (${reward.tier})` });
         }
     };
 
@@ -699,7 +1034,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                     <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${spinsRemaining() > 0 ? 'bg-cyan-500/15 text-cyan-400' : 'bg-gray-500/15 text-gray-500'}`}>
                                         {spinsRemaining()}/{maxSpins()} left
                                     </span>
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                    <HeartBtn gameName="spin" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
                                 </div>
                             </div>
                         </button>
@@ -722,28 +1057,34 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                     <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${blocksRemaining() > 0 ? 'bg-amber-500/15 text-amber-400' : 'bg-gray-500/15 text-gray-500'}`}>
                                         {blocksRemaining()}/{maxBlocks()} left
                                     </span>
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                    <HeartBtn gameName="block" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
                                 </div>
                             </div>
                         </button>
 
                         {/* Scratch Card */}
-                        <div class="group relative overflow-hidden rounded-2xl border border-white/[0.06] border-dashed opacity-60 text-left">
-                            <div class="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5" />
+                        <button
+                            onClick={() => scratchRemaining() > 0 && startScratch()}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-purple-500/30 transition-all duration-300 text-left ${scratchRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={scratchRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 group-hover:from-purple-500/15 group-hover:to-pink-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all" />
                             <div class="relative p-6">
-                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-purple-500/15 to-pink-500/15 rounded-2xl flex items-center justify-center">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                                     <ScratchIcon class="w-7 h-7 text-purple-400" />
                                 </div>
                                 <h3 class="text-lg font-black text-white mb-1">Scratch Card</h3>
-                                <p class="text-xs text-gray-500 mb-4">Invite a friend to unlock!</p>
+                                <p class="text-xs text-gray-500 mb-4">Scratch to reveal rewards</p>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-400">
-                                        Referral Only
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${scratchRemaining() > 0 ? 'bg-purple-500/15 text-purple-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {scratchRemaining()}/{maxScratch()} left
                                     </span>
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                                    <HeartBtn gameName="scratch" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
                                 </div>
                             </div>
-                        </div>
+                        </button>
 
                         {/* Price Predict Card */}
                         <button
@@ -768,7 +1109,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                     <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${predictRemaining() > 0 ? 'bg-indigo-500/15 text-indigo-400' : 'bg-gray-500/15 text-gray-500'}`}>
                                         {predictRemaining()}/{maxPredict()} left
                                     </span>
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                    <HeartBtn gameName="predict" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
                                 </div>
                             </div>
                         </button>
@@ -797,7 +1138,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                     <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${fallingRemaining() > 0 ? 'bg-rose-500/15 text-rose-400' : 'bg-gray-500/15 text-gray-500'}`}>
                                         {fallingRemaining()}/{maxFalling()} left
                                     </span>
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                    <HeartBtn gameName="falling" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
                                 </div>
                             </div>
                         </button>
@@ -827,7 +1168,154 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                     <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${memoryRemaining() > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-500/15 text-gray-500'}`}>
                                         {memoryRemaining()}/{maxMemory()} left
                                     </span>
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-gray-600 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                    <HeartBtn gameName="memory" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* ═══ Tower Climb Card ═══ */}
+                        <button
+                            onClick={() => towerRemaining() > 0 && setActiveGame('tower')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-emerald-500/30 transition-all duration-300 text-left ${towerRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={towerRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-cyan-500/5 group-hover:from-emerald-500/15 group-hover:to-cyan-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+                                        <rect x="9" y="13" width="6" height="8" rx="1" />
+                                        <path d="M9 9h6" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Tower Climb</h3>
+                                <p class="text-xs text-gray-500 mb-4">100 floors, pick the right door!</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${towerRemaining() > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {towerRemaining()}/{maxTower()} left
+                                    </span>
+                                    <HeartBtn gameName="tower" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* ═══ Mine Sweeper Card ═══ */}
+                        <button
+                            onClick={() => mineRemaining() > 0 && setActiveGame('mine')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-red-500/30 transition-all duration-300 text-left ${mineRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={mineRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-red-500/5 to-orange-500/5 group-hover:from-red-500/15 group-hover:to-orange-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-red-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <circle cx="12" cy="12" r="7" />
+                                        <circle cx="12" cy="12" r="3" />
+                                        <line x1="12" y1="3" x2="12" y2="5" />
+                                        <line x1="12" y1="19" x2="12" y2="21" />
+                                        <line x1="3" y1="12" x2="5" y2="12" />
+                                        <line x1="19" y1="12" x2="21" y2="12" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Mine Sweeper</h3>
+                                <p class="text-xs text-gray-500 mb-4">Find gems, avoid 20 mines!</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${mineRemaining() > 0 ? 'bg-red-500/15 text-red-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {mineRemaining()}/{maxMine()} left
+                                    </span>
+                                    <HeartBtn gameName="mine" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* ═══ Flappy VCN Card ═══ */}
+                        <button
+                            onClick={() => flappyRemaining() > 0 && setActiveGame('flappy')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-amber-500/30 transition-all duration-300 text-left ${flappyRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={flappyRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-green-500/5 group-hover:from-amber-500/15 group-hover:to-green-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-amber-500/20 to-green-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 32 32" class="w-7 h-7">
+                                        <circle cx="16" cy="16" r="12" fill="#F59E0B" />
+                                        <circle cx="16" cy="16" r="9" fill="#FBBF24" />
+                                        <text x="16" y="20" text-anchor="middle" fill="#92400E" font-size="12" font-weight="bold">V</text>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Flappy VCN</h3>
+                                <p class="text-xs text-gray-500 mb-4">Tap to fly through pipes!</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${flappyRemaining() > 0 ? 'bg-amber-500/15 text-amber-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {flappyRemaining()}/{maxFlappy()} left
+                                    </span>
+                                    <HeartBtn gameName="flappy" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* ═══ Crypto Slots Card ═══ */}
+                        <button
+                            onClick={() => slotsRemaining() > 0 && setActiveGame('slots')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-yellow-500/30 transition-all duration-300 text-left ${slotsRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={slotsRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-red-500/5 group-hover:from-yellow-500/15 group-hover:to-red-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl group-hover:bg-yellow-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-yellow-500/20 to-red-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <rect x="2" y="4" width="20" height="16" rx="3" />
+                                        <line x1="9" y1="4" x2="9" y2="20" />
+                                        <line x1="15" y1="4" x2="15" y2="20" />
+                                        <circle cx="6" cy="12" r="2" opacity="0.5" />
+                                        <circle cx="12" cy="12" r="2" opacity="0.5" />
+                                        <circle cx="18" cy="12" r="2" opacity="0.5" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Crypto Slots</h3>
+                                <p class="text-xs text-gray-500 mb-4">Match crypto symbols!</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${slotsRemaining() > 0 ? 'bg-yellow-500/15 text-yellow-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {slotsRemaining()}/{maxSlots()} left
+                                    </span>
+                                    <HeartBtn gameName="slots" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* ═══ Crash Game Card ═══ */}
+                        <button
+                            onClick={() => crashRemaining() > 0 && setActiveGame('crash')}
+                            class={`group relative overflow-hidden rounded-2xl border border-white/[0.06] hover:border-red-500/30 transition-all duration-300 text-left ${crashRemaining() <= 0 ? 'opacity-60' : ''}`}
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            disabled={crashRemaining() <= 0}
+                        >
+                            <div class="absolute inset-0 bg-gradient-to-br from-red-500/5 to-amber-500/5 group-hover:from-red-500/15 group-hover:to-amber-500/15 transition-all duration-500" />
+                            <div class="absolute -top-8 -right-8 w-32 h-32 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all" />
+                            <div class="relative p-6">
+                                <div class="w-14 h-14 mb-4 bg-gradient-to-br from-red-500/20 to-amber-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7" fill="none">
+                                        <path d="M12 2L8 10h8L12 2z" fill="#F59E0B" />
+                                        <path d="M8 10l-2 8h12l-2-8H8z" fill="#EF4444" />
+                                        <path d="M6 18l2 4h8l2-4H6z" fill="#DC2626" />
+                                        <circle cx="12" cy="8" r="1.5" fill="white" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-black text-white mb-1">Crash Game</h3>
+                                <p class="text-xs text-gray-500 mb-4">Cash out before crash!</p>
+                                <div class="flex items-center justify-between">
+                                    <span class={`text-xs font-bold px-2.5 py-1 rounded-lg ${crashRemaining() > 0 ? 'bg-red-500/15 text-red-400' : 'bg-gray-500/15 text-gray-500'}`}>
+                                        {crashRemaining()}/{maxCrash()} left
+                                    </span>
+                                    <HeartBtn gameName="crash" hearts={gameHearts()} hearted={userHearted()} onToggle={toggleGameHeart} />
                                 </div>
                             </div>
                         </button>
@@ -1158,6 +1646,135 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     </div>
                 </Show>
 
+                {/* ═══════════════════ SCRATCH CARD GAME ═══════════════════ */}
+                <Show when={activeGame() === 'scratch'}>
+                    <div class="space-y-6">
+                        <button onClick={() => { setActiveGame(null); setScratchReward(null); setScratchRevealed(false); }} class="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors py-2" style="touch-action: manipulation;">
+                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                            Back to games
+                        </button>
+
+                        <div class="flex flex-col items-center">
+                            <div class="text-xs font-black text-purple-400 uppercase tracking-widest mb-4">
+                                Scratch Card
+                            </div>
+
+                            {/* Scratch Card Area */}
+                            <div class="relative w-80 h-48 rounded-2xl overflow-hidden border-2 border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.2)] mb-6">
+                                {/* Reward underneath */}
+                                <div class="absolute inset-0 bg-[#111113] flex flex-col items-center justify-center">
+                                    <Show when={scratchReward()}>
+                                        {(() => {
+                                            const r = scratchReward()!;
+                                            const tierColors = {
+                                                common: 'text-gray-300',
+                                                rare: 'text-blue-400',
+                                                epic: 'text-purple-400',
+                                                legendary: 'text-amber-400',
+                                            };
+                                            const tierBgs = {
+                                                common: 'bg-gray-500/10',
+                                                rare: 'bg-blue-500/10',
+                                                epic: 'bg-purple-500/10',
+                                                legendary: 'bg-amber-500/10',
+                                            };
+                                            return (
+                                                <div class="text-center">
+                                                    <div class={`text-[10px] font-black uppercase tracking-widest mb-2 ${tierColors[r.tier]}`}>{r.tier}</div>
+                                                    <div class="flex items-center justify-center gap-2 mb-2">
+                                                        <VCNCoinIcon class="w-8 h-8" />
+                                                        <span class={`text-4xl font-black ${tierColors[r.tier]}`}>{r.label}</span>
+                                                    </div>
+                                                    <div class={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg ${tierBgs[r.tier]}`}>
+                                                        <svg viewBox="0 0 24 24" class="w-4 h-4 text-purple-400" fill="currentColor">
+                                                            <polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" />
+                                                        </svg>
+                                                        <span class="text-sm font-bold text-purple-400">+{r.rp} RP</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </Show>
+                                </div>
+
+                                {/* Scratch Canvas on top */}
+                                <canvas
+                                    ref={scratchCanvasRef}
+                                    class="absolute inset-0 w-full h-full cursor-pointer"
+                                    style="touch-action: none;"
+                                    onMouseDown={() => { isScratchingRef = true; }}
+                                    onMouseUp={() => { isScratchingRef = false; }}
+                                    onMouseLeave={() => { isScratchingRef = false; }}
+                                    onMouseMove={(e) => { if (isScratchingRef) handleScratchMove(e.clientX, e.clientY); }}
+                                    onTouchStart={(e) => { e.preventDefault(); isScratchingRef = true; const t = e.touches[0]; handleScratchMove(t.clientX, t.clientY); }}
+                                    onTouchEnd={() => { isScratchingRef = false; }}
+                                    onTouchMove={(e) => { e.preventDefault(); if (isScratchingRef) { const t = e.touches[0]; handleScratchMove(t.clientX, t.clientY); } }}
+                                />
+                            </div>
+
+                            {/* Progress indicator */}
+                            <Show when={!scratchRevealed()}>
+                                <div class="w-80 mb-4">
+                                    <div class="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                                        <span>Scratch progress</span>
+                                        <span>{Math.round(scratchProgress() * 100)}%</span>
+                                    </div>
+                                    <div class="h-2 bg-black/40 rounded-full overflow-hidden border border-white/[0.06]">
+                                        <div
+                                            class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-200"
+                                            style={{ width: `${Math.min(100, scratchProgress() * 167)}%` }}
+                                        />
+                                    </div>
+                                    <div class="text-[9px] text-gray-600 mt-1 text-center">Scratch 60% to reveal your reward</div>
+                                </div>
+                            </Show>
+
+                            {/* Revealed result */}
+                            <Show when={scratchRevealed() && scratchReward()}>
+                                <div class="p-6 bg-[#111113]/80 border border-white/[0.08] rounded-2xl text-center animate-in fade-in zoom-in-95 duration-500 w-full max-w-sm">
+                                    {(() => {
+                                        const r = scratchReward()!;
+                                        const tierColors = {
+                                            common: 'text-gray-300',
+                                            rare: 'text-blue-400',
+                                            epic: 'text-purple-400',
+                                            legendary: 'text-amber-400',
+                                        };
+                                        return (
+                                            <>
+                                                <div class={`text-xs font-black uppercase tracking-widest mb-3 ${tierColors[r.tier]}`}>
+                                                    {r.tier === 'legendary' ? 'JACKPOT!' : r.tier === 'epic' ? 'AMAZING!' : r.tier === 'rare' ? 'NICE!' : 'You Won!'}
+                                                </div>
+                                                <div class="flex items-center justify-center gap-6">
+                                                    <div class="flex items-center gap-2">
+                                                        <VCNCoinIcon class="w-8 h-8" />
+                                                        <span class="text-3xl font-black text-amber-400">+{r.vcn}</span>
+                                                        <span class="text-sm text-gray-500 font-bold">VCN</span>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <svg viewBox="0 0 24 24" class="w-6 h-6 text-purple-400" fill="currentColor">
+                                                            <polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" />
+                                                        </svg>
+                                                        <span class="text-3xl font-black text-purple-400">+{r.rp}</span>
+                                                        <span class="text-sm text-gray-500 font-bold">RP</span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center justify-center gap-3 mt-4">
+                                                    <button onClick={startScratch} disabled={scratchRemaining() <= 0}
+                                                        class={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${scratchRemaining() > 0 ? 'bg-purple-500/15 text-purple-400 hover:bg-purple-500/25' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
+                                                        style="touch-action: manipulation; min-height: 44px;">
+                                                        {scratchRemaining() > 0 ? `Scratch Again (${scratchRemaining()} left)` : 'No cards left'}
+                                                    </button>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </Show>
+                        </div>
+                    </div>
+                </Show>
+
                 {/* ═══════════════════ MEMORY MATCH GAME ═══════════════════ */}
                 <Show when={activeGame() === 'memory'}>
                     <MemoryMatchGame
@@ -1249,6 +1866,144 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     />
                 </Show>
 
+                {/* ═══════════════════ TOWER CLIMB GAME ═══════════════════ */}
+                <Show when={activeGame() === 'tower'}>
+                    <TowerClimbGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.floor, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'tower'
+                            };
+                            const updated: DailyGameData = {
+                                ...prev,
+                                towerUsed: prev.towerUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                bestTowerFloor: Math.max(prev.bestTowerFloor, result.floor),
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            if (result.vcn > 0) awardRewards(result.vcn, 0, `Tower Climb (F${result.floor})`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: 'Tower Climb' });
+                            }
+                        }}
+                    />
+                </Show>
+
+                {/* ═══════════════════ MINE SWEEPER GAME ═══════════════════ */}
+                <Show when={activeGame() === 'mine'}>
+                    <MineSweeperGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.revealed, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'mine'
+                            };
+                            const updated: DailyGameData = {
+                                ...prev,
+                                mineUsed: prev.mineUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                bestMineReveals: Math.max(prev.bestMineReveals, result.revealed),
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            if (result.vcn > 0) awardRewards(result.vcn, 0, `Mine Sweeper (${result.revealed} gems)`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: 'Mine Sweeper' });
+                            }
+                        }}
+                    />
+                </Show>
+
+                {/* ═══════════════════ FLAPPY VCN GAME ═══════════════════ */}
+                <Show when={activeGame() === 'flappy'}>
+                    <FlappyVCNGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.score, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'flappy'
+                            };
+                            const updated: DailyGameData = {
+                                ...prev,
+                                flappyUsed: prev.flappyUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                bestFlappyScore: Math.max(prev.bestFlappyScore, result.score),
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            awardRewards(result.vcn, 0, `Flappy VCN (${result.score} pipes)`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: 'Flappy VCN' });
+                            }
+                        }}
+                    />
+                </Show>
+
+                {/* ═══════════════════ CRYPTO SLOTS GAME ═══════════════════ */}
+                <Show when={activeGame() === 'slots'}>
+                    <CryptoSlotsGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: result.match, vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'slots'
+                            };
+                            const updated: DailyGameData = {
+                                ...prev,
+                                slotsUsed: prev.slotsUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            awardRewards(result.vcn, 0, `Crypto Slots (${result.jackpot ? 'JACKPOT' : result.match + ' match'})`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: 'Crypto Slots' });
+                            }
+                        }}
+                    />
+                </Show>
+
+                {/* ═══════════════════ CRASH GAME ═══════════════════ */}
+                <Show when={activeGame() === 'crash'}>
+                    <CrashGame
+                        onBack={() => setActiveGame(null)}
+                        onComplete={(result) => {
+                            const prev = dailyData();
+                            const record: GamePlayRecord = {
+                                score: Math.round(result.multiplier * 100), vcn: result.vcn, rp: result.rp,
+                                timestamp: new Date().toISOString(), game: 'crash'
+                            };
+                            const updated: DailyGameData = {
+                                ...prev,
+                                crashUsed: prev.crashUsed + 1,
+                                totalVCN: prev.totalVCN + result.vcn,
+                                totalRP: prev.totalRP + result.rp,
+                                games: [...prev.games, record],
+                            };
+                            setDailyData(updated);
+                            saveDailyData(updated);
+                            if (result.vcn > 0) awardRewards(result.vcn, 0, `Crash Game (x${result.multiplier.toFixed(2)})`);
+                            if (result.rp > 0) {
+                                setDiceBetPending({ rpAmount: result.rp, gameName: 'Crash Game' });
+                            }
+                        }}
+                    />
+                </Show>
+
                 {/* ═══════════════════ DICE BET OVERLAY ═══════════════════ */}
                 <Show when={diceBetPending() !== null}>
                     {(() => {
@@ -1312,7 +2067,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                             {g.game === 'scratch' && <ScratchIcon class="w-4 h-4 text-purple-400" />}
                                         </div>
                                         <div class="flex-1">
-                                            <span class="text-xs font-bold text-white capitalize">{g.game === 'spin' ? 'Lucky Spin' : g.game === 'block' ? 'Block Breaker' : g.game === 'memory' ? 'Memory Match' : g.game === 'falling' ? 'Falling Coins' : g.game === 'predict' ? 'Price Predict' : 'Scratch Card'}</span>
+                                            <span class="text-xs font-bold text-white capitalize">{g.game === 'spin' ? 'Lucky Spin' : g.game === 'block' ? 'Block Breaker' : g.game === 'memory' ? 'Memory Match' : g.game === 'falling' ? 'Falling Coins' : g.game === 'predict' ? 'Price Predict' : g.game === 'tower' ? 'Tower Climb' : g.game === 'mine' ? 'Mine Sweeper' : g.game === 'flappy' ? 'Flappy VCN' : g.game === 'slots' ? 'Crypto Slots' : g.game === 'crash' ? 'Crash Game' : 'Scratch Card'}</span>
                                             <div class="text-[10px] text-gray-600">{new Date(g.timestamp).toLocaleTimeString()}</div>
                                         </div>
                                         <div class="text-right">

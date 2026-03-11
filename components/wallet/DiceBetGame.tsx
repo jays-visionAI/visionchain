@@ -8,9 +8,9 @@ interface DiceBetProps {
     onSkip: () => void;      // Keep original RP
 }
 
-// Multiplier map: same number = that number x, except (6,6) = x10
+// Multiplier map: same number = that number x, except (1,1) = x5, (6,6) = x10
 const MULTIPLIERS: Record<number, number> = {
-    1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 10,
+    1: 5, 2: 2, 3: 3, 4: 4, 5: 5, 6: 10,
 };
 
 // ─── 3D Dice Face SVG ───────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ export const DiceBetGame = (props: DiceBetProps) => {
                         Roll two dice - if both show the same number,
                     </p>
                     <p class="text-xs text-gray-400 mb-4">
-                        multiply your RP by that number! (6+6 = <span class="text-red-400 font-bold">x10</span>)
+                        multiply your RP! (1+1 = <span class="text-cyan-400 font-bold">x5</span>, 6+6 = <span class="text-red-400 font-bold">x10</span>)
                     </p>
 
                     {/* Stakes */}
@@ -290,10 +290,10 @@ export const DiceBetGame = (props: DiceBetProps) => {
                             {/* Win */}
                             <Show when={isDouble()}>
                                 <div class="space-y-3">
-                                    <div class={`text-3xl font-black ${dice1() === 6 ? 'text-red-400' : 'text-green-400'}`}>
-                                        {dice1() === 6 ? 'JACKPOT!' : 'DOUBLE!'}
+                                    <div class={`text-3xl font-black ${dice1() === 6 ? 'text-red-400' : dice1() === 1 ? 'text-cyan-400' : 'text-green-400'}`}>
+                                        {dice1() === 6 ? 'JACKPOT!' : dice1() === 1 ? 'LUCKY ONES!' : 'DOUBLE!'}
                                     </div>
-                                    <div class={`text-xl font-black ${dice1() === 6 ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-green-400 bg-green-500/10 border-green-500/20'} inline-block px-4 py-1.5 rounded-xl border`}>
+                                    <div class={`text-xl font-black ${dice1() === 6 ? 'text-red-400 bg-red-500/10 border-red-500/20' : dice1() === 1 ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' : 'text-green-400 bg-green-500/10 border-green-500/20'} inline-block px-4 py-1.5 rounded-xl border`}>
                                         x{multiplier()}
                                     </div>
                                     <div class="flex items-center justify-center gap-2 mt-4">
