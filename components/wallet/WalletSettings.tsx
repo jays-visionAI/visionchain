@@ -87,6 +87,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [cloudSyncPassword, setCloudSyncPassword] = createSignal('');
     const [cloudSyncLoading, setCloudSyncLoading] = createSignal(false);
     const [cloudSyncError, setCloudSyncError] = createSignal('');
+    const [cloudSyncNeedsRekey, setCloudSyncNeedsRekey] = createSignal(false);
+    const [cloudSyncNewPassword, setCloudSyncNewPassword] = createSignal('');
 
     // TOTP 2FA state
     const [totpEnabled, setTotpEnabled] = createSignal(false);
@@ -312,6 +314,12 @@ export function WalletSettings(props: { onBack?: () => void }) {
             return;
         }
 
+        // If re-key mode, require new password
+        if (cloudSyncNeedsRekey() && !cloudSyncNewPassword()) {
+            setCloudSyncError('Please enter a new strong password for cloud backup.');
+            return;
+        }
+
         try {
             setCloudSyncLoading(true);
             setCloudSyncError('');
@@ -321,11 +329,21 @@ export function WalletSettings(props: { onBack?: () => void }) {
                 throw new Error('User not logged in');
             }
 
-            const result = await CloudWalletService.syncLocalToCloud(cloudSyncPassword(), userEmail);
+            const result = await CloudWalletService.syncLocalToCloud(
+                cloudSyncPassword(),
+                userEmail,
+                cloudSyncNeedsRekey() ? cloudSyncNewPassword() : undefined
+            );
 
             if (result.success) {
                 setCloudSyncStatus('synced');
                 setCloudSyncPassword('');
+                setCloudSyncNewPassword('');
+                setCloudSyncNeedsRekey(false);
+            } else if (result.needsRekey) {
+                // Password decrypted OK but too weak — show re-key UI
+                setCloudSyncNeedsRekey(true);
+                setCloudSyncError(result.error || 'Password too weak. Please set a new strong password.');
             } else {
                 setCloudSyncError(result.error || 'Failed to sync wallet');
                 setCloudSyncStatus('error');
@@ -1252,22 +1270,33 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 <Show when={cloudSyncStatus() !== 'synced'}>
                                     <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
                                         <p class="text-amber-400 text-sm mb-3">
-                                            Enter your wallet password to backup to cloud:
+                                            {cloudSyncNeedsRekey()
+                                                ? 'Your current wallet password is too weak for cloud backup. Enter your current password and set a new strong password:'
+                                                : 'Enter your wallet password to backup to cloud:'}
                                         </p>
-                                        <div class="flex flex-col sm:flex-row gap-3">
+                                        <div class="flex flex-col gap-3">
                                             <input
                                                 type="password"
                                                 value={cloudSyncPassword()}
                                                 onInput={(e) => setCloudSyncPassword(e.currentTarget.value)}
-                                                placeholder="Wallet password"
-                                                class="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+                                                placeholder={cloudSyncNeedsRekey() ? 'Current wallet password' : 'Wallet password'}
+                                                class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
                                             />
+                                            <Show when={cloudSyncNeedsRekey()}>
+                                                <input
+                                                    type="password"
+                                                    value={cloudSyncNewPassword()}
+                                                    onInput={(e) => setCloudSyncNewPassword(e.currentTarget.value)}
+                                                    placeholder="New strong password (10+ chars, A-Z, a-z, 0-9)"
+                                                    class="w-full px-4 py-3 bg-white/5 border border-cyan-500/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                                                />
+                                            </Show>
                                             <button
                                                 onClick={handleCloudSync}
-                                                disabled={!cloudSyncPassword() || cloudSyncLoading()}
-                                                class="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                                                disabled={!cloudSyncPassword() || (cloudSyncNeedsRekey() && !cloudSyncNewPassword()) || cloudSyncLoading()}
+                                                class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
                                             >
-                                                <Show when={cloudSyncLoading()} fallback={<><Cloud class="w-4 h-4" /> Sync to Cloud</>}>
+                                                <Show when={cloudSyncLoading()} fallback={<><Cloud class="w-4 h-4" /> {cloudSyncNeedsRekey() ? 'Update & Sync' : 'Sync to Cloud'}</>}>
                                                     <RefreshCw class="w-4 h-4 animate-spin" /> Syncing...
                                                 </Show>
                                             </button>

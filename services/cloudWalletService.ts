@@ -264,8 +264,9 @@ export const CloudWalletService = {
      */
     async syncLocalToCloud(
         password: string,
-        userEmail: string
-    ): Promise<{ success: boolean; error?: string }> {
+        userEmail: string,
+        newPassword?: string
+    ): Promise<{ success: boolean; error?: string; needsRekey?: boolean }> {
         try {
             // 1. Get encrypted wallet from local storage
             const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
@@ -284,9 +285,43 @@ export const CloudWalletService = {
             // 3. Check password strength — cloud storage requires a stronger password
             const strength = calculatePasswordStrength(password);
             if (!strength.isStrongEnough) {
+                // If a new strong password is provided, re-key the wallet
+                if (newPassword) {
+                    const newStrength = calculatePasswordStrength(newPassword);
+                    if (!newStrength.isStrongEnough) {
+                        return {
+                            success: false,
+                            error: 'New password is also too weak. Minimum: 10 characters with uppercase, lowercase, and numbers.',
+                        };
+                    }
+
+                    // Re-encrypt wallet with the new strong password
+                    const reEncrypted = await WalletService.encrypt(mnemonic, newPassword);
+                    WalletService.saveEncryptedWallet(reEncrypted, userEmail);
+                    console.log('[CloudSync] Wallet re-encrypted with stronger password');
+
+                    // Use the new encrypted wallet and new password for upload
+                    const derived = WalletService.deriveEOA(mnemonic);
+                    const saveWalletToCloud = httpsCallable(functions, 'saveWalletToCloud');
+                    const result = await saveWalletToCloud({
+                        clientEncryptedWallet: reEncrypted,
+                        walletAddress: derived.address,
+                    });
+
+                    const data = result.data as { success: boolean };
+                    if (data.success) {
+                        console.log('[CloudSync] Wallet re-keyed and synced to cloud successfully');
+                        return { success: true };
+                    } else {
+                        return { success: false, error: 'Server error during cloud sync' };
+                    }
+                }
+
+                // No new password provided — signal that re-key is needed
                 return {
                     success: false,
-                    error: 'Your wallet password is too weak for cloud backup. Please change your password in Settings > Password tab (this will also update your wallet encryption). Then return here and try again.',
+                    needsRekey: true,
+                    error: 'Your wallet password is too weak for cloud backup. Please set a new strong password below.',
                 };
             }
 
