@@ -53,7 +53,7 @@ import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/
 import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, PaperTrade, DecisionLogEntry, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
 import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades, subscribeToDecisionLogs } from '../../services/quant/paperTradingService';
-import { registerExchangeKey, getUserExchangeKeys, type ExchangeKeyInfo, type SupportedExchange } from '../../services/quant/exchangeKeyService';
+import { type SupportedExchange } from '../../services/quant/exchangeKeyService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
 const QuantArenaLazy = lazy(() => import('./QuantArenaLeaderboard'));
@@ -237,12 +237,7 @@ const VisionQuantEngine = (): JSX.Element => {
     const [acceptedBeta, setAcceptedBeta] = createSignal(false);
 
     // === Exchange Key State (Live Trading) ===
-    const [exchangeKeys, setExchangeKeys] = createSignal<ExchangeKeyInfo[]>([]);
-    const [selectedKeyId, setSelectedKeyId] = createSignal<string | null>(null);
-    const [showKeyForm, setShowKeyForm] = createSignal(false);
-    const [keyRegistering, setKeyRegistering] = createSignal(false);
-    const [keyFormData, setKeyFormData] = createSignal({ apiKey: '', apiSecret: '', passphrase: '', label: '' });
-    const [keyError, setKeyError] = createSignal('');
+    // Exchange keys are now managed via CEX Portfolio; live trading uses credentials directly.
 
     // === Signals Tab State ===
     const [signalTrades, setSignalTrades] = createSignal<PaperTrade[]>([]);
@@ -298,56 +293,17 @@ const VisionQuantEngine = (): JSX.Element => {
         return null;
     });
 
-    const needsPassphrase = createMemo(() => {
-        const meta = selectedExchangeMeta();
-        return meta?.passphrase === true;
+    // Registered exchanges from CEX Portfolio credentials (active only)
+    const registeredExchanges = createMemo(() => {
+        return credentials().filter(c => c.status === 'active');
     });
 
-    // Load exchange keys when exchange selected in live mode
-    const loadKeysForExchange = async (ex: string) => {
-        const auth = getFirebaseAuth();
-        const uid = auth.currentUser?.uid;
-        if (!uid || !ex) return;
-        const keys = await getUserExchangeKeys(uid, ex as SupportedExchange);
-        setExchangeKeys(keys);
-        if (keys.length > 0) {
-            setSelectedKeyId(keys[0].id);
-        } else {
-            setSelectedKeyId(null);
-        }
-    };
-
-    const handleRegisterKey = async () => {
+    // Selected credential for live trading
+    const selectedCredential = createMemo(() => {
         const ex = selectedExchange();
-        if (!ex) return;
-        const data = keyFormData();
-        if (!data.apiKey || !data.apiSecret) {
-            setKeyError('API Key and Secret are required');
-            return;
-        }
-        setKeyRegistering(true);
-        setKeyError('');
-        try {
-            const result = await registerExchangeKey({
-                exchange: ex as SupportedExchange,
-                label: data.label || `${ex} Key`,
-                apiKey: data.apiKey,
-                apiSecret: data.apiSecret,
-                passphrase: data.passphrase || undefined,
-            });
-            if (result.success) {
-                setShowKeyForm(false);
-                setKeyFormData({ apiKey: '', apiSecret: '', passphrase: '', label: '' });
-                await loadKeysForExchange(ex);
-            } else {
-                setKeyError(result.error || 'Registration failed');
-            }
-        } catch (err: any) {
-            setKeyError(err.message);
-        } finally {
-            setKeyRegistering(false);
-        }
-    };
+        if (!ex) return null;
+        return registeredExchanges().find(c => c.exchange === ex) || null;
+    });
 
     // === Budget Helpers ===
     const totalPortfolioValue = createMemo(() => {
@@ -514,6 +470,7 @@ const VisionQuantEngine = (): JSX.Element => {
         setAcceptedBeta(false);
         setBudgetConfig({ ...DEFAULT_BUDGET_CONFIG });
         setTradingMode('paper');
+        setSelectedExchange('');
         // Initialize params from strategy defaults
         const params: Record<string, number | string | boolean> = {};
         strategy.parameters.forEach(p => { params[p.key] = p.value; });
@@ -1660,167 +1617,68 @@ const VisionQuantEngine = (): JSX.Element => {
                                         </div>
                                     </Show>
 
-                                    {/* ═══ LIVE MODE: Exchange & API Key ═══ */}
+                                    {/* ═══ LIVE MODE: Registered Exchange Selector ═══ */}
                                     <Show when={tradingMode() === 'live'}>
                                         <div class="mt-2 space-y-3">
-                                            {/* Exchange Selector */}
-                                            <div>
-                                                <div class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                                    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M12 17v4" /><path d="M8 21h8" />
-                                                    </svg>
-                                                    Select Exchange
-                                                </div>
-                                                <div class="space-y-2">
-                                                    <For each={EXCHANGE_LIST}>
-                                                        {(group) => (
-                                                            <div>
-                                                                <div class="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5 px-1">{group.group}</div>
-                                                                <div class="grid grid-cols-3 gap-1.5">
-                                                                    <For each={group.exchanges}>
-                                                                        {(ex) => (
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    setSelectedExchange(ex.id);
-                                                                                    setShowKeyForm(false);
-                                                                                    setKeyError('');
-                                                                                    loadKeysForExchange(ex.id);
-                                                                                }}
-                                                                                class={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-left transition-all ${selectedExchange() === ex.id
-                                                                                    ? 'bg-cyan-500/10 border border-cyan-500/25'
-                                                                                    : 'bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.1]'}`}
-                                                                            >
-                                                                                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style={`background:${ex.color}`} />
-                                                                                <div class="flex-1 min-w-0">
-                                                                                    <div class={`text-[10px] font-bold truncate ${selectedExchange() === ex.id ? 'text-white' : 'text-gray-400'}`}>{ex.name}</div>
-                                                                                </div>
-                                                                                <Show when={ex.futures}>
-                                                                                    <span class="text-[7px] font-bold text-purple-400 bg-purple-400/10 px-1 py-0.5 rounded">F</span>
-                                                                                </Show>
-                                                                            </button>
-                                                                        )}
-                                                                    </For>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </div>
-
-                                            {/* API Key Section */}
-                                            <Show when={selectedExchange()}>
-                                                <div class="p-3 bg-cyan-500/[0.04] rounded-xl border border-cyan-500/15">
-                                                    <div class="flex items-center justify-between mb-2">
-                                                        <div class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                                                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                                                            </svg>
-                                                            API Key ({selectedExchangeMeta()?.name})
-                                                        </div>
-                                                        <button
-                                                            onClick={() => { setShowKeyForm(!showKeyForm()); setKeyError(''); }}
-                                                            class="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors"
-                                                        >
-                                                            {showKeyForm() ? 'Cancel' : '+ Register Key'}
-                                                        </button>
+                                            {/* Registered Exchanges from CEX Portfolio */}
+                                            <Show when={registeredExchanges().length > 0}>
+                                                <div>
+                                                    <div class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M12 17v4" /><path d="M8 21h8" />
+                                                        </svg>
+                                                        Connected Exchange
                                                     </div>
-
-                                                    {/* Registered Keys List */}
-                                                    <Show when={exchangeKeys().length > 0}>
-                                                        <div class="space-y-1 mb-2">
-                                                            <For each={exchangeKeys()}>
-                                                                {(key) => (
+                                                    <div class="grid grid-cols-1 gap-1.5">
+                                                        <For each={registeredExchanges()}>
+                                                            {(cred) => {
+                                                                const meta = () => {
+                                                                    for (const g of EXCHANGE_LIST) {
+                                                                        const found = g.exchanges.find(e => e.id === cred.exchange);
+                                                                        if (found) return found;
+                                                                    }
+                                                                    return null;
+                                                                };
+                                                                const isSelected = () => selectedExchange() === cred.exchange;
+                                                                return (
                                                                     <button
-                                                                        onClick={() => setSelectedKeyId(key.id)}
-                                                                        class={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all ${selectedKeyId() === key.id
-                                                                            ? 'bg-cyan-500/15 border border-cyan-500/25'
-                                                                            : 'bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08]'}`}
+                                                                        onClick={() => setSelectedExchange(cred.exchange)}
+                                                                        class={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isSelected()
+                                                                            ? 'bg-cyan-500/10 border border-cyan-500/25'
+                                                                            : 'bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.1]'}`}
                                                                     >
-                                                                        <div class={`w-1.5 h-1.5 rounded-full ${key.isValid ? 'bg-green-400' : 'bg-red-400'}`} />
+                                                                        <div class="w-3 h-3 rounded-full flex-shrink-0" style={`background:${meta()?.color || '#666'}`} />
                                                                         <div class="flex-1 min-w-0">
-                                                                            <div class="text-[10px] font-bold text-white truncate">{key.label}</div>
-                                                                            <div class="text-[9px] text-gray-500 font-mono">{key.maskedKey}</div>
+                                                                            <div class={`text-[11px] font-bold ${isSelected() ? 'text-white' : 'text-gray-400'}`}>{meta()?.name || cred.exchange}</div>
+                                                                            <div class="text-[9px] text-gray-600">{cred.label}</div>
                                                                         </div>
-                                                                        <Show when={selectedKeyId() === key.id}>
-                                                                            <Check class="w-3 h-3 text-cyan-400" />
+                                                                        <div class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cred.status === 'active' ? 'bg-green-400' : 'bg-red-400'}`} />
+                                                                        <Show when={meta()?.futures}>
+                                                                            <span class="text-[7px] font-bold text-purple-400 bg-purple-400/10 px-1 py-0.5 rounded">F</span>
+                                                                        </Show>
+                                                                        <Show when={isSelected()}>
+                                                                            <Check class="w-3.5 h-3.5 text-cyan-400" />
                                                                         </Show>
                                                                     </button>
-                                                                )}
-                                                            </For>
-                                                        </div>
-                                                    </Show>
+                                                                );
+                                                            }}
+                                                        </For>
+                                                    </div>
+                                                </div>
+                                            </Show>
 
-                                                    {/* No Keys */}
-                                                    <Show when={exchangeKeys().length === 0 && !showKeyForm()}>
-                                                        <div class="text-center py-3">
-                                                            <div class="text-[10px] text-gray-500 mb-2">No API key registered for {selectedExchangeMeta()?.name}.</div>
-                                                            <button
-                                                                onClick={() => setShowKeyForm(true)}
-                                                                class="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors"
-                                                            >
-                                                                Register API Key
-                                                            </button>
-                                                        </div>
-                                                    </Show>
-
-                                                    {/* Registration Form */}
-                                                    <Show when={showKeyForm()}>
-                                                        <div class="space-y-2 mt-2 p-3 bg-black/30 rounded-lg border border-white/[0.06]">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Label (optional)"
-                                                                value={keyFormData().label}
-                                                                onInput={(e) => setKeyFormData(prev => ({ ...prev, label: e.currentTarget.value }))}
-                                                                class="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
-                                                            />
-                                                            <input
-                                                                type="password"
-                                                                placeholder="API Key *"
-                                                                value={keyFormData().apiKey}
-                                                                onInput={(e) => setKeyFormData(prev => ({ ...prev, apiKey: e.currentTarget.value }))}
-                                                                class="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
-                                                            />
-                                                            <input
-                                                                type="password"
-                                                                placeholder="API Secret *"
-                                                                value={keyFormData().apiSecret}
-                                                                onInput={(e) => setKeyFormData(prev => ({ ...prev, apiSecret: e.currentTarget.value }))}
-                                                                class="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
-                                                            />
-                                                            <Show when={needsPassphrase()}>
-                                                                <input
-                                                                    type="password"
-                                                                    placeholder="Passphrase *"
-                                                                    value={keyFormData().passphrase}
-                                                                    onInput={(e) => setKeyFormData(prev => ({ ...prev, passphrase: e.currentTarget.value }))}
-                                                                    class="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
-                                                                />
-                                                            </Show>
-
-                                                            <Show when={keyError()}>
-                                                                <div class="flex items-center gap-1.5 text-[10px] text-red-400">
-                                                                    <AlertCircle class="w-3 h-3 flex-shrink-0" />
-                                                                    {keyError()}
-                                                                </div>
-                                                            </Show>
-
-                                                            <div class="flex items-center gap-1.5 text-[9px] text-gray-500">
-                                                                <Shield class="w-3 h-3 text-cyan-400/60 flex-shrink-0" />
-                                                                API Key is encrypted and stored securely. Withdrawal must be disabled.
-                                                            </div>
-
-                                                            <button
-                                                                onClick={handleRegisterKey}
-                                                                disabled={keyRegistering() || !keyFormData().apiKey || !keyFormData().apiSecret}
-                                                                class="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/25 rounded-lg text-[10px] font-bold text-cyan-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                                            >
-                                                                <Show when={keyRegistering()}>
-                                                                    <div class="animate-spin w-3 h-3 border border-cyan-400 border-t-transparent rounded-full" />
-                                                                </Show>
-                                                                {keyRegistering() ? 'Validating...' : 'Register & Validate'}
-                                                            </button>
-                                                        </div>
-                                                    </Show>
+                                            {/* No Exchange Connected */}
+                                            <Show when={registeredExchanges().length === 0}>
+                                                <div class="p-4 bg-amber-500/[0.04] rounded-xl border border-amber-500/15 text-center">
+                                                    <svg viewBox="0 0 24 24" class="w-5 h-5 text-amber-400 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                                        <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                                    </svg>
+                                                    <div class="text-[11px] font-bold text-amber-400 mb-1">거래소 연결이 필요합니다</div>
+                                                    <div class="text-[10px] text-gray-500 leading-relaxed">
+                                                        CEX Portfolio에서 먼저 거래소 API를 등록하세요.
+                                                        등록된 거래소만 Live Trading에 사용할 수 있습니다.
+                                                    </div>
                                                 </div>
                                             </Show>
 
@@ -2198,7 +2056,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                 </button>
                                 <button
                                     onClick={() => { setShowSetup(false); setShowConfirm(true); }}
-                                    disabled={selectedAssets().length === 0}
+                                    disabled={selectedAssets().length === 0 || (tradingMode() === 'live' && !selectedExchange())}
                                     class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl text-sm font-black text-black transition-colors"
                                 >
                                     Review & Confirm
@@ -2245,6 +2103,12 @@ const VisionQuantEngine = (): JSX.Element => {
                                         <span class="text-[10px] text-gray-500 uppercase tracking-wider">Timeframe</span>
                                         <span class="text-xs font-bold text-white">{selectedStrategy()!.recommendedTimeframe.toUpperCase()}</span>
                                     </div>
+                                    <Show when={tradingMode() === 'live' && selectedExchange()}>
+                                        <div class="flex items-center justify-between p-3 bg-cyan-500/[0.04] rounded-xl border border-cyan-500/10">
+                                            <span class="text-[10px] text-gray-500 uppercase tracking-wider">Exchange</span>
+                                            <span class="text-xs font-bold text-cyan-400">{selectedExchangeMeta()?.name || selectedExchange()}</span>
+                                        </div>
+                                    </Show>
                                     <div class={`flex items-center justify-between p-3 rounded-xl ${tradingMode() === 'paper' ? 'bg-amber-500/[0.04] border border-amber-500/10' : 'bg-cyan-500/[0.04] border border-cyan-500/10'}`}>
                                         <span class="text-[10px] text-gray-500 uppercase tracking-wider">Trading Mode</span>
                                         <span class={`text-xs font-black uppercase tracking-wider ${tradingMode() === 'paper' ? 'text-amber-400' : 'text-cyan-400'}`}>
@@ -2430,8 +2294,9 @@ const VisionQuantEngine = (): JSX.Element => {
                                             setCreatingAgent(true);
                                             try {
                                                 const strategy = selectedStrategy()!;
-                                                // Derive seedCurrency from selected exchange
+                                                // Derive seedCurrency from selected exchange (registered via CEX Portfolio)
                                                 const ex = selectedExchange();
+                                                const cred = selectedCredential();
                                                 const krwExchanges = ['upbit', 'bithumb', 'coinone'];
                                                 const seedCurrency = krwExchanges.includes(ex) ? 'KRW' as const : 'USDT' as const;
 
@@ -2445,7 +2310,7 @@ const VisionQuantEngine = (): JSX.Element => {
                                                     seedCurrency,
                                                     tradingMode: 'live',
                                                     exchange: ex || undefined,
-                                                    exchangeAccountId: selectedKeyId() || undefined,
+                                                    exchangeAccountId: cred?.id || undefined,
                                                 });
 
                                                 console.log('[Quant] Live agent created successfully');
