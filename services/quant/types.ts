@@ -6,7 +6,7 @@
 
 // ─── Strategy Types ────────────────────────────────────────────────────────
 
-export type StrategyCategory = 'trend_following' | 'mean_reversion' | 'multi_signal' | 'breakout' | 'risk_overlay' | 'turtle_trading' | 'momentum_swing' | 'williams' | 'stage_analysis'
+export type StrategyCategory = 'trend_following' | 'mean_reversion' | 'multi_signal' | 'breakout' | 'risk_overlay' | 'turtle_trading' | 'momentum_swing' | 'williams' | 'stage_analysis' | 'dca'
     | 'futures_trend' | 'futures_mean_reversion' | 'futures_breakout' | 'futures_arbitrage' | 'futures_scalping';
 
 export type MarketType = 'spot' | 'futures';

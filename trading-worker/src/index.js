@@ -60,13 +60,28 @@ function evaluateSignals(agent, prices, priceHistory, volumeHistory) {
         closes[asset] = priceHistory[asset] || [];
         volumes[asset] = volumeHistory[asset] || [];
 
-        const c = closes[asset];
-        if (c.length < 30) continue;
-
         const price = prices[asset];
         if (!price) continue;
 
         const strategyId = agent.strategyId || "";
+
+        // ── DCA: time-based buy, no candle history required ──
+        if (strategyId.includes("dca")) {
+            const intervalStr = params.dca_interval || "4h";
+            const intervalMs = {
+                "1h": 3600000, "4h": 14400000, "12h": 43200000,
+                "1d": 86400000, "7d": 604800000,
+            }[intervalStr] || 14400000;
+            const lastBuy = agent.lastDcaBuyAt ? new Date(agent.lastDcaBuyAt).getTime() : 0;
+            const elapsed = Date.now() - lastBuy;
+            if (elapsed >= intervalMs) {
+                signals.push({ asset, side: "buy", reason: `DCA: ${intervalStr} interval elapsed`, isDca: true });
+            }
+            continue; // DCA doesn't use technical signals
+        }
+
+        const c = closes[asset];
+        if (c.length < 30) continue;
 
         // Spot strategies
         if (strategyId.includes("trend") && !strategyId.includes("futures")) {
@@ -698,7 +713,7 @@ async function main() {
                     const isFuturesStrategy = (agent.strategyId || "").includes("futures");
 
                     for (const signal of signals) {
-                        const { asset, side, reason, leverage: sigLeverage, direction, atrUnit } = signal;
+                        const { asset, side, reason, leverage: sigLeverage, direction, atrUnit, isDca } = signal;
                         const price = prices[asset];
                         if (!price || price <= 0) continue;
 
@@ -714,44 +729,56 @@ async function main() {
                         if (side === "buy" && rs.todayTradeCount >= maxDailyTrades) continue;
 
                         if (side === "buy") {
-                            // ── Exception Rules check ──
-                            const exceptions = checkAllExceptions({
-                                currentPrice: price,
-                                closes: assetCloses,
-                                params: agent.params || {},
-                            });
-                            if (exceptions.blocked) {
-                                console.log(`[Worker] Agent ${agent.id} signal BLOCKED: ${exceptions.reasons.join("; ")}`);
-                                decisionLogs.push({
-                                    signal: { side, asset, reason, strength: 50 },
-                                    risk: { approved: false, layer: "Exception", rejectReason: exceptions.reasons.join("; ") },
-                                    marketSnapshot: { price },
-                                });
-                                continue;
-                            }
+                            let exceptions = { blocked: false, reasons: [], downtrendScale: 1.0 };
+                            let volResult = { scaledSize: 0, scale: 1.0, bucket: "n/a", halted: false };
+                            let orderBudget;
 
-                            let orderBudget = cashBalance * 0.10;
-                            const budgetConfig = agent.budgetConfig || {};
-                            if (budgetConfig.maxOrderSizeEnabled && budgetConfig.maxOrderSize > 0) {
-                                orderBudget = Math.min(orderBudget, budgetConfig.maxOrderSize);
-                            }
-                            const maxPosPct = Number(agent.params?.max_position) || 10;
-                            const totalVal = cashBalance + positions.reduce((s, p) => s + (p.value || 0), 0);
-                            if (totalVal > 0) orderBudget = Math.min(orderBudget, totalVal * maxPosPct / 100);
-                            orderBudget = Math.min(orderBudget, cashBalance * 0.90);
-
-                            // ── Volatility Overlay (Layer 3) ──
-                            const volResult = scaleOrderSize(orderBudget, assetCloses);
-                            if (volResult.halted) {
-                                console.log(`[Worker] Agent ${agent.id} HALTED by Volatility Overlay: ${asset} bucket=${volResult.bucket}`);
-                                decisionLogs.push({
-                                    signal: { side, asset, reason, strength: 50 },
-                                    risk: { approved: false, layer: "L3_Volatility", rejectReason: `Extreme volatility (bucket=${volResult.bucket}, ATR ratio=${volResult.atrRatio?.toFixed(2)})` },
-                                    marketSnapshot: { price },
+                            if (isDca) {
+                                // ── DCA: simple percentage-of-seed sizing, skip exceptions & vol overlay ──
+                                const orderPct = Number(agent.params?.order_pct) || 2;
+                                orderBudget = agent.seed * (orderPct / 100);
+                                orderBudget = Math.min(orderBudget, cashBalance * 0.95);
+                                volResult.scaledSize = orderBudget;
+                            } else {
+                                // ── Exception Rules check ──
+                                exceptions = checkAllExceptions({
+                                    currentPrice: price,
+                                    closes: assetCloses,
+                                    params: agent.params || {},
                                 });
-                                continue;
+                                if (exceptions.blocked) {
+                                    console.log(`[Worker] Agent ${agent.id} signal BLOCKED: ${exceptions.reasons.join("; ")}`);
+                                    decisionLogs.push({
+                                        signal: { side, asset, reason, strength: 50 },
+                                        risk: { approved: false, layer: "Exception", rejectReason: exceptions.reasons.join("; ") },
+                                        marketSnapshot: { price },
+                                    });
+                                    continue;
+                                }
+
+                                orderBudget = cashBalance * 0.10;
+                                const budgetConfig = agent.budgetConfig || {};
+                                if (budgetConfig.maxOrderSizeEnabled && budgetConfig.maxOrderSize > 0) {
+                                    orderBudget = Math.min(orderBudget, budgetConfig.maxOrderSize);
+                                }
+                                const maxPosPct = Number(agent.params?.max_position) || 10;
+                                const totalVal = cashBalance + positions.reduce((s, p) => s + (p.value || 0), 0);
+                                if (totalVal > 0) orderBudget = Math.min(orderBudget, totalVal * maxPosPct / 100);
+                                orderBudget = Math.min(orderBudget, cashBalance * 0.90);
+
+                                // ── Volatility Overlay (Layer 3) ──
+                                volResult = scaleOrderSize(orderBudget, assetCloses);
+                                if (volResult.halted) {
+                                    console.log(`[Worker] Agent ${agent.id} HALTED by Volatility Overlay: ${asset} bucket=${volResult.bucket}`);
+                                    decisionLogs.push({
+                                        signal: { side, asset, reason, strength: 50 },
+                                        risk: { approved: false, layer: "L3_Volatility", rejectReason: `Extreme volatility (bucket=${volResult.bucket}, ATR ratio=${volResult.atrRatio?.toFixed(2)})` },
+                                        marketSnapshot: { price },
+                                    });
+                                    continue;
+                                }
+                                orderBudget = volResult.scaledSize;
                             }
-                            orderBudget = volResult.scaledSize;
 
                             // ── Downtrend reduction ──
                             if (exceptions.downtrendScale < 1.0) {
@@ -929,6 +956,9 @@ async function main() {
                     const totalPnlPercent = agent.seed > 0 ? (totalPnl / agent.seed) * 100 : 0;
                     const winRate = agentTotalTrades > 0 ? (winningTrades / agentTotalTrades) * 100 : 0;
 
+                    // Track if any DCA buy was executed this cycle
+                    const dcaBuyExecuted = signals.some(s => s.isDca && s.side === "buy") && agentTotalTrades > (agent.totalTrades || 0);
+
                     await agent.ref.update({
                         cashBalance,
                         positions: updatedPositions,
@@ -940,6 +970,7 @@ async function main() {
                         lastHeartbeatAt: new Date().toISOString(),
                         lastTradeAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
+                        ...(dcaBuyExecuted ? { lastDcaBuyAt: new Date().toISOString() } : {}),
                     });
 
                     // Write decision logs + daily PnL snapshot

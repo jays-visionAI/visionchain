@@ -764,6 +764,63 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
         },
     },
 
+    // ─── Module 11: DCA Auto Accumulate ─────────────────────────────────
+    {
+        id: 'dca_auto_accumulate_v1',
+        name: 'DCA Auto Accumulate',
+        nameKo: '자동 적립매수 (DCA)',
+        category: 'dca',
+        marketType: 'spot',
+        description: 'Dollar-Cost Averaging strategy that automatically buys selected assets at fixed time intervals regardless of market conditions. No technical analysis required -- simply accumulates positions over time. Ideal for long-term investors who want to build positions without timing the market. Each buy uses a configurable percentage of the seed capital.',
+        descriptionKo: '시장 조건과 무관하게 설정된 시간 간격으로 선택한 자산을 자동 매수하는 적립식 투자 전략입니다. 기술적 분석이 필요 없으며, 시간에 걸쳐 포지션을 축적합니다. 시장 타이밍을 잡지 않고 장기적으로 포지션을 구축하려는 투자자에게 적합합니다.',
+        shortDescription: 'Automatic fixed-interval buying regardless of market conditions',
+        shortDescriptionKo: '시장 조건 무관 자동 정기 매수',
+        favorableMarket: 'All market conditions -- DCA smooths out volatility over time',
+        favorableMarketKo: '모든 시장 조건 -- 시간에 걸쳐 변동성을 평탄화',
+        weakMarket: 'Prolonged bear markets may result in extended drawdowns before recovery',
+        weakMarketKo: '장기 하락장에서는 회복까지 장기간 손실이 지속될 수 있음',
+        riskLevel: 'low',
+        recommendedAssets: ['KRW-BTC', 'KRW-ETH'],
+        recommendedTimeframe: '1d',
+        entryRules: [
+            { indicator: 'time_interval', condition: 'elapsed', value: 24 },
+        ],
+        exitRules: [],
+        riskRules: {
+            maxPositionPct: 50,
+            dailyDrawdownLimit: 5,
+            weeklyDrawdownLimit: 10,
+        },
+        exceptions: [],
+        volatilityOverlay: {
+            enabled: false,
+            window: 20,
+            targetBucket: { low: 1.0, mid: 1.0, high: 1.0, extreme: 1.0 },
+        },
+        parameters: [
+            {
+                key: 'dca_interval', label: 'Buy Interval', labelKo: '매수 간격',
+                type: 'select', value: '4h',
+                options: [
+                    { value: '1h', label: 'Every 1 hour' },
+                    { value: '4h', label: 'Every 4 hours' },
+                    { value: '12h', label: 'Every 12 hours' },
+                    { value: '1d', label: 'Every day' },
+                    { value: '7d', label: 'Every week' },
+                ],
+                group: 'entry',
+            },
+            {
+                key: 'order_pct', label: 'Order Size (% of Seed)', labelKo: '1회 매수 비율 (시드 대비 %)',
+                type: 'number', value: 2, min: 0.5, max: 10, step: 0.5, group: 'entry',
+            },
+            { key: 'max_position', label: 'Max Position per Asset %', labelKo: '자산별 최대 비중 %', type: 'number', value: 50, min: 10, max: 80, step: 5, group: 'risk' },
+            ...riskRuntimeParams({ daily_loss_limit: 5, weekly_loss_limit: 10, max_daily_trades: 24, evaluation_timeframe: '1d' }),
+        ],
+        userCount: 0,
+        avgReturn30d: 0,
+    },
+
     // ═══════════════════════════════════════════════════════════════════════
     // ═══ FUTURES STRATEGIES ════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════════════
