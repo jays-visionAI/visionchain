@@ -71,179 +71,149 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [showCountryDropdown, setShowCountryDropdown] = createSignal(false);
     const [countrySearchTerm, setCountrySearchTerm] = createSignal("");
 
-    // Password state
-    const [currentPassword, setCurrentPassword] = createSignal('');
-    const [newPassword, setNewPassword] = createSignal('');
-    const [confirmPassword, setConfirmPassword] = createSignal('');
-    const [showCurrentPassword, setShowCurrentPassword] = createSignal(false);
-    const [showNewPassword, setShowNewPassword] = createSignal(false);
-    const [showConfirmPassword, setShowConfirmPassword] = createSignal(false);
-    const [passwordError, setPasswordError] = createSignal('');
-    const [passwordSuccess, setPasswordSuccess] = createSignal(false);
-    const [passwordLoading, setPasswordLoading] = createSignal(false);
-    // Wallet password mismatch handling
-    const [needsWalletPw, setNeedsWalletPw] = createSignal(false);
-    const [walletPwForReEncrypt, setWalletPwForReEncrypt] = createSignal('');
-    const [showWalletPwForReEncrypt, setShowWalletPwForReEncrypt] = createSignal(false);
+    // === Login Password Change State ===
+    const [loginCurrentPw, setLoginCurrentPw] = createSignal('');
+    const [loginNewPw, setLoginNewPw] = createSignal('');
+    const [loginConfirmPw, setLoginConfirmPw] = createSignal('');
+    const [showLoginCurrentPw, setShowLoginCurrentPw] = createSignal(false);
+    const [showLoginNewPw, setShowLoginNewPw] = createSignal(false);
+    const [showLoginConfirmPw, setShowLoginConfirmPw] = createSignal(false);
+    const [loginPwError, setLoginPwError] = createSignal('');
+    const [loginPwSuccess, setLoginPwSuccess] = createSignal(false);
+    const [loginPwLoading, setLoginPwLoading] = createSignal(false);
+    const [loginPw2FACode, setLoginPw2FACode] = createSignal('');
+    const [loginPw2FAUseBackup, setLoginPw2FAUseBackup] = createSignal(false);
 
-    // Helper: re-encrypt wallet with a known decryption password and the new login password
-    const reEncryptWallet = async (decryptPassword: string, encryptPassword: string, userEmail: string) => {
-        const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
-        if (!encryptedWallet) return;
+    // === Wallet Password Change State ===
+    const [walletCurrentPw, setWalletCurrentPw] = createSignal('');
+    const [walletNewPw, setWalletNewPw] = createSignal('');
+    const [walletConfirmPw, setWalletConfirmPw] = createSignal('');
+    const [showWalletCurrentPw, setShowWalletCurrentPw] = createSignal(false);
+    const [showWalletNewPw, setShowWalletNewPw] = createSignal(false);
+    const [showWalletConfirmPw, setShowWalletConfirmPw] = createSignal(false);
+    const [walletPwError, setWalletPwError] = createSignal('');
+    const [walletPwSuccess, setWalletPwSuccess] = createSignal(false);
+    const [walletPwLoading, setWalletPwLoading] = createSignal(false);
+    const [walletPw2FACode, setWalletPw2FACode] = createSignal('');
+    const [walletPw2FAUseBackup, setWalletPw2FAUseBackup] = createSignal(false);
 
-        const mnemonic = await WalletService.decrypt(encryptedWallet, decryptPassword);
-        const reEncrypted = await WalletService.encrypt(mnemonic, encryptPassword);
-        WalletService.saveEncryptedWallet(reEncrypted, userEmail);
-        console.log('[ChangePassword] Wallet re-encrypted with new password');
-
-        // Re-sync to cloud (non-blocking)
-        CloudWalletService.hasCloudWallet().then(cloudCheck => {
-            if (cloudCheck.exists) {
-                const address = WalletService.getAddressHint(userEmail) || '';
-                CloudWalletService.saveToCloud(mnemonic, encryptPassword, address, userEmail)
-                    .then(r => {
-                        if (r.success) console.log('[ChangePassword] Cloud wallet re-synced');
-                        else console.warn('[ChangePassword] Cloud re-sync failed:', r.error);
-                    })
-                    .catch(e => console.warn('[ChangePassword] Cloud re-sync error:', e));
-            }
-        }).catch(e => console.warn('[ChangePassword] Cloud check failed:', e));
-    };
-
-    const handleChangePassword = async (e: Event) => {
+    // --- Login Password Change Handler ---
+    const handleChangeLoginPassword = async (e: Event) => {
         e.preventDefault();
-        setPasswordError('');
-        setPasswordSuccess(false);
+        setLoginPwError('');
+        setLoginPwSuccess(false);
 
-        // Phase 2: User is providing their wallet password for re-encryption
-        if (needsWalletPw()) {
-            if (!walletPwForReEncrypt()) {
-                setPasswordError(locale() === 'ko'
-                    ? '지갑 비밀번호를 입력해주세요.'
-                    : 'Please enter your wallet password.');
-                return;
-            }
-            setPasswordLoading(true);
-            try {
-                const userEmail = auth.user()?.email || '';
-                await reEncryptWallet(walletPwForReEncrypt(), newPassword(), userEmail);
+        if (!loginCurrentPw()) { setLoginPwError('Please enter your current password.'); return; }
+        if (loginNewPw().length < 8) { setLoginPwError('New password must be at least 8 characters.'); return; }
+        if (loginNewPw() !== loginConfirmPw()) { setLoginPwError('Passwords do not match.'); return; }
+        if (loginCurrentPw() === loginNewPw()) { setLoginPwError('New password must be different from current password.'); return; }
 
-                setPasswordSuccess(true);
-                setNeedsWalletPw(false);
-                setWalletPwForReEncrypt('');
-                setCurrentPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-                setTimeout(() => setPasswordSuccess(false), 5000);
-            } catch (err: any) {
-                console.error('[ChangePassword] Wallet re-encryption with wallet pw failed:', err);
-                setPasswordError(locale() === 'ko'
-                    ? '지갑 비밀번호가 올바르지 않습니다. 다시 시도해주세요.'
-                    : 'Incorrect wallet password. Please try again.');
-            } finally {
-                setPasswordLoading(false);
-            }
-            return;
-        }
+        // OTP required
+        if (!totpEnabled()) { setLoginPwError('You must enable 2FA (Google OTP) before changing your password. Go to the Security tab.'); return; }
+        if (!loginPw2FACode() || loginPw2FACode().length < 6) { setLoginPwError('Please enter your 2FA verification code.'); return; }
 
-        // Phase 1: Normal password change flow
-        if (!currentPassword()) {
-            setPasswordError(t('settings.password.enterCurrent'));
-            return;
-        }
-        if (newPassword().length < 8) {
-            setPasswordError(t('settings.password.tooShort'));
-            return;
-        }
-        if (newPassword() !== confirmPassword()) {
-            setPasswordError(t('settings.password.mismatch'));
-            return;
-        }
-        if (currentPassword() === newPassword()) {
-            setPasswordError(t('settings.password.samePassword'));
-            return;
-        }
-
-        setPasswordLoading(true);
+        setLoginPwLoading(true);
         try {
             const user = auth.user();
-            if (!user || !user.email) {
-                throw new Error('User not found. Please re-login and try again.');
-            }
+            if (!user || !user.email) throw new Error('User not found. Please re-login.');
 
-            // Step 1: Re-authenticate with current login password
-            const credential = EmailAuthProvider.credential(user.email, currentPassword());
+            // Step 1: Re-authenticate
+            const credential = EmailAuthProvider.credential(user.email, loginCurrentPw());
             await reauthenticateWithCredential(user, credential);
 
-            // Step 2: Verify 2FA if enabled
-            if (totpEnabled()) {
-                if (!pwChange2FACode() || pwChange2FACode().length < 6) {
-                    setPasswordError('Please enter your 2FA verification code.');
-                    setPasswordLoading(false);
-                    return;
-                }
-                const totpResult = await CloudWalletService.verifyTOTP(pwChange2FACode(), pwChange2FAUseBackup());
-                if (!totpResult.success) {
-                    setPasswordError(totpResult.error || 'Invalid 2FA code. Please try again.');
-                    setPasswordLoading(false);
-                    return;
-                }
-            }
+            // Step 2: Verify OTP
+            const totpResult = await CloudWalletService.verifyTOTP(loginPw2FACode(), loginPw2FAUseBackup());
+            if (!totpResult.success) { setLoginPwError(totpResult.error || 'Invalid 2FA code.'); setLoginPwLoading(false); return; }
 
             // Step 3: Update Firebase login password
-            await updatePassword(user, newPassword());
+            await updatePassword(user, loginNewPw());
 
-            // Step 4: Re-encrypt wallet with new password
-            const userEmail = user.email || '';
-            const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
-
-            if (encryptedWallet) {
-                try {
-                    // Try decrypting with the old login password
-                    await reEncryptWallet(currentPassword(), newPassword(), userEmail);
-
-                    // Full success
-                    setPasswordSuccess(true);
-                    setCurrentPassword('');
-                    setNewPassword('');
-                    setConfirmPassword('');
-                    setPwChange2FACode('');
-                    setPwChange2FAUseBackup(false);
-                    setTimeout(() => setPasswordSuccess(false), 5000);
-                } catch (reEncryptErr) {
-                    // Login password != wallet password.
-                    // Firebase password already changed. Now ask user for their wallet password.
-                    console.warn('[ChangePassword] Login pw != wallet pw, requesting wallet pw input');
-                    setNeedsWalletPw(true);
-                    setPasswordError(locale() === 'ko'
-                        ? '로그인 비밀번호가 변경되었습니다. 지갑은 다른 비밀번호로 암호화되어 있습니다. 지갑 비밀번호를 입력하면 새 비밀번호로 동기화됩니다.'
-                        : 'Login password changed. Your wallet was encrypted with a different password. Enter your wallet password below to sync it with your new password.');
-                }
-            } else {
-                // No wallet on this device - just succeed
-                setPasswordSuccess(true);
-                setCurrentPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-                setPwChange2FACode('');
-                setPwChange2FAUseBackup(false);
-                setTimeout(() => setPasswordSuccess(false), 5000);
-            }
+            // Success - login password only, no wallet re-encryption
+            setLoginPwSuccess(true);
+            setLoginCurrentPw(''); setLoginNewPw(''); setLoginConfirmPw(''); setLoginPw2FACode('');
+            setTimeout(() => setLoginPwSuccess(false), 5000);
         } catch (err: any) {
-            console.error('[ChangePassword] Error:', err);
+            console.error('[ChangeLoginPw] Error:', err);
             if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-                setPasswordError(t('settings.password.wrongPassword'));
+                setLoginPwError('Current password is incorrect.');
             } else if (err.code === 'auth/too-many-requests') {
-                setPasswordError(t('settings.password.tooManyAttempts'));
+                setLoginPwError('Too many attempts. Please try again later.');
             } else if (err.code === 'auth/requires-recent-login') {
-                setPasswordError(t('settings.password.requiresRelogin'));
+                setLoginPwError('Session expired. Please log out and log back in.');
             } else if (err.code === 'auth/weak-password') {
-                setPasswordError(t('settings.password.weakPassword'));
+                setLoginPwError('Password is too weak. Use a stronger password.');
             } else {
-                setPasswordError(err.message || t('settings.password.generic'));
+                setLoginPwError(err.message || 'An error occurred.');
             }
         } finally {
-            setPasswordLoading(false);
+            setLoginPwLoading(false);
+        }
+    };
+
+    // --- Wallet Password Change Handler ---
+    const handleChangeWalletPassword = async (e: Event) => {
+        e.preventDefault();
+        setWalletPwError('');
+        setWalletPwSuccess(false);
+
+        if (!walletCurrentPw()) { setWalletPwError('Please enter your current wallet password.'); return; }
+        if (walletNewPw().length < 8) { setWalletPwError('New password must be at least 8 characters.'); return; }
+        if (walletNewPw() !== walletConfirmPw()) { setWalletPwError('Passwords do not match.'); return; }
+        if (walletCurrentPw() === walletNewPw()) { setWalletPwError('New password must be different from current password.'); return; }
+
+        // OTP required
+        if (!totpEnabled()) { setWalletPwError('You must enable 2FA (Google OTP) before changing your wallet password. Go to the Security tab.'); return; }
+        if (!walletPw2FACode() || walletPw2FACode().length < 6) { setWalletPwError('Please enter your 2FA verification code.'); return; }
+
+        setWalletPwLoading(true);
+        try {
+            const userEmail = auth.user()?.email || '';
+            if (!userEmail) throw new Error('User not found.');
+
+            // Step 1: Verify OTP
+            const totpResult = await CloudWalletService.verifyTOTP(walletPw2FACode(), walletPw2FAUseBackup());
+            if (!totpResult.success) { setWalletPwError(totpResult.error || 'Invalid 2FA code.'); setWalletPwLoading(false); return; }
+
+            // Step 2: Decrypt wallet with current wallet password
+            const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
+            if (!encryptedWallet) { setWalletPwError('No wallet found on this device. Please restore your wallet first.'); setWalletPwLoading(false); return; }
+
+            let mnemonic: string;
+            try {
+                mnemonic = await WalletService.decrypt(encryptedWallet, walletCurrentPw());
+            } catch {
+                setWalletPwError('Current wallet password is incorrect.');
+                setWalletPwLoading(false);
+                return;
+            }
+
+            // Step 3: Re-encrypt with new wallet password
+            const reEncrypted = await WalletService.encrypt(mnemonic, walletNewPw());
+            WalletService.saveEncryptedWallet(reEncrypted, userEmail);
+            console.log('[ChangeWalletPw] Wallet re-encrypted with new password');
+
+            // Step 4: Update cloud backup (non-blocking)
+            CloudWalletService.hasCloudWallet().then(cloudCheck => {
+                if (cloudCheck.exists) {
+                    const address = WalletService.getAddressHint(userEmail) || '';
+                    CloudWalletService.saveToCloud(mnemonic, walletNewPw(), address, userEmail)
+                        .then(r => {
+                            if (r.success) console.log('[ChangeWalletPw] Cloud wallet updated');
+                            else console.warn('[ChangeWalletPw] Cloud update failed:', r.error);
+                        })
+                        .catch(e => console.warn('[ChangeWalletPw] Cloud error:', e));
+                }
+            }).catch(e => console.warn('[ChangeWalletPw] Cloud check error:', e));
+
+            // Success
+            setWalletPwSuccess(true);
+            setWalletCurrentPw(''); setWalletNewPw(''); setWalletConfirmPw(''); setWalletPw2FACode('');
+            setTimeout(() => setWalletPwSuccess(false), 5000);
+        } catch (err: any) {
+            console.error('[ChangeWalletPw] Error:', err);
+            setWalletPwError(err.message || 'An error occurred.');
+        } finally {
+            setWalletPwLoading(false);
         }
     };
 
@@ -271,9 +241,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [totpDisableMode, setTotpDisableMode] = createSignal(false);
     const [totpDisableCode, setTotpDisableCode] = createSignal('');
 
-    // 2FA verification for password change
-    const [pwChange2FACode, setPwChange2FACode] = createSignal('');
-    const [pwChange2FAUseBackup, setPwChange2FAUseBackup] = createSignal(false);
+
 
     // Transfer threshold state
     const [thresholdSettings, setThresholdSettings] = createSignal<TransferThreshold>({ vcnAmount: 1000, usdAmount: 1000, enabled: true });
@@ -1544,178 +1512,183 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
             {/* Password Tab */}
             <Show when={activeTab() === 'password'}>
-                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                        <div class="p-2 rounded-xl bg-cyan-500/20">
-                            <Lock class="w-5 h-5 text-cyan-400" />
+                <div class="space-y-6">
+                    {/* OTP Setup Nudge Banner */}
+                    <Show when={!totpEnabled()}>
+                        <div class="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-6 space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 rounded-xl bg-amber-500/20">
+                                    <Shield class="w-5 h-5 text-amber-400" />
+                                </div>
+                                <h3 class="text-lg font-semibold text-amber-300">Two-Factor Authentication Required</h3>
+                            </div>
+                            <p class="text-sm text-gray-300 leading-relaxed">
+                                You must enable Google Authenticator (2FA) before you can change any passwords.
+                                This ensures that only you can modify your account credentials.
+                            </p>
+                            <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                <p class="text-xs text-red-400 leading-relaxed">
+                                    <strong>Important:</strong> All users are strongly advised to enable 2FA.
+                                    If you choose not to enable 2FA and lose access to your password,
+                                    you bear full responsibility for any loss of funds or inability to access your wallet.
+                                    VisionChain cannot recover passwords or wallets without proper authentication.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('security')}
+                                class="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-amber-500/25 transition-all"
+                            >
+                                <Shield class="w-4 h-4" />
+                                Go to Security Tab to Enable 2FA
+                            </button>
                         </div>
-                        <h2 class="text-lg font-semibold text-white">{t('settings.password.title')}</h2>
-                    </div>
-                    <form onSubmit={handleChangePassword} class="p-6 space-y-6">
-                        {/* Current Password */}
-                        <div>
-                            <label class="text-gray-400 text-sm mb-2 block">{t('settings.password.currentPassword')}</label>
-                            <div class="relative">
-                                <input
-                                    type={showCurrentPassword() ? 'text' : 'password'}
-                                    value={currentPassword()}
-                                    onInput={(e) => setCurrentPassword(e.currentTarget.value)}
-                                    placeholder={t('settings.password.currentPasswordPlaceholder')}
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCurrentPassword(!showCurrentPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showCurrentPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
+                    </Show>
+
+                    {/* Section 1: Login Password Change */}
+                    <div class={`rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden ${!totpEnabled() ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                            <div class="p-2 rounded-xl bg-cyan-500/20">
+                                <Lock class="w-5 h-5 text-cyan-400" />
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-semibold text-white">Login Password</h2>
+                                <p class="text-xs text-gray-500">Change your account login password (used for email sign-in)</p>
                             </div>
                         </div>
-
-                        {/* New Password */}
-                        <div>
-                            <label class="text-gray-400 text-sm mb-2 block">{t('settings.password.newPassword')}</label>
-                            <div class="relative">
-                                <input
-                                    type={showNewPassword() ? 'text' : 'password'}
-                                    value={newPassword()}
-                                    onInput={(e) => setNewPassword(e.currentTarget.value)}
-                                    placeholder={t('settings.password.newPasswordPlaceholder')}
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNewPassword(!showNewPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showNewPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
+                        <form onSubmit={handleChangeLoginPassword} class="p-6 space-y-4">
+                            {/* Current Login Password */}
+                            <div>
+                                <label class="text-gray-400 text-sm mb-2 block">Current Password</label>
+                                <div class="relative">
+                                    <input type={showLoginCurrentPw() ? 'text' : 'password'} value={loginCurrentPw()} onInput={(e) => setLoginCurrentPw(e.currentTarget.value)} placeholder="Enter current password" class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50" />
+                                    <button type="button" onClick={() => setShowLoginCurrentPw(!showLoginCurrentPw())} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                        <Show when={showLoginCurrentPw()} fallback={<Eye class="w-4 h-4" />}><EyeOff class="w-4 h-4" /></Show>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-
-                        {/* Confirm Password */}
-                        <div>
-                            <label class="text-gray-400 text-sm mb-2 block">{t('settings.password.confirmPassword')}</label>
-                            <div class="relative">
-                                <input
-                                    type={showConfirmPassword() ? 'text' : 'password'}
-                                    value={confirmPassword()}
-                                    onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                                    placeholder={t('settings.password.confirmPasswordPlaceholder')}
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showConfirmPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
+                            {/* New Login Password */}
+                            <div>
+                                <label class="text-gray-400 text-sm mb-2 block">New Password</label>
+                                <div class="relative">
+                                    <input type={showLoginNewPw() ? 'text' : 'password'} value={loginNewPw()} onInput={(e) => setLoginNewPw(e.currentTarget.value)} placeholder="Min 8 characters" class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50" />
+                                    <button type="button" onClick={() => setShowLoginNewPw(!showLoginNewPw())} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                        <Show when={showLoginNewPw()} fallback={<Eye class="w-4 h-4" />}><EyeOff class="w-4 h-4" /></Show>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-
-                        {/* 2FA Verification (conditional) */}
-                        <Show when={totpEnabled()}>
+                            {/* Confirm Login Password */}
+                            <div>
+                                <label class="text-gray-400 text-sm mb-2 block">Confirm New Password</label>
+                                <div class="relative">
+                                    <input type={showLoginConfirmPw() ? 'text' : 'password'} value={loginConfirmPw()} onInput={(e) => setLoginConfirmPw(e.currentTarget.value)} placeholder="Re-enter new password" class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50" />
+                                    <button type="button" onClick={() => setShowLoginConfirmPw(!showLoginConfirmPw())} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                        <Show when={showLoginConfirmPw()} fallback={<Eye class="w-4 h-4" />}><EyeOff class="w-4 h-4" /></Show>
+                                    </button>
+                                </div>
+                            </div>
+                            {/* OTP Code */}
                             <div class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
                                 <div class="flex items-center gap-2">
                                     <Shield class="w-4 h-4 text-amber-400" />
                                     <span class="text-sm font-medium text-amber-300">2FA Verification Required</span>
                                 </div>
-                                <p class="text-xs text-gray-500">Your account has 2FA enabled. Enter your authenticator code to change your password.</p>
-                                <input
-                                    type="text"
-                                    maxLength={pwChange2FAUseBackup() ? 8 : 6}
-                                    value={pwChange2FACode()}
-                                    onInput={(e) => setPwChange2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, pwChange2FAUseBackup() ? 8 : 6))}
-                                    placeholder={pwChange2FAUseBackup() ? 'Backup code' : '6-digit code'}
-                                    class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-center font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setPwChange2FAUseBackup(!pwChange2FAUseBackup())}
-                                    class="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                                >
-                                    {pwChange2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
+                                <input type="text" maxLength={loginPw2FAUseBackup() ? 8 : 6} value={loginPw2FACode()} onInput={(e) => setLoginPw2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, loginPw2FAUseBackup() ? 8 : 6))} placeholder={loginPw2FAUseBackup() ? 'Backup code' : '6-digit code'} class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-center font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-amber-500/50" />
+                                <button type="button" onClick={() => setLoginPw2FAUseBackup(!loginPw2FAUseBackup())} class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                                    {loginPw2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
                                 </button>
                             </div>
-                        </Show>
-
-                        {/* Error Message */}
-                        <Show when={passwordError()}>
-                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                                {passwordError()}
-                            </div>
-                        </Show>
-
-                        {/* Success Message */}
-                        <Show when={passwordSuccess()}>
-                            <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
-                                <Check class="w-4 h-4" />
-                                {t('settings.password.success')}
-                            </div>
-                        </Show>
-
-                        {/* Wallet password input for re-encryption (Phase 2) */}
-                        <Show when={needsWalletPw()}>
-                            <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-3">
-                                <div class="flex items-center gap-2">
-                                    <AlertCircle class="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span class="text-sm font-semibold text-amber-300">
-                                        {locale() === 'ko' ? '지갑 비밀번호 동기화 필요' : 'Wallet Password Sync Required'}
-                                    </span>
+                            {/* Error/Success */}
+                            <Show when={loginPwError()}>
+                                <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{loginPwError()}</div>
+                            </Show>
+                            <Show when={loginPwSuccess()}>
+                                <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
+                                    <Check class="w-4 h-4" /> Login password changed successfully.
                                 </div>
-                                <p class="text-xs text-gray-400 leading-relaxed">
-                                    {locale() === 'ko'
-                                        ? '로그인 비밀번호가 변경되었습니다. 지갑 비밀번호를 입력하면 새 로그인 비밀번호로 통합됩니다.'
-                                        : 'Login password changed. Enter your wallet password to unify it with your new login password.'}
-                                </p>
+                            </Show>
+                            <button type="submit" disabled={loginPwLoading()} class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Show when={loginPwLoading()} fallback={<><Save class="w-4 h-4" /> Change Login Password</>}>
+                                    <RefreshCw class="w-4 h-4 animate-spin" /> Changing...
+                                </Show>
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Section 2: Wallet Password Change */}
+                    <div class={`rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden ${!totpEnabled() ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                            <div class="p-2 rounded-xl bg-purple-500/20">
+                                <Key class="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-semibold text-white">Wallet Password</h2>
+                                <p class="text-xs text-gray-500">Change your wallet encryption password (used for transactions & cloud backup)</p>
+                            </div>
+                        </div>
+                        <form onSubmit={handleChangeWalletPassword} class="p-6 space-y-4">
+                            {/* Current Wallet Password */}
+                            <div>
+                                <label class="text-gray-400 text-sm mb-2 block">Current Wallet Password</label>
                                 <div class="relative">
-                                    <input
-                                        type={showWalletPwForReEncrypt() ? 'text' : 'password'}
-                                        value={walletPwForReEncrypt()}
-                                        onInput={(e) => setWalletPwForReEncrypt(e.currentTarget.value)}
-                                        placeholder={locale() === 'ko' ? '지갑 비밀번호 입력' : 'Enter wallet password'}
-                                        class="w-full p-3 pr-12 bg-white/5 border border-amber-500/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowWalletPwForReEncrypt(!showWalletPwForReEncrypt())}
-                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-1"
-                                        tabIndex={-1}
-                                    >
-                                        <Show when={showWalletPwForReEncrypt()} fallback={<Eye class="w-4 h-4" />}>
-                                            <EyeOff class="w-4 h-4" />
-                                        </Show>
+                                    <input type={showWalletCurrentPw() ? 'text' : 'password'} value={walletCurrentPw()} onInput={(e) => setWalletCurrentPw(e.currentTarget.value)} placeholder="Enter current wallet password" class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" />
+                                    <button type="button" onClick={() => setShowWalletCurrentPw(!showWalletCurrentPw())} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                        <Show when={showWalletCurrentPw()} fallback={<Eye class="w-4 h-4" />}><EyeOff class="w-4 h-4" /></Show>
                                     </button>
                                 </div>
                             </div>
-                        </Show>
-
-                        <button
-                            type="submit"
-                            disabled={passwordLoading()}
-                            class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Show when={passwordLoading()} fallback={
-                                <>
-                                    <Save class="w-4 h-4" />
-                                    {needsWalletPw()
-                                        ? (locale() === 'ko' ? '지갑 비밀번호 동기화' : 'Sync Wallet Password')
-                                        : t('settings.password.changeButton')}
-                                </>
-                            }>
-                                <RefreshCw class="w-4 h-4 animate-spin" /> {t('settings.password.changing')}
+                            {/* New Wallet Password */}
+                            <div>
+                                <label class="text-gray-400 text-sm mb-2 block">New Wallet Password</label>
+                                <div class="relative">
+                                    <input type={showWalletNewPw() ? 'text' : 'password'} value={walletNewPw()} onInput={(e) => setWalletNewPw(e.currentTarget.value)} placeholder="Min 8 characters" class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" />
+                                    <button type="button" onClick={() => setShowWalletNewPw(!showWalletNewPw())} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                        <Show when={showWalletNewPw()} fallback={<Eye class="w-4 h-4" />}><EyeOff class="w-4 h-4" /></Show>
+                                    </button>
+                                </div>
+                            </div>
+                            {/* Confirm Wallet Password */}
+                            <div>
+                                <label class="text-gray-400 text-sm mb-2 block">Confirm New Wallet Password</label>
+                                <div class="relative">
+                                    <input type={showWalletConfirmPw() ? 'text' : 'password'} value={walletConfirmPw()} onInput={(e) => setWalletConfirmPw(e.currentTarget.value)} placeholder="Re-enter new wallet password" class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" />
+                                    <button type="button" onClick={() => setShowWalletConfirmPw(!showWalletConfirmPw())} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                        <Show when={showWalletConfirmPw()} fallback={<Eye class="w-4 h-4" />}><EyeOff class="w-4 h-4" /></Show>
+                                    </button>
+                                </div>
+                            </div>
+                            {/* OTP Code */}
+                            <div class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
+                                <div class="flex items-center gap-2">
+                                    <Shield class="w-4 h-4 text-amber-400" />
+                                    <span class="text-sm font-medium text-amber-300">2FA Verification Required</span>
+                                </div>
+                                <input type="text" maxLength={walletPw2FAUseBackup() ? 8 : 6} value={walletPw2FACode()} onInput={(e) => setWalletPw2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, walletPw2FAUseBackup() ? 8 : 6))} placeholder={walletPw2FAUseBackup() ? 'Backup code' : '6-digit code'} class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-center font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-amber-500/50" />
+                                <button type="button" onClick={() => setWalletPw2FAUseBackup(!walletPw2FAUseBackup())} class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                                    {walletPw2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
+                                </button>
+                            </div>
+                            {/* Info note */}
+                            <div class="text-xs text-gray-500 bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3">
+                                Changing your wallet password will also update your cloud backup. Use your new wallet password when syncing to cloud or restoring your wallet.
+                            </div>
+                            {/* Error/Success */}
+                            <Show when={walletPwError()}>
+                                <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{walletPwError()}</div>
                             </Show>
-                        </button>
-                        <div class="h-40" />
-                    </form>
+                            <Show when={walletPwSuccess()}>
+                                <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
+                                    <Check class="w-4 h-4" /> Wallet password changed and cloud backup updated.
+                                </div>
+                            </Show>
+                            <button type="submit" disabled={walletPwLoading()} class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-purple-500/25 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Show when={walletPwLoading()} fallback={<><Save class="w-4 h-4" /> Change Wallet Password</>}>
+                                    <RefreshCw class="w-4 h-4 animate-spin" /> Changing...
+                                </Show>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="h-40" />
                 </div>
             </Show>
         </div>

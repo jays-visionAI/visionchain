@@ -21,6 +21,7 @@ export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAn
 export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminBridgeNetworks'));
 export const AdminEmail = lazy(() => import('../components/admin/AdminEmail'));
 export const AdminCexPortfolio = lazy(() => import('../components/admin/AdminCexPortfolio'));
+export const AdminQuantMonitor = lazy(() => import('../components/admin/AdminQuantMonitor'));
 export const AdminVisionInsight = lazy(() => import('../components/admin/AdminVisionInsight'));
 export const AdminSocialMedia = lazy(() => import('../components/admin/AdminSocialMedia'));
 export const AdminApiPricing = lazy(() => import('../components/admin/AdminApiPricing'));
@@ -255,6 +256,17 @@ export function AdminCexPortfolioPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminCexPortfolio />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminQuantMonitorPage() {
+    document.title = 'Quant Monitor | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminQuantMonitor />
             </AdminLayout>
         </Suspense>
     );

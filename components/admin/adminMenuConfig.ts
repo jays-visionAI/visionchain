@@ -242,6 +242,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         order: 13
     },
     {
+        id: 'quant-monitor',
+        path: '/adminsystem/quant-monitor',
+        label: 'Quant Monitor',
+        icon: 'BarChart3',
+        badge: 'NEW',
+        category: 'custom',
+        order: 13.5,
+        requiredRole: 'admin'
+    },
+    {
         id: 'vision-insight',
         path: '/adminsystem/vision-insight',
         label: 'Vision Insight',
