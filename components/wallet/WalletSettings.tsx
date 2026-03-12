@@ -81,6 +81,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [passwordError, setPasswordError] = createSignal('');
     const [passwordSuccess, setPasswordSuccess] = createSignal(false);
     const [passwordLoading, setPasswordLoading] = createSignal(false);
+    const [walletPwMismatch, setWalletPwMismatch] = createSignal(false);
 
     // Cloud Sync state
     const [cloudSyncStatus, setCloudSyncStatus] = createSignal<'none' | 'synced' | 'error'>('none');
@@ -88,6 +89,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [cloudSyncLoading, setCloudSyncLoading] = createSignal(false);
     const [cloudSyncError, setCloudSyncError] = createSignal('');
     const [cloudSyncNeedsRekey, setCloudSyncNeedsRekey] = createSignal(false);
+    const [showCloudSyncPw, setShowCloudSyncPw] = createSignal(false);
     const [cloudSyncNewPassword, setCloudSyncNewPassword] = createSignal('');
 
     // TOTP 2FA state
@@ -246,15 +248,17 @@ export function WalletSettings(props: { onBack?: () => void }) {
             // The wallet is encrypted with the wallet password (set during creation).
             // When a user changes their login password, we must also re-encrypt the
             // local wallet so both passwords stay in sync.
+            let walletReEncrypted = false;
             try {
                 const userEmail = user.email || '';
                 const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
                 if (encryptedWallet) {
-                    // Decrypt with old (current) password
+                    // Decrypt with old (current) login password
                     const mnemonic = await WalletService.decrypt(encryptedWallet, currentPassword());
                     // Re-encrypt with new password
                     const reEncrypted = await WalletService.encrypt(mnemonic, newPassword());
                     WalletService.saveEncryptedWallet(reEncrypted, userEmail);
+                    walletReEncrypted = true;
                     console.log('[ChangePassword] Wallet re-encrypted with new password');
 
                     // Re-sync to cloud if cloud wallet exists (non-blocking)
@@ -271,14 +275,16 @@ export function WalletSettings(props: { onBack?: () => void }) {
                     }).catch(e => console.warn('[ChangePassword] Cloud check failed:', e));
                 }
             } catch (reEncryptErr) {
-                console.error('[ChangePassword] Wallet re-encryption failed:', reEncryptErr);
+                console.warn('[ChangePassword] Wallet re-encryption failed (wallet pw != login pw):', reEncryptErr);
                 // Firebase password was changed but wallet wasn't re-encrypted.
-                // This can happen if the wallet was created with a different password.
-                // Not a blocking error — user can still use the app.
+                // This happens when the wallet was created with a different password.
+                // The wallet password remains unchanged — user must use the original wallet password
+                // for cloud sync and wallet operations.
             }
 
             // Success
             setPasswordSuccess(true);
+            setWalletPwMismatch(!walletReEncrypted);
 
             // Reset form
             setCurrentPassword('');
@@ -287,8 +293,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
             setPwChange2FACode('');
             setPwChange2FAUseBackup(false);
 
-            // Hide success after 5 seconds
-            setTimeout(() => setPasswordSuccess(false), 5000);
+            // Hide success after 8 seconds (longer if wallet mismatch to allow reading)
+            setTimeout(() => { setPasswordSuccess(false); setWalletPwMismatch(false); }, walletReEncrypted ? 5000 : 10000);
         } catch (err: any) {
             console.error('[ChangePassword] Error:', err);
             if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
@@ -1275,13 +1281,27 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                                 : 'Enter your wallet password to backup to cloud:'}
                                         </p>
                                         <div class="flex flex-col gap-3">
-                                            <input
-                                                type="password"
-                                                value={cloudSyncPassword()}
-                                                onInput={(e) => setCloudSyncPassword(e.currentTarget.value)}
-                                                placeholder={cloudSyncNeedsRekey() ? 'Current wallet password' : 'Wallet password'}
-                                                class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
-                                            />
+                                            <div class="relative">
+                                                <input
+                                                    type={showCloudSyncPw() ? 'text' : 'password'}
+                                                    value={cloudSyncPassword()}
+                                                    onInput={(e) => setCloudSyncPassword(e.currentTarget.value)}
+                                                    placeholder={cloudSyncNeedsRekey() ? 'Current wallet password' : 'Wallet password'}
+                                                    class="w-full px-4 py-3 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowCloudSyncPw(!showCloudSyncPw())}
+                                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-1"
+                                                    tabIndex={-1}
+                                                >
+                                                    <Show when={showCloudSyncPw()} fallback={
+                                                        <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                                    }>
+                                                        <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                                                    </Show>
+                                                </button>
+                                            </div>
                                             <Show when={cloudSyncNeedsRekey()}>
                                                 <input
                                                     type="password"
@@ -1602,6 +1622,21 @@ export function WalletSettings(props: { onBack?: () => void }) {
                             <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
                                 <Check class="w-4 h-4" />
                                 {t('settings.password.success')}
+                            </div>
+                        </Show>
+
+                        {/* Wallet password mismatch warning */}
+                        <Show when={walletPwMismatch()}>
+                            <div class="text-amber-400 text-sm bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <AlertCircle class="w-4 h-4 shrink-0" />
+                                    <span class="font-semibold">{locale() === 'ko' ? '지갑 비밀번호 안내' : 'Wallet Password Notice'}</span>
+                                </div>
+                                <p class="text-amber-400/80 text-xs leading-relaxed">
+                                    {locale() === 'ko'
+                                        ? '로그인 비밀번호가 변경되었지만, 지갑 비밀번호는 별도로 설정되어 있어 변경되지 않았습니다. 클라우드 동기화 시 원래 지갑 비밀번호를 사용하세요.'
+                                        : 'Your login password was changed, but your wallet password was set separately and remains unchanged. Use your original wallet password for cloud sync.'}
+                                </p>
                             </div>
                         </Show>
 
