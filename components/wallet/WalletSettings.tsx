@@ -1614,7 +1614,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 <RefreshCw class="w-4 h-4 animate-spin" /> {t('settings.password.changing')}
                             </Show>
                         </button>
-                        <div class="h-24" />
+                        <div class="h-40" />
                     </form>
                 </div>
             </Show>
