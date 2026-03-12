@@ -410,3 +410,28 @@ export async function sendAgentSetupNotification(agent: PaperAgent): Promise<voi
         console.warn('[AgentEmail] Failed to send setup notification:', err.message);
     }
 }
+
+// ─── Daily PnL Snapshots ───────────────────────────────────────────────────
+
+/** Subscribe to daily PnL snapshots for an agent (realtime) */
+export function subscribeToDailyPnl(
+    agentId: string,
+    callback: (snapshots: { date: string; totalValue: number; totalPnl: number; totalPnlPercent: number; btcPrice?: number }[]) => void,
+    max = 90,
+): () => void {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, 'dailyPnlSnapshots'),
+        where('agentId', '==', agentId),
+        orderBy('date', 'asc'),
+        limit(max),
+    );
+
+    return onSnapshot(q, (snap) => {
+        callback(snap.docs.map(d => d.data() as any));
+    }, (err) => {
+        console.error('[subscribeToDailyPnl] Error:', err.message);
+        callback([]);
+    });
+}
+

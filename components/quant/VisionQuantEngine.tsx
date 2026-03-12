@@ -53,7 +53,7 @@ import {
 import { DEFAULT_BUDGET_CONFIG, PAPER_TRADING_SEED } from '../../services/quant/types';
 import type { StrategyTemplate, StrategyParameter, ExceptionRule, StrategyBlogContent, BudgetConfig, PaperAgent, PaperTrade, DecisionLogEntry, Competition, PerformanceReport, ReportPeriod } from '../../services/quant/types';
 import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
-import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades, subscribeToDecisionLogs, sendAgentSetupNotification } from '../../services/quant/paperTradingService';
+import { createPaperAgent, subscribeToPaperAgents, updatePaperAgentStatus, deletePaperAgent, updatePaperAgentConfig, getActiveCompetitions, joinCompetition, fetchPaperReport, subscribeToPaperTrades, subscribeToDecisionLogs, sendAgentSetupNotification, subscribeToDailyPnl } from '../../services/quant/paperTradingService';
 import { type SupportedExchange } from '../../services/quant/exchangeKeyService';
 import { lazy, onCleanup } from 'solid-js';
 const QuantReportLazy = lazy(() => import('./QuantReport'));
@@ -193,6 +193,298 @@ const DecisionLogTimeline = (props: { agentId: string }) => {
     );
 };
 
+// ─── Trade Toast Notification Component ─────────────────────────────────────
+
+interface ToastItem {
+    id: number;
+    trade: PaperTrade;
+    exiting: boolean;
+}
+
+const TradeToast = (props: { toasts: ToastItem[]; onDismiss: (id: number) => void }) => {
+    return (
+        <div class="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2 pointer-events-none" style="max-width: 320px;">
+            <For each={props.toasts}>
+                {(toast) => {
+                    const isBuy = () => toast.trade.side === 'buy';
+                    const pnlStr = () => {
+                        if (toast.trade.side === 'buy') return '';
+                        const sign = toast.trade.pnl >= 0 ? '+' : '';
+                        return `${sign}${toast.trade.pnlPercent.toFixed(2)}%`;
+                    };
+                    return (
+                        <div
+                            class={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-2xl transition-all duration-500 ${
+                                toast.exiting ? 'opacity-0 translate-x-8' : 'opacity-100 translate-x-0'
+                            } ${
+                                isBuy()
+                                    ? 'bg-green-950/80 border-green-500/20'
+                                    : toast.trade.pnl >= 0
+                                        ? 'bg-green-950/80 border-green-500/20'
+                                        : 'bg-red-950/80 border-red-500/20'
+                            }`}
+                            onClick={() => props.onDismiss(toast.id)}
+                        >
+                            <div class={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                isBuy() ? 'bg-green-500/20' : 'bg-red-500/20'
+                            }`}>
+                                <svg viewBox="0 0 24 24" class={`w-4 h-4 ${isBuy() ? 'text-green-400' : 'text-red-400'}`} fill="none" stroke="currentColor" stroke-width="2.5">
+                                    {isBuy()
+                                        ? <path d="M12 19V5m-7 7l7-7 7 7" stroke-linecap="round" stroke-linejoin="round" />
+                                        : <path d="M12 5v14m7-7l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" />
+                                    }
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class={`text-xs font-black ${isBuy() ? 'text-green-400' : 'text-red-400'}`}>
+                                        {isBuy() ? 'BUY' : 'SELL'}
+                                    </span>
+                                    <span class="text-xs font-bold text-white">
+                                        {toast.trade.asset.replace('KRW-', '')}
+                                    </span>
+                                    <Show when={!isBuy() && pnlStr()}>
+                                        <span class={`text-[10px] font-bold ${toast.trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            {pnlStr()}
+                                        </span>
+                                    </Show>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-0.5">
+                                    {toast.trade.quantity.toFixed(4)} @ {toast.trade.price.toLocaleString()}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }}
+            </For>
+        </div>
+    );
+};
+
+// ─── Trade History Panel Component ──────────────────────────────────────────
+
+const TradeHistoryPanel = (props: { agentId: string; seedCurrency: string }) => {
+    const [trades, setTrades] = createSignal<PaperTrade[]>([]);
+    const [loading, setLoading] = createSignal(true);
+    const [sideFilter, setSideFilter] = createSignal<'all' | 'buy' | 'sell'>('all');
+
+    onMount(() => {
+        const unsub = subscribeToPaperTrades(props.agentId, (t) => {
+            setTrades(t);
+            setLoading(false);
+        }, 50);
+        onCleanup(unsub);
+    });
+
+    const filtered = createMemo(() => {
+        const f = sideFilter();
+        if (f === 'all') return trades();
+        return trades().filter(t => t.side === f);
+    });
+
+    const formatVal = (v: number) => {
+        if (props.seedCurrency === 'KRW') {
+            if (Math.abs(v) >= 10000) return `${(v / 10000).toFixed(1)}\u{B9CC}`;
+            return Math.round(v).toLocaleString();
+        }
+        return `$${v.toFixed(2)}`;
+    };
+
+    return (
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Trade History</div>
+                <div class="flex gap-1">
+                    {(['all', 'buy', 'sell'] as const).map(f => (
+                        <button
+                            onClick={() => setSideFilter(f)}
+                            class={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${
+                                sideFilter() === f
+                                    ? f === 'buy' ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                                      : f === 'sell' ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                                      : 'bg-white/[0.06] text-white border border-white/[0.08]'
+                                    : 'text-gray-600 hover:text-gray-400 border border-transparent'
+                            }`}
+                        >
+                            {f === 'all' ? 'All' : f === 'buy' ? 'Buy' : 'Sell'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <Show when={!loading()} fallback={
+                <div class="text-[10px] text-gray-600 py-3">Loading trades...</div>
+            }>
+                <Show when={filtered().length > 0} fallback={
+                    <div class="text-[10px] text-gray-600 py-3">No trades yet.</div>
+                }>
+                    <div class="max-h-[240px] overflow-y-auto space-y-1" style="scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;">
+                        <For each={filtered()}>
+                            {(trade) => (
+                                <div class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.015] border border-white/[0.03] hover:border-white/[0.06] transition-all">
+                                    <div class={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[8px] font-black ${
+                                        trade.side === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                    }`}>
+                                        {trade.side === 'buy' ? 'B' : 'S'}
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[10px] font-bold text-white">{trade.asset.replace('KRW-', '')}</span>
+                                            <span class="text-[9px] text-gray-500">{trade.quantity.toFixed(4)}</span>
+                                            <span class="text-[9px] text-gray-600">@</span>
+                                            <span class="text-[9px] text-gray-400">{trade.price.toLocaleString()}</span>
+                                        </div>
+                                        <div class="text-[8px] text-gray-600 mt-0.5">
+                                            {new Date(trade.timestamp).toLocaleString()}
+                                            {trade.fee > 0 && <span class="ml-2">Fee: {formatVal(trade.fee)}</span>}
+                                        </div>
+                                    </div>
+                                    <div class="text-right flex-shrink-0">
+                                        <Show when={trade.side === 'sell'}>
+                                            <div class={`text-[10px] font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {trade.pnl >= 0 ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+                                            </div>
+                                            <div class={`text-[8px] ${trade.pnl >= 0 ? 'text-green-400/60' : 'text-red-400/60'}`}>
+                                                {trade.pnl >= 0 ? '+' : ''}{formatVal(trade.pnl)}
+                                            </div>
+                                        </Show>
+                                        <Show when={trade.side === 'buy'}>
+                                            <div class="text-[10px] font-bold text-gray-400">{formatVal(trade.value)}</div>
+                                        </Show>
+                                    </div>
+                                </div>
+                            )}
+                        </For>
+                    </div>
+                </Show>
+            </Show>
+        </div>
+    );
+};
+
+// ─── PnL Dashboard Component ────────────────────────────────────────────────
+
+const PnLDashboard = (props: { agentId: string; seed: number; seedCurrency: string }) => {
+    const [snapshots, setSnapshots] = createSignal<{ date: string; totalValue: number; totalPnl: number; totalPnlPercent: number; btcPrice?: number }[]>([]);
+    const [loading, setLoading] = createSignal(true);
+
+    onMount(() => {
+        const unsub = subscribeToDailyPnl(props.agentId, (s) => {
+            setSnapshots(s);
+            setLoading(false);
+        });
+        onCleanup(unsub);
+    });
+
+    const chartData = createMemo(() => {
+        const data = snapshots();
+        if (data.length === 0) return null;
+        const values = data.map(d => d.totalPnlPercent || 0);
+        const minVal = Math.min(0, ...values);
+        const maxVal = Math.max(0, ...values);
+        const range = maxVal - minVal || 1;
+        return { data, values, minVal, maxVal, range };
+    });
+
+    const stats = createMemo(() => {
+        const data = snapshots();
+        if (data.length === 0) return null;
+        const last = data[data.length - 1];
+        const maxDD = data.reduce((dd, d) => Math.min(dd, d.totalPnlPercent || 0), 0);
+        const returns = data.map(d => d.totalPnlPercent || 0);
+        const avg = returns.reduce((a, b) => a + b, 0) / returns.length;
+        const variance = returns.reduce((s, r) => s + (r - avg) ** 2, 0) / returns.length;
+        const vol = Math.sqrt(variance);
+        const sharpe = vol > 0 ? (avg / vol) * Math.sqrt(252) : 0;
+        return {
+            totalReturn: last.totalPnlPercent || 0,
+            maxDrawdown: maxDD,
+            sharpe,
+            days: data.length,
+        };
+    });
+
+    return (
+        <div>
+            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Equity Curve</div>
+            <Show when={!loading()} fallback={
+                <div class="text-[10px] text-gray-600 py-3">Loading PnL data...</div>
+            }>
+                <Show when={chartData()} fallback={
+                    <div class="text-[10px] text-gray-600 py-3">No PnL data yet. Data appears after the first daily snapshot.</div>
+                }>
+                    {(cd) => {
+                        const d = cd();
+                        const W = 400;
+                        const H = 120;
+                        const PAD = 2;
+                        const points = d.values.map((v, i) => {
+                            const x = PAD + (i / Math.max(d.values.length - 1, 1)) * (W - PAD * 2);
+                            const y = H - PAD - ((v - d.minVal) / d.range) * (H - PAD * 2);
+                            return `${x},${y}`;
+                        });
+                        const zeroY = H - PAD - ((0 - d.minVal) / d.range) * (H - PAD * 2);
+                        const path = `M${points.join(' L')}`;
+                        const areaPath = `${path} L${PAD + ((d.values.length - 1) / Math.max(d.values.length - 1, 1)) * (W - PAD * 2)},${zeroY} L${PAD},${zeroY} Z`;
+                        const lastVal = d.values[d.values.length - 1];
+                        const lineColor = lastVal >= 0 ? '#4ade80' : '#f87171';
+                        const fillColor = lastVal >= 0 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)';
+
+                        return (
+                            <div class="space-y-3">
+                                <div class="bg-white/[0.02] rounded-xl border border-white/[0.04] p-3">
+                                    <svg viewBox={`0 0 ${W} ${H}`} class="w-full" style="height: 120px;" preserveAspectRatio="none">
+                                        {/* Zero line */}
+                                        <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY} stroke="rgba(255,255,255,0.06)" stroke-width="0.5" stroke-dasharray="4,4" />
+                                        {/* Area fill */}
+                                        <path d={areaPath} fill={fillColor} />
+                                        {/* Line */}
+                                        <path d={path} fill="none" stroke={lineColor} stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                        {/* End dot */}
+                                        <circle cx={parseFloat(points[points.length - 1].split(',')[0])} cy={parseFloat(points[points.length - 1].split(',')[1])} r="3" fill={lineColor} />
+                                    </svg>
+                                    <div class="flex justify-between mt-1">
+                                        <span class="text-[8px] text-gray-600">{d.data[0].date}</span>
+                                        <span class="text-[8px] text-gray-600">{d.data[d.data.length - 1].date}</span>
+                                    </div>
+                                </div>
+
+                                <Show when={stats()}>
+                                    {(s) => (
+                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                <div class="text-[9px] text-gray-500 mb-0.5">Total Return</div>
+                                                <div class={`text-[11px] font-black ${s().totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {s().totalReturn >= 0 ? '+' : ''}{s().totalReturn.toFixed(2)}%
+                                                </div>
+                                            </div>
+                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                <div class="text-[9px] text-gray-500 mb-0.5">Max Drawdown</div>
+                                                <div class="text-[11px] font-black text-red-400">
+                                                    {s().maxDrawdown.toFixed(2)}%
+                                                </div>
+                                            </div>
+                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                <div class="text-[9px] text-gray-500 mb-0.5">Sharpe Ratio</div>
+                                                <div class={`text-[11px] font-black ${s().sharpe >= 1 ? 'text-green-400' : s().sharpe >= 0 ? 'text-white' : 'text-red-400'}`}>
+                                                    {s().sharpe.toFixed(2)}
+                                                </div>
+                                            </div>
+                                            <div class="p-2 bg-white/[0.02] rounded-lg">
+                                                <div class="text-[9px] text-gray-500 mb-0.5">Days Running</div>
+                                                <div class="text-[11px] font-black text-white">{s().days}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Show>
+                            </div>
+                        );
+                    }}
+                </Show>
+            </Show>
+        </div>
+    );
+};
+
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 const VisionQuantEngine = (): JSX.Element => {
@@ -227,6 +519,9 @@ const VisionQuantEngine = (): JSX.Element => {
     const [agentsLoading, setAgentsLoading] = createSignal(true);
     const [creatingAgent, setCreatingAgent] = createSignal(false);
     const [successToast, setSuccessToast] = createSignal<string | null>(null);
+    const [tradeToasts, setTradeToasts] = createSignal<ToastItem[]>([]);
+    let tradeToastCounter = 0;
+    let prevTradeCount = 0;
     const [activeCompetitions, setActiveCompetitions] = createSignal<Competition[]>([]);
     const [expandedAgentId, setExpandedAgentId] = createSignal<string | null>(null);
     const [reportData, setReportData] = createSignal<PerformanceReport | null>(null);
@@ -450,6 +745,26 @@ const VisionQuantEngine = (): JSX.Element => {
             }
         });
         onCleanup(() => tradeUnsubs.forEach(u => u()));
+
+        // Watch for new trades and show toast
+        createEffect(() => {
+            const currentTrades = signalTrades();
+            if (prevTradeCount > 0 && currentTrades.length > prevTradeCount) {
+                const newCount = currentTrades.length - prevTradeCount;
+                const newest = currentTrades.slice(0, Math.min(newCount, 3));
+                for (const trade of newest) {
+                    const id = ++tradeToastCounter;
+                    setTradeToasts(prev => [...prev.slice(-2), { id, trade, exiting: false }]);
+                    setTimeout(() => {
+                        setTradeToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+                        setTimeout(() => {
+                            setTradeToasts(prev => prev.filter(t => t.id !== id));
+                        }, 500);
+                    }, 4000);
+                }
+            }
+            prevTradeCount = currentTrades.length;
+        });
     }
 
     // === Setup Helpers ===
@@ -1194,6 +1509,12 @@ const VisionQuantEngine = (): JSX.Element => {
                                                                 <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Recent Decisions</div>
                                                                 <DecisionLogTimeline agentId={agent.id} />
                                                             </div>
+
+                                                            {/* ── Trade History Panel ── */}
+                                                            <TradeHistoryPanel agentId={agent.id} seedCurrency={agent.seedCurrency} />
+
+                                                            {/* ── PnL Dashboard ── */}
+                                                            <PnLDashboard agentId={agent.id} seed={agent.seed} seedCurrency={agent.seedCurrency} />
 
                                                             {/* Edit hint */}
                                                             <Show when={agent.status === 'paused'}>
@@ -2454,6 +2775,12 @@ const VisionQuantEngine = (): JSX.Element => {
                         </div>
                     </div>
                 </Show>
+
+                {/* Trade Toast Notifications */}
+                <TradeToast
+                    toasts={tradeToasts()}
+                    onDismiss={(id) => setTradeToasts(prev => prev.filter(t => t.id !== id))}
+                />
 
             </div>
         </div>
