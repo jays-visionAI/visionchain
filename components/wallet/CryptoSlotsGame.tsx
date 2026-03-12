@@ -24,17 +24,67 @@ function randomSymbol(): SlotSymbol {
     return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
 }
 
-// ─── Symbol SVG ─────────────────────────────────────────────────────────────
+// ─── Realistic Crypto Symbol SVGs ───────────────────────────────────────────
 const SymbolIcon = (p: { symbol: SlotSymbol; class?: string }) => (
     <div class={`flex items-center justify-center rounded-xl ${p.class || 'w-16 h-16'}`}
         style={{ background: p.symbol.bg }}>
-        <svg viewBox="0 0 32 32" class="w-10 h-10">
-            <circle cx="16" cy="16" r="13" fill={p.symbol.color} opacity="0.2" />
-            <circle cx="16" cy="16" r="11" stroke={p.symbol.color} stroke-width="1.5" fill="none" />
-            <text x="16" y="20" text-anchor="middle" fill={p.symbol.color} font-size="10" font-weight="bold">
-                {p.symbol.name}
-            </text>
-        </svg>
+        {p.symbol.id === 'btc' && (
+            <svg viewBox="0 0 32 32" class="w-10 h-10">
+                <circle cx="16" cy="16" r="14" fill="#F7931A" />
+                <path d="M21.2 14.3c.3-2-1.2-3-3.3-3.8l.7-2.7-1.6-.4-.6 2.6c-.4-.1-.9-.2-1.3-.3l.7-2.6-1.7-.4-.7 2.7c-.3-.1-.7-.2-1-.3l-2.3-.6-.4 1.8s1.2.3 1.2.3c.7.2.8.6.8 1l-.8 3.2c0 0 .1 0 .1 0l-.1 0-1.1 4.5c-.1.2-.3.5-.7.4 0 0-1.2-.3-1.2-.3l-.8 1.9 2.2.5c.4.1.8.2 1.2.3l-.7 2.8 1.6.4.7-2.7c.5.1.9.2 1.3.3l-.7 2.7 1.7.4.7-2.8c2.8.5 5 .3 5.9-2.3.7-2-.1-3.2-1.5-3.9 1.1-.3 1.9-1 2.1-2.5zm-3.7 5.3c-.5 2-4 .9-5.1.7l.9-3.7c1.1.3 4.7.8 4.2 3zm.5-5.3c-.5 1.8-3.4.9-4.3.7l.8-3.3c1 .2 4 .6 3.5 2.6z" fill="white" />
+            </svg>
+        )}
+        {p.symbol.id === 'eth' && (
+            <svg viewBox="0 0 32 32" class="w-10 h-10">
+                <circle cx="16" cy="16" r="14" fill="#627EEA" />
+                <path d="M16 4l-8 13 8 4.5 8-4.5L16 4z" fill="white" opacity="0.6" />
+                <path d="M16 4v13.5l8-4.5L16 4z" fill="white" opacity="0.8" />
+                <path d="M16 23.5l-8-5.5L16 28l8-10-8 5.5z" fill="white" opacity="0.6" />
+                <path d="M16 23.5V28l8-10-8 5.5z" fill="white" opacity="0.8" />
+            </svg>
+        )}
+        {p.symbol.id === 'sol' && (
+            <svg viewBox="0 0 32 32" class="w-10 h-10">
+                <circle cx="16" cy="16" r="14" fill="#0D0D0D" />
+                <defs>
+                    <linearGradient id="sol-grad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#00FFA3" />
+                        <stop offset="50%" stop-color="#03E1FF" />
+                        <stop offset="100%" stop-color="#DC1FFF" />
+                    </linearGradient>
+                </defs>
+                <path d="M8 21.5h13.5l2.5-2.5H10.5L8 21.5z" fill="url(#sol-grad)" />
+                <path d="M8 12.5l2.5-2.5H24l-2.5 2.5H8z" fill="url(#sol-grad)" />
+                <path d="M8 17h13.5L24 14.5H10.5L8 17z" fill="url(#sol-grad)" />
+            </svg>
+        )}
+        {p.symbol.id === 'vcn' && (
+            <svg viewBox="0 0 32 32" class="w-10 h-10">
+                <circle cx="16" cy="16" r="14" fill="#0891B2" />
+                <circle cx="16" cy="16" r="11" fill="#22D3EE" opacity="0.3" />
+                <circle cx="16" cy="16" r="10" stroke="#22D3EE" stroke-width="1.5" fill="none" />
+                <text x="16" y="21" text-anchor="middle" fill="white" font-size="13" font-weight="bold">V</text>
+                <path d="M16 5a11 11 0 0 1 0 22" stroke="#67E8F9" stroke-width="1" fill="none" opacity="0.5" />
+            </svg>
+        )}
+        {p.symbol.id === 'bnb' && (
+            <svg viewBox="0 0 32 32" class="w-10 h-10">
+                <circle cx="16" cy="16" r="14" fill="#F3BA2F" />
+                <path d="M16 8l-3 3 3 3 3-3-3-3z" fill="white" />
+                <path d="M10 14l-3 3 3 3 3-3-3-3z" fill="white" />
+                <path d="M22 14l-3 3 3 3 3-3-3-3z" fill="white" />
+                <path d="M16 20l-3 3 3 3 3-3-3-3z" fill="white" />
+                <path d="M16 14l-3 3 3 3 3-3-3-3z" fill="white" opacity="0.6" />
+            </svg>
+        )}
+        {p.symbol.id === 'doge' && (
+            <svg viewBox="0 0 32 32" class="w-10 h-10">
+                <circle cx="16" cy="16" r="14" fill="#C3A634" />
+                <circle cx="16" cy="16" r="11" fill="#E6C84E" />
+                <text x="16" y="22" text-anchor="middle" fill="#8B6914" font-size="16" font-weight="900" font-family="serif">D</text>
+                <line x1="14" y1="12" x2="14" y2="22" stroke="#8B6914" stroke-width="1.5" />
+            </svg>
+        )}
     </div>
 );
 
@@ -142,7 +192,10 @@ export const CryptoSlotsGame = (props: CryptoSlotsProps) => {
         setIsJackpot(jackpot);
         setReward({ vcn, rp });
 
-        props.onComplete({ vcn, rp, match, jackpot });
+        // 2-second delay so user can see the result before dice bet overlay
+        setTimeout(() => {
+            props.onComplete({ vcn, rp, match, jackpot });
+        }, 2000);
     };
 
     const currentDisplaySymbol = (reelIdx: number): SlotSymbol => {

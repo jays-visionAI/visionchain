@@ -944,7 +944,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 {/* Header */}
                 <WalletViewHeader
                     tag="MINI GAME"
-                    title="VCN Game"
+                    title="Game"
                     titleAccent="Center"
                     description="Play daily mini-games to earn VCN and RP rewards. Invite friends for bonus plays!"
                     icon={GameCenterIcon}
