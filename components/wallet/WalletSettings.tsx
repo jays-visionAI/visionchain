@@ -81,7 +81,171 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [passwordError, setPasswordError] = createSignal('');
     const [passwordSuccess, setPasswordSuccess] = createSignal(false);
     const [passwordLoading, setPasswordLoading] = createSignal(false);
-    const [walletPwMismatch, setWalletPwMismatch] = createSignal(false);
+    // Wallet password mismatch handling
+    const [needsWalletPw, setNeedsWalletPw] = createSignal(false);
+    const [walletPwForReEncrypt, setWalletPwForReEncrypt] = createSignal('');
+    const [showWalletPwForReEncrypt, setShowWalletPwForReEncrypt] = createSignal(false);
+
+    // Helper: re-encrypt wallet with a known decryption password and the new login password
+    const reEncryptWallet = async (decryptPassword: string, encryptPassword: string, userEmail: string) => {
+        const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
+        if (!encryptedWallet) return;
+
+        const mnemonic = await WalletService.decrypt(encryptedWallet, decryptPassword);
+        const reEncrypted = await WalletService.encrypt(mnemonic, encryptPassword);
+        WalletService.saveEncryptedWallet(reEncrypted, userEmail);
+        console.log('[ChangePassword] Wallet re-encrypted with new password');
+
+        // Re-sync to cloud (non-blocking)
+        CloudWalletService.hasCloudWallet().then(cloudCheck => {
+            if (cloudCheck.exists) {
+                const address = WalletService.getAddressHint(userEmail) || '';
+                CloudWalletService.saveToCloud(mnemonic, encryptPassword, address, userEmail)
+                    .then(r => {
+                        if (r.success) console.log('[ChangePassword] Cloud wallet re-synced');
+                        else console.warn('[ChangePassword] Cloud re-sync failed:', r.error);
+                    })
+                    .catch(e => console.warn('[ChangePassword] Cloud re-sync error:', e));
+            }
+        }).catch(e => console.warn('[ChangePassword] Cloud check failed:', e));
+    };
+
+    const handleChangePassword = async (e: Event) => {
+        e.preventDefault();
+        setPasswordError('');
+        setPasswordSuccess(false);
+
+        // Phase 2: User is providing their wallet password for re-encryption
+        if (needsWalletPw()) {
+            if (!walletPwForReEncrypt()) {
+                setPasswordError(locale() === 'ko'
+                    ? '지갑 비밀번호를 입력해주세요.'
+                    : 'Please enter your wallet password.');
+                return;
+            }
+            setPasswordLoading(true);
+            try {
+                const userEmail = auth.user()?.email || '';
+                await reEncryptWallet(walletPwForReEncrypt(), newPassword(), userEmail);
+
+                setPasswordSuccess(true);
+                setNeedsWalletPw(false);
+                setWalletPwForReEncrypt('');
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setTimeout(() => setPasswordSuccess(false), 5000);
+            } catch (err: any) {
+                console.error('[ChangePassword] Wallet re-encryption with wallet pw failed:', err);
+                setPasswordError(locale() === 'ko'
+                    ? '지갑 비밀번호가 올바르지 않습니다. 다시 시도해주세요.'
+                    : 'Incorrect wallet password. Please try again.');
+            } finally {
+                setPasswordLoading(false);
+            }
+            return;
+        }
+
+        // Phase 1: Normal password change flow
+        if (!currentPassword()) {
+            setPasswordError(t('settings.password.enterCurrent'));
+            return;
+        }
+        if (newPassword().length < 8) {
+            setPasswordError(t('settings.password.tooShort'));
+            return;
+        }
+        if (newPassword() !== confirmPassword()) {
+            setPasswordError(t('settings.password.mismatch'));
+            return;
+        }
+        if (currentPassword() === newPassword()) {
+            setPasswordError(t('settings.password.samePassword'));
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            const user = auth.user();
+            if (!user || !user.email) {
+                throw new Error('User not found. Please re-login and try again.');
+            }
+
+            // Step 1: Re-authenticate with current login password
+            const credential = EmailAuthProvider.credential(user.email, currentPassword());
+            await reauthenticateWithCredential(user, credential);
+
+            // Step 2: Verify 2FA if enabled
+            if (totpEnabled()) {
+                if (!pwChange2FACode() || pwChange2FACode().length < 6) {
+                    setPasswordError('Please enter your 2FA verification code.');
+                    setPasswordLoading(false);
+                    return;
+                }
+                const totpResult = await CloudWalletService.verifyTOTP(pwChange2FACode(), pwChange2FAUseBackup());
+                if (!totpResult.success) {
+                    setPasswordError(totpResult.error || 'Invalid 2FA code. Please try again.');
+                    setPasswordLoading(false);
+                    return;
+                }
+            }
+
+            // Step 3: Update Firebase login password
+            await updatePassword(user, newPassword());
+
+            // Step 4: Re-encrypt wallet with new password
+            const userEmail = user.email || '';
+            const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
+
+            if (encryptedWallet) {
+                try {
+                    // Try decrypting with the old login password
+                    await reEncryptWallet(currentPassword(), newPassword(), userEmail);
+
+                    // Full success
+                    setPasswordSuccess(true);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setPwChange2FACode('');
+                    setPwChange2FAUseBackup(false);
+                    setTimeout(() => setPasswordSuccess(false), 5000);
+                } catch (reEncryptErr) {
+                    // Login password != wallet password.
+                    // Firebase password already changed. Now ask user for their wallet password.
+                    console.warn('[ChangePassword] Login pw != wallet pw, requesting wallet pw input');
+                    setNeedsWalletPw(true);
+                    setPasswordError(locale() === 'ko'
+                        ? '로그인 비밀번호가 변경되었습니다. 지갑은 다른 비밀번호로 암호화되어 있습니다. 지갑 비밀번호를 입력하면 새 비밀번호로 동기화됩니다.'
+                        : 'Login password changed. Your wallet was encrypted with a different password. Enter your wallet password below to sync it with your new password.');
+                }
+            } else {
+                // No wallet on this device - just succeed
+                setPasswordSuccess(true);
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setPwChange2FACode('');
+                setPwChange2FAUseBackup(false);
+                setTimeout(() => setPasswordSuccess(false), 5000);
+            }
+        } catch (err: any) {
+            console.error('[ChangePassword] Error:', err);
+            if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                setPasswordError(t('settings.password.wrongPassword'));
+            } else if (err.code === 'auth/too-many-requests') {
+                setPasswordError(t('settings.password.tooManyAttempts'));
+            } else if (err.code === 'auth/requires-recent-login') {
+                setPasswordError(t('settings.password.requiresRelogin'));
+            } else if (err.code === 'auth/weak-password') {
+                setPasswordError(t('settings.password.weakPassword'));
+            } else {
+                setPasswordError(err.message || t('settings.password.generic'));
+            }
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
 
     // Cloud Sync state
     const [cloudSyncStatus, setCloudSyncStatus] = createSignal<'none' | 'synced' | 'error'>('none');
@@ -184,133 +348,6 @@ export function WalletSettings(props: { onBack?: () => void }) {
             announcements: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
         };
         return icons[key] || icons.announcements;
-    };
-
-    const handleChangePassword = async (e: Event) => {
-        e.preventDefault();
-        setPasswordError('');
-        setPasswordSuccess(false);
-
-        // Validate current password is provided
-        if (!currentPassword()) {
-            setPasswordError(t('settings.password.enterCurrent'));
-            return;
-        }
-
-        // Validate new password
-        if (newPassword().length < 8) {
-            setPasswordError(t('settings.password.tooShort'));
-            return;
-        }
-
-        // Validate confirmation
-        if (newPassword() !== confirmPassword()) {
-            setPasswordError(t('settings.password.mismatch'));
-            return;
-        }
-
-        // Prevent same password
-        if (currentPassword() === newPassword()) {
-            setPasswordError(t('settings.password.samePassword'));
-            return;
-        }
-
-        setPasswordLoading(true);
-        try {
-            const user = auth.user();
-            if (!user || !user.email) {
-                throw new Error('User not found. Please re-login and try again.');
-            }
-
-            // Step 1: Re-authenticate with current password
-            const credential = EmailAuthProvider.credential(user.email, currentPassword());
-            await reauthenticateWithCredential(user, credential);
-
-            // Step 2: Verify 2FA if enabled
-            if (totpEnabled()) {
-                if (!pwChange2FACode() || pwChange2FACode().length < 6) {
-                    setPasswordError('Please enter your 2FA verification code.');
-                    setPasswordLoading(false);
-                    return;
-                }
-                const totpResult = await CloudWalletService.verifyTOTP(pwChange2FACode(), pwChange2FAUseBackup());
-                if (!totpResult.success) {
-                    setPasswordError(totpResult.error || 'Invalid 2FA code. Please try again.');
-                    setPasswordLoading(false);
-                    return;
-                }
-            }
-
-            // Step 3: Update to new password
-            await updatePassword(user, newPassword());
-
-            // Step 4: Re-encrypt wallet with new password
-            // The wallet is encrypted with the wallet password (set during creation).
-            // When a user changes their login password, we must also re-encrypt the
-            // local wallet so both passwords stay in sync.
-            let walletReEncrypted = false;
-            try {
-                const userEmail = user.email || '';
-                const encryptedWallet = WalletService.getEncryptedWallet(userEmail);
-                if (encryptedWallet) {
-                    // Decrypt with old (current) login password
-                    const mnemonic = await WalletService.decrypt(encryptedWallet, currentPassword());
-                    // Re-encrypt with new password
-                    const reEncrypted = await WalletService.encrypt(mnemonic, newPassword());
-                    WalletService.saveEncryptedWallet(reEncrypted, userEmail);
-                    walletReEncrypted = true;
-                    console.log('[ChangePassword] Wallet re-encrypted with new password');
-
-                    // Re-sync to cloud if cloud wallet exists (non-blocking)
-                    CloudWalletService.hasCloudWallet().then(cloudCheck => {
-                        if (cloudCheck.exists) {
-                            const address = WalletService.getAddressHint(userEmail) || '';
-                            CloudWalletService.saveToCloud(mnemonic, newPassword(), address, userEmail)
-                                .then(r => {
-                                    if (r.success) console.log('[ChangePassword] Cloud wallet re-synced');
-                                    else console.warn('[ChangePassword] Cloud re-sync failed:', r.error);
-                                })
-                                .catch(e => console.warn('[ChangePassword] Cloud re-sync error:', e));
-                        }
-                    }).catch(e => console.warn('[ChangePassword] Cloud check failed:', e));
-                }
-            } catch (reEncryptErr) {
-                console.warn('[ChangePassword] Wallet re-encryption failed (wallet pw != login pw):', reEncryptErr);
-                // Firebase password was changed but wallet wasn't re-encrypted.
-                // This happens when the wallet was created with a different password.
-                // The wallet password remains unchanged — user must use the original wallet password
-                // for cloud sync and wallet operations.
-            }
-
-            // Success
-            setPasswordSuccess(true);
-            setWalletPwMismatch(!walletReEncrypted);
-
-            // Reset form
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-            setPwChange2FACode('');
-            setPwChange2FAUseBackup(false);
-
-            // Hide success after 8 seconds (longer if wallet mismatch to allow reading)
-            setTimeout(() => { setPasswordSuccess(false); setWalletPwMismatch(false); }, walletReEncrypted ? 5000 : 10000);
-        } catch (err: any) {
-            console.error('[ChangePassword] Error:', err);
-            if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-                setPasswordError(t('settings.password.wrongPassword'));
-            } else if (err.code === 'auth/too-many-requests') {
-                setPasswordError(t('settings.password.tooManyAttempts'));
-            } else if (err.code === 'auth/requires-recent-login') {
-                setPasswordError(t('settings.password.requiresRelogin'));
-            } else if (err.code === 'auth/weak-password') {
-                setPasswordError(t('settings.password.weakPassword'));
-            } else {
-                setPasswordError(err.message || t('settings.password.generic'));
-            }
-        } finally {
-            setPasswordLoading(false);
-        }
     };
 
     // Cloud Sync Handler
@@ -1625,18 +1662,39 @@ export function WalletSettings(props: { onBack?: () => void }) {
                             </div>
                         </Show>
 
-                        {/* Wallet password mismatch warning */}
-                        <Show when={walletPwMismatch()}>
-                            <div class="text-amber-400 text-sm bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <AlertCircle class="w-4 h-4 shrink-0" />
-                                    <span class="font-semibold">{locale() === 'ko' ? '지갑 비밀번호 안내' : 'Wallet Password Notice'}</span>
+                        {/* Wallet password input for re-encryption (Phase 2) */}
+                        <Show when={needsWalletPw()}>
+                            <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-3">
+                                <div class="flex items-center gap-2">
+                                    <AlertCircle class="w-4 h-4 text-amber-400 shrink-0" />
+                                    <span class="text-sm font-semibold text-amber-300">
+                                        {locale() === 'ko' ? '지갑 비밀번호 동기화 필요' : 'Wallet Password Sync Required'}
+                                    </span>
                                 </div>
-                                <p class="text-amber-400/80 text-xs leading-relaxed">
+                                <p class="text-xs text-gray-400 leading-relaxed">
                                     {locale() === 'ko'
-                                        ? '로그인 비밀번호가 변경되었지만, 지갑 비밀번호는 별도로 설정되어 있어 변경되지 않았습니다. 클라우드 동기화 시 원래 지갑 비밀번호를 사용하세요.'
-                                        : 'Your login password was changed, but your wallet password was set separately and remains unchanged. Use your original wallet password for cloud sync.'}
+                                        ? '로그인 비밀번호가 변경되었습니다. 지갑 비밀번호를 입력하면 새 로그인 비밀번호로 통합됩니다.'
+                                        : 'Login password changed. Enter your wallet password to unify it with your new login password.'}
                                 </p>
+                                <div class="relative">
+                                    <input
+                                        type={showWalletPwForReEncrypt() ? 'text' : 'password'}
+                                        value={walletPwForReEncrypt()}
+                                        onInput={(e) => setWalletPwForReEncrypt(e.currentTarget.value)}
+                                        placeholder={locale() === 'ko' ? '지갑 비밀번호 입력' : 'Enter wallet password'}
+                                        class="w-full p-3 pr-12 bg-white/5 border border-amber-500/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowWalletPwForReEncrypt(!showWalletPwForReEncrypt())}
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-1"
+                                        tabIndex={-1}
+                                    >
+                                        <Show when={showWalletPwForReEncrypt()} fallback={<Eye class="w-4 h-4" />}>
+                                            <EyeOff class="w-4 h-4" />
+                                        </Show>
+                                    </button>
+                                </div>
                             </div>
                         </Show>
 
@@ -1645,7 +1703,14 @@ export function WalletSettings(props: { onBack?: () => void }) {
                             disabled={passwordLoading()}
                             class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Show when={passwordLoading()} fallback={<><Save class="w-4 h-4" /> {t('settings.password.changeButton')}</>}>
+                            <Show when={passwordLoading()} fallback={
+                                <>
+                                    <Save class="w-4 h-4" />
+                                    {needsWalletPw()
+                                        ? (locale() === 'ko' ? '지갑 비밀번호 동기화' : 'Sync Wallet Password')
+                                        : t('settings.password.changeButton')}
+                                </>
+                            }>
                                 <RefreshCw class="w-4 h-4 animate-spin" /> {t('settings.password.changing')}
                             </Show>
                         </button>
