@@ -16,7 +16,6 @@ import EnvironmentBadge from './components/EnvironmentBadge';
 import HomePage from './pages/HomePage';
 import * as Public from './pages/PublicPages';
 import * as Admin from './pages/AdminPages';
-import * as TradingAdmin from './pages/TradingAdminPages';
 import * as Auth from './pages/AuthPages';
 import ValidatorStaking from './components/ValidatorStaking';
 
@@ -34,13 +33,12 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/trading-login') || location.pathname.startsWith('/trading-admin') || location.pathname.startsWith('/mm-admin') || location.pathname.startsWith('/mm-login') || location.pathname.startsWith('/user-guide');
-  const isDexRoute = () => location.pathname.startsWith('/dex');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/user-guide');
 
   return (
     <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
       <div class="relative z-10">
-        <Show when={!isAdminRoute() && !isDexRoute() && !location.pathname.startsWith('/wallet')}>
+        <Show when={!isAdminRoute() && !location.pathname.startsWith('/wallet')}>
           <Navbar />
         </Show>
         <main>
@@ -48,7 +46,7 @@ function Layout(props: { children?: any }) {
             {props.children}
           </Suspense>
         </main>
-        <Show when={!isAdminRoute() && !isDexRoute() && !location.pathname.startsWith('/wallet')}>
+        <Show when={!isAdminRoute() && !location.pathname.startsWith('/wallet')}>
           <Footer />
         </Show>
       </div>
@@ -103,12 +101,6 @@ render(() => (
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
         <Route path="/docs/user-guide" component={Public.UserManualPage} />
-        {!isProduction() && (
-          <>
-            <Route path="/dex" component={Public.DEXMarketsPage} />
-            <Route path="/dex/:pair" component={Public.TradingTerminalPage} />
-          </>
-        )}
 
         {/* Studio / Tools Routes */}
         <Route path="/mint" component={Public.MintStudioPage} />
@@ -146,28 +138,6 @@ render(() => (
         <Route path="/adminsystem/reward-engine" component={Admin.AdminRewardHubPage} />
         <Route path="/adminsystem/ai-storage" component={Admin.AIStorageAdminPage} />
         <Route path="/adminsystem/content" component={Admin.AdminContentPage} />
-
-        {/* Trading Admin Routes (Separate system) */}
-        <Route path="/trading-login" component={TradingAdmin.TradingAdminLoginPage} />
-        <Route path="/trading-admin" component={TradingAdmin.TradingAdminDashboardPage} />
-        <Route path="/trading-admin/action" component={TradingAdmin.TradingAdminActionPage} />
-        <Route path="/trading-admin/price" component={TradingAdmin.TradingAdminPricePage} />
-        <Route path="/trading-admin/spread" component={TradingAdmin.TradingAdminSpreadPage} />
-        <Route path="/trading-admin/inventory" component={TradingAdmin.TradingAdminInventoryPage} />
-        <Route path="/trading-admin/risk" component={TradingAdmin.TradingAdminRiskPage} />
-        <Route path="/trading-admin/agents" component={TradingAdmin.TradingAdminAgentsPage} />
-        <Route path="/trading-admin/log" component={TradingAdmin.TradingAdminLogPage} />
-
-        {/* Legacy redirects: /mm-admin -> /trading-admin */}
-        <Route path="/mm-login" component={() => <Navigate href="/trading-login" />} />
-        <Route path="/mm-admin" component={() => <Navigate href="/trading-admin" />} />
-        <Route path="/mm-admin/action" component={() => <Navigate href="/trading-admin/action" />} />
-        <Route path="/mm-admin/price" component={() => <Navigate href="/trading-admin/price" />} />
-        <Route path="/mm-admin/spread" component={() => <Navigate href="/trading-admin/spread" />} />
-        <Route path="/mm-admin/inventory" component={() => <Navigate href="/trading-admin/inventory" />} />
-        <Route path="/mm-admin/risk" component={() => <Navigate href="/trading-admin/risk" />} />
-        <Route path="/mm-admin/agents" component={() => <Navigate href="/trading-admin/agents" />} />
-        <Route path="/mm-admin/log" component={() => <Navigate href="/trading-admin/log" />} />
 
       </Router>
     </I18nProvider>

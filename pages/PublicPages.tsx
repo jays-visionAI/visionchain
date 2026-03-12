@@ -18,8 +18,6 @@ export const Bridge = lazy(() => import('../components/Bridge'));
 export const Paymaster = lazy(() => import('../components/Paymaster'));
 export const AgentGateway = lazy(() => import('../components/AgentGateway'));
 export const ApiHub = lazy(() => import('../components/ApiHub'));
-export const TradingTerminal = lazy(() => import('../dex/TradingTerminal'));
-export const DEXMarkets = lazy(() => import('../dex/DEXMarkets'));
 export const MintStudio = lazy(() => import('../components/mint/MintStudio'));
 
 // Page Wrapper Components
@@ -127,12 +125,3 @@ export const MintStudioPage = () => {
     return <div><MintStudio /></div>;
 };
 
-export const TradingTerminalPage = () => {
-    document.title = 'VisionDEX Trading Arena | Vision Chain';
-    return <div id="trading-terminal"><TradingTerminal /></div>;
-};
-
-export const DEXMarketsPage = () => {
-    document.title = 'VisionDEX Markets | Vision Chain';
-    return <div id="dex-markets"><DEXMarkets /></div>;
-};
