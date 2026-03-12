@@ -856,31 +856,42 @@ const VisionQuantEngine = (): JSX.Element => {
                         </div>
 
                         {/* Tab Navigation */}
-                        <div class="flex items-center gap-1 bg-[#111113]/40 rounded-xl p-1 border border-white/[0.04]">
-                            {(['strategies', 'agents', 'arena', 'signals', 'reports'] as QuantTab[]).map(tab => (
-                                <button
-                                    onClick={() => setActiveTab(tab)}
-                                    class={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab() === tab
-                                        ? tab === 'arena'
-                                            ? 'bg-cyan-500/15 text-cyan-400 shadow-lg border border-cyan-500/20'
-                                            : 'bg-white/[0.08] text-white shadow-lg'
-                                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
-                                        }`}
-                                >
-                                    {tab === 'strategies' && <StrategyIcon />}
-                                    {tab === 'agents' && <BotIcon />}
-                                    {tab === 'arena' && (
-                                        <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                                            <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
-                                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                                        </svg>
-                                    )}
-                                    {tab === 'signals' && <Activity class="w-4 h-4" />}
-                                    {tab === 'reports' && <BarChart3 class="w-4 h-4" />}
-                                    <span class="capitalize">{tab === 'arena' ? 'Arena' : tab}</span>
-                                </button>
-                            ))}
+                        <div class="relative">
+                            {/* Right fade indicator for scroll hint */}
+                            <div class="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#070708] to-transparent z-10 pointer-events-none md:hidden" />
+                            <div
+                                class="flex items-center gap-1 overflow-x-auto scrollbar-hide scroll-smooth border-b border-white/[0.06] pb-0 -mx-1 px-1"
+                                style="-webkit-overflow-scrolling: touch;"
+                            >
+                                {(['strategies', 'agents', 'arena', 'signals', 'reports'] as QuantTab[]).map(tab => (
+                                    <button
+                                        onClick={() => setActiveTab(tab)}
+                                        class={`flex items-center justify-center gap-1.5 px-4 py-3 whitespace-nowrap text-xs font-bold transition-all relative flex-shrink-0 ${activeTab() === tab
+                                            ? tab === 'arena'
+                                                ? 'text-cyan-400'
+                                                : 'text-white'
+                                            : 'text-gray-500 hover:text-gray-300'
+                                            }`}
+                                    >
+                                        {tab === 'strategies' && <StrategyIcon />}
+                                        {tab === 'agents' && <BotIcon />}
+                                        {tab === 'arena' && (
+                                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                                <path d="M4 22h16" /><path d="M10 22V9" /><path d="M14 22V9" />
+                                                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                            </svg>
+                                        )}
+                                        {tab === 'signals' && <Activity class="w-4 h-4" />}
+                                        {tab === 'reports' && <BarChart3 class="w-4 h-4" />}
+                                        <span class="capitalize">{tab === 'arena' ? 'Arena' : tab}</span>
+                                        {/* Active underline indicator */}
+                                        <Show when={activeTab() === tab}>
+                                            <div class={`absolute bottom-0 left-2 right-2 h-[2px] rounded-full ${tab === 'arena' ? 'bg-cyan-400' : 'bg-white'}`} />
+                                        </Show>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {/* ═══ STRATEGIES TAB ═══ */}
