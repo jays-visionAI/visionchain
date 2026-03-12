@@ -27492,7 +27492,10 @@ exports.runLiveTradingEngine = onSchedule({
   memory: "512MiB",
   timeoutSeconds: 300,
 }, async () => {
-  console.log("[LiveEngine] Starting 5-minute run...");
+  // DISABLED: Migrated to Cloud Run quant-trading-worker (10s cycle, always-on)
+  // Cloud Run service: quant-trading-worker-451188892027.asia-northeast3.run.app
+  console.log("[LiveEngine] DISABLED - Migrated to Cloud Run worker. Remove this function after confirming worker stability.");
+  return;
 
   // ═══ Layer 4: Global Kill Switch ═══
   try {

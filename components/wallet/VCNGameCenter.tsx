@@ -932,9 +932,9 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         <div ref={gameContainerRef}
             class={isFullscreenGame()
                 ? 'fixed inset-0 z-40 bg-[#09090b] flex flex-col overflow-hidden'
-                : 'flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8 relative'
+                : 'p-4 lg:p-8 pb-32 relative'
             }
-            style={isFullscreenGame() ? 'touch-action: none;' : '-webkit-overflow-scrolling: touch;'}
+            style={isFullscreenGame() ? 'touch-action: none;' : ''}
         >
             <div class={isFullscreenGame()
                 ? 'flex-1 flex flex-col min-h-0'
