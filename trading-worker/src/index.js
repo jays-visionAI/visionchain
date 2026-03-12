@@ -406,12 +406,13 @@ async function main() {
     async function loadAgents() {
         try {
             const snap = await db.collection("paperAgents")
-                .where("tradingMode", "==", "live")
                 .where("status", "in", ["running", "active"])
                 .get();
             agents = snap.docs.map(d => ({ ref: d.ref, id: d.id, ...d.data() }));
             lastAgentLoad = Date.now();
-            console.log(`[Worker] Loaded ${agents.length} active live agents`);
+            const liveCount = agents.filter(a => a.tradingMode === "live").length;
+            const paperCount = agents.length - liveCount;
+            console.log(`[Worker] Loaded ${agents.length} active agents (${liveCount} live, ${paperCount} paper)`);
         } catch (err) {
             console.error("[Worker] Failed to load agents:", err.message);
         }
