@@ -265,6 +265,32 @@ export const CrashGame = (props: CrashGameProps) => {
                         Watch the rocket fly and cash out before it crashes!<br />
                         The longer you wait, the bigger the multiplier.
                     </p>
+
+                    {/* How to Play */}
+                    <div class="w-full max-w-xs space-y-2">
+                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">How to Play</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L8 10h8L12 2z" /><path d="M8 10l-2 8h12l-2-8H8z" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Launch the rocket</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20l10-10 10 10" /><path d="M2 20h20" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Multiplier goes up</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M9 12l2 2 4-4" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Cash out before crash!</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <button onClick={startGame}
                         class="px-8 py-3.5 bg-gradient-to-r from-red-500 to-amber-500 text-white font-black rounded-2xl hover:shadow-[0_0_30px_rgba(239,68,68,0.3)] active:scale-95 transition-all text-lg"
                         style="touch-action: manipulation; min-height: 52px;">

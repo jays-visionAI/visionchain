@@ -268,6 +268,32 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
                         Tap to fly! Navigate through pipes to earn VCN.<br />
                         The further you go, the bigger the reward.
                     </p>
+
+                    {/* How to Play */}
+                    <div class="w-full max-w-xs space-y-2">
+                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">How to Play</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 15l-2 5L9 9l11 4-5 2z" /><path d="M15 15l5 5" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Tap screen to flap up</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M14 6v12" /><path d="M20 6v12" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Fly through pipe gaps</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">More pipes = more VCN!</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <button onClick={flap}
                         class="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-green-500 text-white font-black rounded-2xl hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95 transition-all text-lg"
                         style="touch-action: manipulation; min-height: 52px;">

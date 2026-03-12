@@ -331,6 +331,31 @@ export const TowerClimbGame = (props: TowerClimbProps) => {
                         Choose the right door on each floor to climb higher!
                         Cash out anytime or lose everything if you pick wrong.
                     </p>
+
+                    {/* How to Play */}
+                    <div class="w-full max-w-xs space-y-2">
+                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">How to Play</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M12 8v8M8 12h8" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Tap a door to choose</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Climb floors if safe</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l2 2" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Cash out anytime!</div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-5 gap-1 w-full max-w-xs text-center">
                         {ZONES.map(z => (
                             <div class="p-1.5 rounded-lg bg-[#111113]/60 border border-white/[0.04]">

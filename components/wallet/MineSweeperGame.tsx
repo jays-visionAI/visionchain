@@ -166,6 +166,32 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
                         Tap cells to reveal gems. Avoid the {MINE_COUNT} hidden mines!<br />
                         Each gem increases your multiplier. Cash out anytime.
                     </p>
+
+                    {/* How to Play */}
+                    <div class="w-full max-w-xs space-y-2">
+                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">How to Play</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 15l-2 5L9 9l11 4-5 2z" /><path d="M15 15l5 5" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Tap cells to reveal gems</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Avoid mines or lose all!</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l2 2" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Cash out anytime!</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <button onClick={initGrid}
                         class="px-8 py-3.5 bg-gradient-to-r from-red-500 to-orange-500 text-white font-black rounded-2xl hover:shadow-[0_0_30px_rgba(239,68,68,0.3)] active:scale-95 transition-all text-lg"
                         style="touch-action: manipulation; min-height: 52px;">

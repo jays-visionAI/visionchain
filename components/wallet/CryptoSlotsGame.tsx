@@ -90,7 +90,7 @@ const SymbolIcon = (p: { symbol: SlotSymbol; class?: string }) => (
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 export const CryptoSlotsGame = (props: CryptoSlotsProps) => {
-    const [phase, setPhase] = createSignal<'ready' | 'spinning' | 'stopping' | 'result'>('ready');
+    const [phase, setPhase] = createSignal<'ready' | 'idle' | 'spinning' | 'stopping' | 'result'>('ready');
     const [reels, setReels] = createSignal<SlotSymbol[]>([randomSymbol(), randomSymbol(), randomSymbol()]);
     const [spinReels, setSpinReels] = createSignal<SlotSymbol[][]>([[], [], []]);
     const [spinIndex, setSpinIndex] = createSignal([0, 0, 0]);
@@ -216,6 +216,59 @@ export const CryptoSlotsGame = (props: CryptoSlotsProps) => {
                 Back to games
             </button>
 
+            {/* Ready Screen with Tutorial */}
+            <Show when={phase() === 'ready'}>
+                <div class="flex-1 flex flex-col items-center justify-center gap-5 px-4 pb-20">
+                    <div class="w-16 h-16 bg-gradient-to-br from-amber-500/20 to-red-500/20 rounded-2xl flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" class="w-10 h-10" fill="none">
+                            <rect x="2" y="4" width="20" height="16" rx="3" fill="#F59E0B" opacity="0.3" />
+                            <rect x="4" y="7" width="4" height="6" rx="1" fill="#F59E0B" />
+                            <rect x="10" y="7" width="4" height="6" rx="1" fill="#EF4444" />
+                            <rect x="16" y="7" width="4" height="6" rx="1" fill="#F59E0B" />
+                            <rect x="3" y="16" width="18" height="3" rx="1" fill="#D97706" />
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-white">Crypto Slots</h2>
+                    <p class="text-sm text-gray-500 text-center max-w-xs leading-tight">
+                        Spin the reels and match crypto symbols to win!<br />
+                        Match all 3 VCN for the jackpot.
+                    </p>
+
+                    {/* How to Play */}
+                    <div class="w-full max-w-xs space-y-2">
+                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">How to Play</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v10M12 12l5-3M12 12l-5-3" /><circle cx="12" cy="12" r="10" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Pull the lever to spin</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h4v10H4zM10 7h4v10h-4zM16 7h4v10h-4z" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Match 2 or 3 symbols</div>
+                            </div>
+                            <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" /></svg>
+                                </div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Triple VCN = Jackpot!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onClick={() => setPhase('idle')}
+                        class="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-red-500 text-white font-black rounded-2xl hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95 transition-all text-lg"
+                        style="touch-action: manipulation; min-height: 52px;">
+                        PLAY
+                    </button>
+                </div>
+            </Show>
+
+            {/* Slot Machine */}
+            <Show when={phase() !== 'ready'}>
             <div class="flex-1 flex flex-col items-center justify-center gap-6 px-4">
                 <div class="text-xs font-black text-amber-400 uppercase tracking-widest">Crypto Slots</div>
 
@@ -282,7 +335,7 @@ export const CryptoSlotsGame = (props: CryptoSlotsProps) => {
                         disabled={phase() === 'spinning'}
                         class={`w-full py-4 rounded-2xl font-black text-lg transition-all
                             ${phase() === 'spinning' ? 'bg-gray-800 text-gray-600 cursor-wait' : ''}
-                            ${phase() === 'ready' ? 'bg-gradient-to-r from-amber-500 to-red-500 text-white hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95' : ''}
+                            ${phase() === 'idle' ? 'bg-gradient-to-r from-amber-500 to-red-500 text-white hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95' : ''}
                             ${phase() === 'result' ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-gray-400' : ''}
                         `}
                         style="touch-action: manipulation; min-height: 52px;">
@@ -290,6 +343,7 @@ export const CryptoSlotsGame = (props: CryptoSlotsProps) => {
                     </button>
                 </div>
             </div>
+            </Show>
         </div>
     );
 };
