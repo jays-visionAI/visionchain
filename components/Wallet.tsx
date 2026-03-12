@@ -6173,7 +6173,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     initial={{ scale: 0.9, opacity: 0, y: 20 }}
                                     animate={{ scale: 1, opacity: 1, y: 0 }}
                                     exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                                    class="relative w-full max-w-md bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                                    class="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#111113] border border-white/10 rounded-[32px] shadow-2xl"
                                 >
                                     {/* Header */}
                                     <div class="p-8 pb-6 text-center">

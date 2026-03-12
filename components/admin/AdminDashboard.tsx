@@ -1,6 +1,6 @@
 import { Component, createSignal, onCleanup, For, Show, onMount, createMemo } from 'solid-js';
 import { ethers } from 'ethers';
-import { getAllUsers, getDefiConfig, getFirebaseDb } from '../../services/firebaseService';
+import { getDefiConfig, getFirebaseDb } from '../../services/firebaseService';
 import { collection, query, where, getDocs, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import {
     Activity,
@@ -66,6 +66,10 @@ export const AdminDashboard: Component = () => {
     const [wallets, setWallets] = createSignal(0);
     const [humanCount, setHumanCount] = createSignal(0);
     const [agentCount, setAgentCount] = createSignal(0);
+    const [growth24h, setGrowth24h] = createSignal(0);
+    const [growth7d, setGrowth7d] = createSignal(0);
+    const [newUsers24h, setNewUsers24h] = createSignal(0);
+    const [newUsers7d, setNewUsers7d] = createSignal(0);
     const [blockTime, setBlockTime] = createSignal(1.2); // Static realistic block time
     const [tvl, setTvl] = createSignal(0);
     const [vcnDistributed, setVcnDistributed] = createSignal(0);
@@ -187,17 +191,44 @@ export const AdminDashboard: Component = () => {
 
     const fetchUserStats = async () => {
         try {
-            const users = await getAllUsers(500);
-            setHumanCount(users.length);
-
-            // Fetch agent count from Firestore
             const db = getFirebaseDb();
+
+            // Accurate total user count (no limit)
+            const usersRef = collection(db, 'users');
+            const usersSnap = await getCountFromServer(usersRef);
+            const totalHuman = usersSnap.data().count;
+            setHumanCount(totalHuman);
+
+            // Agent count
             const agentsRef = collection(db, 'agents');
             const agentsSnap = await getCountFromServer(agentsRef);
             const agentTotal = agentsSnap.data().count;
             setAgentCount(agentTotal);
 
-            setWallets(users.length + agentTotal);
+            setWallets(totalHuman + agentTotal);
+
+            // 24h growth: count users created in last 24 hours
+            const now = new Date();
+            const h24Ago = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+            const d7Ago = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+            try {
+                const q24 = query(usersRef, where('createdAt', '>=', h24Ago));
+                const snap24 = await getCountFromServer(q24);
+                const new24 = snap24.data().count;
+                setNewUsers24h(new24);
+                const base24 = totalHuman - new24;
+                setGrowth24h(base24 > 0 ? parseFloat(((new24 / base24) * 100).toFixed(1)) : 0);
+
+                const q7 = query(usersRef, where('createdAt', '>=', d7Ago));
+                const snap7 = await getCountFromServer(q7);
+                const new7 = snap7.data().count;
+                setNewUsers7d(new7);
+                const base7 = totalHuman - new7;
+                setGrowth7d(base7 > 0 ? parseFloat(((new7 / base7) * 100).toFixed(1)) : 0);
+            } catch (growthErr) {
+                console.warn('[Dashboard] Growth rate calculation failed:', growthErr);
+            }
         } catch (e) {
             console.error("Failed to fetch user stats for dashboard:", e);
         }
@@ -568,7 +599,6 @@ export const AdminDashboard: Component = () => {
                     <MetricCard
                         title="Total Accounts"
                         value={wallets().toLocaleString()}
-                        trend={5.8}
                         icon={Users}
                         color="blue"
                     >
@@ -595,6 +625,33 @@ export const AdminDashboard: Component = () => {
                                 </div>
                                 <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
                                     <div class="bg-cyan-500 h-full rounded-full transition-all" style={`width: ${wallets() > 0 ? (agentCount() / wallets() * 100) : 0}%`} />
+                                </div>
+                            </div>
+                            {/* Growth & DAU Stats */}
+                            <div class="pt-3 border-t border-white/5 grid grid-cols-3 gap-2">
+                                {/* 24h Growth */}
+                                <div class="bg-white/[0.03] rounded-xl p-2.5 text-center">
+                                    <div class={`text-sm font-black ${growth24h() > 0 ? 'text-green-400' : growth24h() < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                        {growth24h() > 0 ? '+' : ''}{growth24h()}%
+                                    </div>
+                                    <div class="text-[8px] font-bold uppercase tracking-wider text-gray-600 mt-0.5">24H</div>
+                                    <div class="text-[9px] text-gray-500 mt-0.5">+{newUsers24h()}</div>
+                                </div>
+                                {/* 7d Growth */}
+                                <div class="bg-white/[0.03] rounded-xl p-2.5 text-center">
+                                    <div class={`text-sm font-black ${growth7d() > 0 ? 'text-green-400' : growth7d() < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                        {growth7d() > 0 ? '+' : ''}{growth7d()}%
+                                    </div>
+                                    <div class="text-[8px] font-bold uppercase tracking-wider text-gray-600 mt-0.5">7D</div>
+                                    <div class="text-[9px] text-gray-500 mt-0.5">+{newUsers7d()}</div>
+                                </div>
+                                {/* DAU Rate */}
+                                <div class="bg-white/[0.03] rounded-xl p-2.5 text-center">
+                                    <div class="text-sm font-black text-indigo-400">
+                                        {humanCount() > 0 ? ((dauData().length > 0 ? dauData()[dauData().length - 1]?.value || 0 : 0) / humanCount() * 100).toFixed(1) : '0'}%
+                                    </div>
+                                    <div class="text-[8px] font-bold uppercase tracking-wider text-gray-600 mt-0.5">DAU Rate</div>
+                                    <div class="text-[9px] text-gray-500 mt-0.5">{dauData().length > 0 ? dauData()[dauData().length - 1]?.value || 0 : 0} users</div>
                                 </div>
                             </div>
                         </div>
