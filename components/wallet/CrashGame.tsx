@@ -54,7 +54,6 @@ export const CrashGame = (props: CrashGameProps) => {
     };
 
     const startGame = () => {
-        initCanvas();
         crashPt = generateCrashPoint();
         setCrashPoint(crashPt);
         setMultiplier(1.0);
@@ -62,7 +61,13 @@ export const CrashGame = (props: CrashGameProps) => {
         startTime = Date.now();
         setPhase('flying');
         GameAudio.play('rocketLaunch');
-        animFrameId = requestAnimationFrame(gameLoop);
+        // Defer canvas init to next frame so canvas element is in the DOM
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                initCanvas();
+                animFrameId = requestAnimationFrame(gameLoop);
+            });
+        });
     };
 
     const gameLoop = () => {

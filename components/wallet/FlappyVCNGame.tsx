@@ -39,6 +39,7 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
     let frameCount = 0;
     let canvasW = 0;
     let canvasH = 0;
+    let graceFrames = 0; // Skip collision detection for first N frames
 
     onMount(() => { GameAudio.startBGM('flappy'); });
     onCleanup(() => {
@@ -47,23 +48,40 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
     });
 
     const initCanvas = () => {
-        if (!canvasRef) return;
+        if (!canvasRef) return false;
         const rect = canvasRef.getBoundingClientRect();
+        if (rect.width < 10 || rect.height < 10) return false; // Canvas not rendered yet
         canvasW = rect.width;
         canvasH = rect.height;
         canvasRef.width = canvasW;
         canvasRef.height = canvasH;
+        return true;
     };
 
     const startGame = () => {
-        initCanvas();
-        birdY = canvasH / 2;
-        birdVel = 0;
+        setPhase('playing');
+        setScore(0);
         pipes = [];
         frameCount = 0;
-        setScore(0);
-        setPhase('playing');
-        animFrameId = requestAnimationFrame(gameLoop);
+        graceFrames = 45; // ~0.75 seconds of invincibility
+        birdVel = FLAP_FORCE * 0.5; // Gentle initial upward push
+
+        // Defer game loop start to next frame so the canvas element is in the DOM
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (!initCanvas()) {
+                    // Still not ready, try one more time
+                    requestAnimationFrame(() => {
+                        initCanvas();
+                        birdY = canvasH / 2;
+                        animFrameId = requestAnimationFrame(gameLoop);
+                    });
+                    return;
+                }
+                birdY = canvasH / 2;
+                animFrameId = requestAnimationFrame(gameLoop);
+            });
+        });
     };
 
     const flap = () => {
@@ -85,12 +103,20 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
 
         frameCount++;
 
+        // Grace period countdown
+        if (graceFrames > 0) graceFrames--;
+
         // Physics
         birdVel += GRAVITY;
         birdY += birdVel;
 
-        // Spawn pipes
-        if (frameCount % 90 === 0) {
+        // Clamp bird during grace period (don't let it fly off screen while invincible)
+        if (graceFrames > 0) {
+            birdY = Math.max(BIRD_SIZE, Math.min(canvasH - BIRD_SIZE, birdY));
+        }
+
+        // Spawn pipes (delay first pipe to after grace period)
+        if (frameCount > 60 && frameCount % 90 === 0) {
             const gapY = 80 + Math.random() * (canvasH - 160 - PIPE_GAP);
             pipes.push({ x: canvasW, gapY, passed: false });
         }
@@ -107,22 +133,24 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
             }
         }
 
-        // Collision detection
+        // Collision detection (SKIP during grace period)
         const birdX = 60;
         const birdR = BIRD_SIZE / 2;
 
-        // Floor/ceiling
-        if (birdY - birdR <= 0 || birdY + birdR >= canvasH) {
-            die();
-            return;
-        }
+        if (graceFrames <= 0) {
+            // Floor/ceiling
+            if (birdY - birdR <= 0 || birdY + birdR >= canvasH) {
+                die();
+                return;
+            }
 
-        // Pipes
-        for (const pipe of pipes) {
-            if (birdX + birdR > pipe.x && birdX - birdR < pipe.x + PIPE_WIDTH) {
-                if (birdY - birdR < pipe.gapY || birdY + birdR > pipe.gapY + PIPE_GAP) {
-                    die();
-                    return;
+            // Pipes
+            for (const pipe of pipes) {
+                if (birdX + birdR > pipe.x && birdX - birdR < pipe.x + PIPE_WIDTH) {
+                    if (birdY - birdR < pipe.gapY || birdY + birdR > pipe.gapY + PIPE_GAP) {
+                        die();
+                        return;
+                    }
                 }
             }
         }
