@@ -43,7 +43,9 @@ import {
     AlertTriangle,
     List,
     History,
-    X
+    X,
+    Shield,
+    Key
 } from 'lucide-solid';
 import { useI18n } from '../../i18n/i18nContext';
 import { DailyTipCard } from './DailyTipCard';
@@ -715,7 +717,8 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
     { id: '1', label: 'Learn about Vision Chain', prompt: 'Tell me about Vision Chain', icon: 'BookOpen', iconColor: 'text-yellow-500', actionType: 'chat', order: 1, enabled: true },
     { id: '2', label: 'Receive VCN Gift', prompt: 'I want to receive VCN airdrop', icon: 'Sparkles', iconColor: 'text-purple-400', actionType: 'chat', order: 2, enabled: true },
     { id: '3', label: 'Invite Friends', prompt: 'How do I invite friends?', icon: 'UserPlus', iconColor: 'text-emerald-400', actionType: 'chat', order: 3, enabled: true },
-    { id: '4', label: 'Send VCN', prompt: '', icon: 'Send', iconColor: 'text-blue-400', actionType: 'flow', flowName: 'send', order: 4, enabled: true }
+    { id: '4', label: 'Send VCN', prompt: '', icon: 'Send', iconColor: 'text-blue-400', actionType: 'flow', flowName: 'send', order: 4, enabled: true },
+    { id: '5', label: 'Setup 2FA Security', prompt: '', icon: 'Shield', iconColor: 'text-amber-400', actionType: 'flow', flowName: 'settings', order: 5, enabled: true }
 ];
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
@@ -1198,7 +1201,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-20 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64 min-w-0" style="box-sizing: border-box;">
+                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-20 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-96 md:pb-64 min-w-0" style="box-sizing: border-box;">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -1220,16 +1223,19 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         {(action) => {
                                             // Icon mapping
                                             const iconMap: Record<string, any> = {
-                                                BookOpen, Sparkles, UserPlus, Send, TrendingUp, Zap, Download, Clock, MessageSquare, Search, Lock, Layers
+                                                BookOpen, Sparkles, UserPlus, Send, TrendingUp, Zap, Download, Clock, MessageSquare, Search, Lock, Layers, Shield, Key
                                             };
                                             const IconComponent = iconMap[action.icon] || Sparkles;
 
                                             const handleClick = () => {
                                                 if (action.actionType === 'flow' && action.flowName) {
-                                                    props.setActiveFlow(action.flowName);
+                                                    if (action.flowName === 'settings') {
+                                                        props.setActiveView('settings');
+                                                    } else {
+                                                        props.setActiveFlow(action.flowName);
+                                                    }
                                                 } else if (action.prompt) {
                                                     props.setInput(action.prompt);
-                                                    // Use queueMicrotask to ensure input signal is updated
                                                     queueMicrotask(() => props.handleSend());
                                                 }
                                             };

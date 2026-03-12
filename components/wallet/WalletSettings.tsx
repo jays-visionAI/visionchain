@@ -109,7 +109,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
         if (loginCurrentPw() === loginNewPw()) { setLoginPwError('New password must be different from current password.'); return; }
 
         // OTP required
-        if (!totpEnabled()) { setLoginPwError('You must enable 2FA (Google OTP) before changing your password. Go to the Security tab.'); return; }
+        // 2FA check removed - password change is allowed without 2FA
         if (!loginPw2FACode() || loginPw2FACode().length < 6) { setLoginPwError('Please enter your 2FA verification code.'); return; }
 
         setLoginPwLoading(true);
@@ -162,7 +162,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
         if (walletCurrentPw() === walletNewPw()) { setWalletPwError('New password must be different from current password.'); return; }
 
         // OTP required
-        if (!totpEnabled()) { setWalletPwError('You must enable 2FA (Google OTP) before changing your wallet password. Go to the Security tab.'); return; }
+        // 2FA check removed - wallet password change is allowed without 2FA
         if (!walletPw2FACode() || walletPw2FACode().length < 6) { setWalletPwError('Please enter your 2FA verification code.'); return; }
 
         setWalletPwLoading(true);
@@ -1514,39 +1514,18 @@ export function WalletSettings(props: { onBack?: () => void }) {
             <Show when={activeTab() === 'password'}>
                 <div class="space-y-6">
                     {/* OTP Setup Nudge Banner */}
+                    {/* 2FA recommendation (non-blocking) */}
                     <Show when={!totpEnabled()}>
-                        <div class="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-6 space-y-4">
-                            <div class="flex items-center gap-3">
-                                <div class="p-2 rounded-xl bg-amber-500/20">
-                                    <Shield class="w-5 h-5 text-amber-400" />
-                                </div>
-                                <h3 class="text-lg font-semibold text-amber-300">Two-Factor Authentication Required</h3>
-                            </div>
-                            <p class="text-sm text-gray-300 leading-relaxed">
-                                You must enable Google Authenticator (2FA) before you can change any passwords.
-                                This ensures that only you can modify your account credentials.
+                        <div class="rounded-2xl bg-blue-500/5 border border-blue-500/20 p-4 flex items-center gap-3">
+                            <Shield class="w-5 h-5 text-blue-400 flex-shrink-0" />
+                            <p class="text-sm text-gray-400">
+                                For enhanced security, consider enabling 2FA in the <button type="button" onClick={() => setActiveTab('security')} class="text-blue-400 hover:underline font-medium">Security tab</button>.
                             </p>
-                            <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                                <p class="text-xs text-red-400 leading-relaxed">
-                                    <strong>Important:</strong> All users are strongly advised to enable 2FA.
-                                    If you choose not to enable 2FA and lose access to your password,
-                                    you bear full responsibility for any loss of funds or inability to access your wallet.
-                                    VisionChain cannot recover passwords or wallets without proper authentication.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('security')}
-                                class="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-amber-500/25 transition-all"
-                            >
-                                <Shield class="w-4 h-4" />
-                                Go to Security Tab to Enable 2FA
-                            </button>
                         </div>
                     </Show>
 
                     {/* Section 1: Login Password Change */}
-                    <div class={`rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden ${!totpEnabled() ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
                         <div class="flex items-center gap-3 p-6 border-b border-white/5">
                             <div class="p-2 rounded-xl bg-cyan-500/20">
                                 <Lock class="w-5 h-5 text-cyan-400" />
@@ -1616,7 +1595,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                     </div>
 
                     {/* Section 2: Wallet Password Change */}
-                    <div class={`rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden ${!totpEnabled() ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
                         <div class="flex items-center gap-3 p-6 border-b border-white/5">
                             <div class="p-2 rounded-xl bg-purple-500/20">
                                 <Key class="w-5 h-5 text-purple-400" />
