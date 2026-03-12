@@ -45,6 +45,7 @@ import {
     ExternalLink,
     ArrowRight
 } from 'lucide-solid';
+import { renderMarkdown } from '../../utils/renderMarkdown';
 import { Motion, Presence } from 'solid-motionone';
 import { useAuth } from '../auth/authContext';
 import {
@@ -818,10 +819,29 @@ export function WalletNotifications() {
                                                 </div>
                                             </div>
 
-                                            <div class="prose prose-invert max-w-none">
-                                                <p class="text-lg lg:text-xl text-gray-400 font-medium leading-[1.6] whitespace-pre-wrap">
-                                                    {item().content}
-                                                </p>
+                                            <div class="announcement-markdown-content" style="color: #9ca3af; font-size: 1rem; line-height: 1.8;">
+                                                <style>{`
+                                                    .announcement-markdown-content h1 { font-size: 1.75rem; font-weight: 800; color: #fff; margin: 1.5rem 0 0.75rem; line-height: 1.2; }
+                                                    .announcement-markdown-content h2 { font-size: 1.4rem; font-weight: 700; color: #e5e7eb; margin: 1.25rem 0 0.5rem; line-height: 1.3; }
+                                                    .announcement-markdown-content h3 { font-size: 1.15rem; font-weight: 700; color: #d1d5db; margin: 1rem 0 0.4rem; }
+                                                    .announcement-markdown-content p { margin: 0.5rem 0; }
+                                                    .announcement-markdown-content strong { color: #fff; font-weight: 700; }
+                                                    .announcement-markdown-content em { font-style: italic; color: #d1d5db; }
+                                                    .announcement-markdown-content a { color: #a78bfa; text-decoration: underline; transition: color 0.2s; }
+                                                    .announcement-markdown-content a:hover { color: #c4b5fd; }
+                                                    .announcement-markdown-content code { background: rgba(255,255,255,0.06); padding: 0.15rem 0.4rem; border-radius: 0.35rem; font-family: monospace; font-size: 0.9em; color: #e5e7eb; }
+                                                    .announcement-markdown-content ul, .announcement-markdown-content ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+                                                    .announcement-markdown-content li { margin: 0.25rem 0; }
+                                                    .announcement-markdown-content ul { list-style: disc; }
+                                                    .announcement-markdown-content ol { list-style: decimal; }
+                                                    .announcement-markdown-content blockquote { border-left: 3px solid #a78bfa; padding: 0.75rem 1rem; margin: 0.75rem 0; background: rgba(167,139,250,0.06); border-radius: 0 0.5rem 0.5rem 0; }
+                                                    .announcement-markdown-content blockquote p { margin: 0.25rem 0; color: #d1d5db; }
+                                                    .announcement-markdown-content hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5rem 0; }
+                                                    .announcement-markdown-content table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9em; }
+                                                    .announcement-markdown-content th { text-align: left; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.04); border-bottom: 2px solid rgba(255,255,255,0.1); color: #e5e7eb; font-weight: 700; font-size: 0.85em; }
+                                                    .announcement-markdown-content td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+                                                `}</style>
+                                                <div innerHTML={renderMarkdown(item().content)} />
                                             </div>
 
                                             <Show when={item().actionUrl}>

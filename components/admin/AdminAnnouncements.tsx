@@ -25,6 +25,7 @@ import {
     updateAnnouncement,
     deleteAnnouncement
 } from '../../services/firebaseService';
+import { renderMarkdown } from '../../utils/renderMarkdown';
 import { useAuth } from '../auth/authContext';
 
 export function AdminAnnouncements() {
@@ -34,6 +35,7 @@ export function AdminAnnouncements() {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
     const [editingId, setEditingId] = createSignal<string | null>(null);
     const [saving, setSaving] = createSignal(false);
+    const [contentPreview, setContentPreview] = createSignal(false);
 
     // Form state
     const [formTitle, setFormTitle] = createSignal('');
@@ -66,6 +68,7 @@ export function AdminAnnouncements() {
         setFormActionUrl('');
         setFormActionLabel('');
         setEditingId(null);
+        setContentPreview(false);
     };
 
     // Open modal for new announcement
@@ -322,16 +325,63 @@ export function AdminAnnouncements() {
 
                             {/* Content */}
                             <div>
-                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">
-                                    Content *
-                                </label>
-                                <textarea
-                                    value={formContent()}
-                                    onInput={(e) => setFormContent(e.currentTarget.value)}
-                                    rows={5}
-                                    class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-none"
-                                    placeholder="Announcement content..."
-                                />
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                        Content * (Supports Markdown)
+                                    </label>
+                                    <div class="flex bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => setContentPreview(false)}
+                                            class={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-all ${!contentPreview() ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                                        >
+                                            Write
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setContentPreview(true)}
+                                            class={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-all ${contentPreview() ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                                        >
+                                            Preview
+                                        </button>
+                                    </div>
+                                </div>
+                                <Show when={!contentPreview()} fallback={
+                                    <div class="min-h-[140px] p-4 bg-white/5 border border-white/10 rounded-xl text-gray-300 overflow-auto" style="line-height: 1.7; font-size: 0.9rem;">
+                                        <style>{`
+                                            .admin-md-preview h1 { font-size: 1.5rem; font-weight: 800; color: #fff; margin: 1rem 0 0.5rem; }
+                                            .admin-md-preview h2 { font-size: 1.25rem; font-weight: 700; color: #e5e7eb; margin: 0.75rem 0 0.4rem; }
+                                            .admin-md-preview h3 { font-size: 1.1rem; font-weight: 700; color: #d1d5db; margin: 0.5rem 0 0.3rem; }
+                                            .admin-md-preview p { margin: 0.4rem 0; }
+                                            .admin-md-preview strong { color: #fff; font-weight: 700; }
+                                            .admin-md-preview a { color: #a78bfa; text-decoration: underline; }
+                                            .admin-md-preview code { background: rgba(255,255,255,0.08); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.9em; }
+                                            .admin-md-preview ul, .admin-md-preview ol { margin: 0.4rem 0 0.4rem 1.5rem; }
+                                            .admin-md-preview li { margin: 0.2rem 0; }
+                                            .admin-md-preview ul { list-style: disc; }
+                                            .admin-md-preview ol { list-style: decimal; }
+                                            .admin-md-preview blockquote { border-left: 3px solid #a78bfa; padding: 0.5rem 0.75rem; margin: 0.5rem 0; background: rgba(167,139,250,0.08); border-radius: 0 0.5rem 0.5rem 0; }
+                                            .admin-md-preview hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
+                                            .admin-md-preview table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.9em; }
+                                            .admin-md-preview th { text-align: left; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.04); border-bottom: 2px solid rgba(255,255,255,0.1); color: #e5e7eb; font-weight: 700; }
+                                            .admin-md-preview td { padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+                                        `}</style>
+                                        <Show when={formContent().trim()} fallback={
+                                            <p class="text-gray-600 italic">Nothing to preview</p>
+                                        }>
+                                            <div class="admin-md-preview" innerHTML={renderMarkdown(formContent())} />
+                                        </Show>
+                                    </div>
+                                }>
+                                    <textarea
+                                        value={formContent()}
+                                        onInput={(e) => setFormContent(e.currentTarget.value)}
+                                        rows={8}
+                                        class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-none font-mono text-sm"
+                                        placeholder={"# Heading\n\nParagraph with **bold** and *italic*.\n\n- List item 1\n- List item 2\n\n| Col A | Col B |\n|-------|-------|\n| val 1 | val 2 |"}
+                                    />
+                                </Show>
+                                <p class="text-[10px] text-gray-600 mt-1">Supports: # headings, **bold**, *italic*, - lists, {'>'} quotes, tables, [links](url), `code`, ---</p>
                             </div>
 
                             {/* Type & Priority */}
