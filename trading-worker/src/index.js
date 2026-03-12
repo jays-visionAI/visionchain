@@ -1008,6 +1008,91 @@ async function main() {
                 startedAt,
                 uptimeSeconds: Math.floor(process.uptime()),
             }));
+        } else if (req.url === "/test-order") {
+            // Temporary: Test Upbit order API
+            const axios = require("axios");
+            const jwt = require("jsonwebtoken");
+            const { v4: uuidv4 } = require("uuid");
+            const crypto = require("crypto");
+            const querystring = require("querystring");
+            const results = { timestamp: new Date().toISOString() };
+
+            const upbitAgent = agents.find(a => (a.exchange || "upbit") === "upbit" && a.exchangeAccountId);
+            if (!upbitAgent) {
+                results.order = { status: "SKIPPED", reason: "No Upbit agent with exchangeAccountId" };
+            } else {
+                try {
+                    const keyData = await loadExchangeKey(upbitAgent.exchangeAccountId);
+                    if (!keyData) throw new Error("Exchange key not found or invalid");
+
+                    // Place a limit buy BTC at minimum amount (5000 KRW) at a very low price
+                    const orderParams = {
+                        market: "KRW-BTC",
+                        side: "bid",
+                        ord_type: "limit",
+                        price: "50000000",  // 5천만원 (시장가보다 낮음)
+                        volume: "0.0001",    // 최소 수량
+                    };
+
+                    const query = querystring.encode(orderParams);
+                    const hash = crypto.createHash("sha512").update(query, "utf-8").digest("hex");
+                    const payload = {
+                        access_key: keyData.accessKey,
+                        nonce: uuidv4(),
+                        query_hash: hash,
+                        query_hash_alg: "SHA512",
+                    };
+                    const token = jwt.sign(payload, keyData.secretKey);
+
+                    const resp = await axios.post("https://api.upbit.com/v1/orders", orderParams, {
+                        headers: { Authorization: `Bearer ${token}` },
+                        timeout: 10000,
+                    });
+                    results.order = {
+                        status: "ORDER_PLACED",
+                        orderId: resp.data?.uuid,
+                        market: resp.data?.market,
+                        side: resp.data?.side,
+                        price: resp.data?.price,
+                        volume: resp.data?.volume,
+                    };
+                    // Cancel immediately if order was placed
+                    if (resp.data?.uuid) {
+                        try {
+                            const cancelQuery = querystring.encode({ uuid: resp.data.uuid });
+                            const cancelHash = crypto.createHash("sha512").update(cancelQuery, "utf-8").digest("hex");
+                            const cancelPayload = {
+                                access_key: keyData.accessKey,
+                                nonce: uuidv4(),
+                                query_hash: cancelHash,
+                                query_hash_alg: "SHA512",
+                            };
+                            const cancelToken = jwt.sign(cancelPayload, keyData.secretKey);
+                            await axios.delete(`https://api.upbit.com/v1/order?${cancelQuery}`, {
+                                headers: { Authorization: `Bearer ${cancelToken}` },
+                                timeout: 10000,
+                            });
+                            results.order.cancelled = true;
+                        } catch (cancelErr) {
+                            results.order.cancelError = cancelErr.message;
+                        }
+                    }
+                } catch (err) {
+                    const errName = err.response?.data?.error?.name || "";
+                    const errMsg = err.response?.data?.error?.message || err.message;
+                    results.order = {
+                        status: errName === "insufficient_funds_bid" ? "API_WORKS" : "FAILED",
+                        errorName: errName,
+                        message: errMsg,
+                        note: errName === "insufficient_funds_bid"
+                            ? "Order API is functional! Failed only due to insufficient KRW balance."
+                            : undefined,
+                    };
+                }
+            }
+
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(results, null, 2));
         } else {
             res.writeHead(404);
             res.end("Not found");

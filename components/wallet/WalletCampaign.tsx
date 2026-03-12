@@ -173,13 +173,22 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                         {/* Sub-page Header */}
                         <div class="flex items-center justify-between">
                             <button
-                                onClick={() => setSelectedQuest(null)}
+                                onClick={() => {
+                                    // If user came from Game Center (via initialQuest), go back to game view
+                                    if (props.initialQuest && props.onNavigate) {
+                                        props.onNavigate('game');
+                                    } else {
+                                        setSelectedQuest(null);
+                                    }
+                                }}
                                 class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
                             >
                                 <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-all">
                                     <ArrowLeft class="w-5 h-5" />
                                 </div>
-                                <span class="text-sm font-bold uppercase tracking-widest">{t('campaign.backToQuests')}</span>
+                                <span class="text-sm font-bold uppercase tracking-widest">
+                                    {props.initialQuest ? t('campaign.backToGames') || 'Back to Games' : t('campaign.backToQuests')}
+                                </span>
                             </button>
 
                             <div class="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
