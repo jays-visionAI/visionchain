@@ -55,7 +55,7 @@ const REST_URLS = {
     bitkub: "https://api.bitkub.com/api",
     coinbase: "https://api.exchange.coinbase.com",
     bitflyer: "https://api.bitflyer.com/v1",
-    gmo: "https://api.coin.z.com/public/v1",
+    gmo: "https://api.coin.z.com",
     coincheck: "https://coincheck.com/api",
     coinone: "https://api.coinone.co.kr",
     cryptocom: "https://api.crypto.com/exchange/v1",
@@ -207,8 +207,70 @@ async function fetchCandles(exchange, market, count = 100) {
                 break;
             }
 
+            case "bitkub": {
+                const now = Math.floor(Date.now() / 1000);
+                const from = now - (count * 3600);
+                const sym = market.includes("_") ? market.split("_")[1] : market;
+                const resp = await axios.get(
+                    `https://api.bitkub.com/tradingview/history?symbol=${sym}_THB&resolution=60&from=${from}&to=${now}`,
+                    { timeout: 10000, headers: COMMON_HEADERS }
+                );
+                if (resp.data?.c) {
+                    closes = resp.data.c.slice(-count);
+                    volumes = (resp.data.v || []).slice(-count);
+                }
+                break;
+            }
+
+            case "coinbase": {
+                const end = Math.floor(Date.now() / 1000);
+                const start = end - (count * 3600);
+                const resp = await axios.get(
+                    `${REST_URLS.coinbase}/products/${market}/candles?granularity=3600&start=${start}&end=${end}`,
+                    { timeout: 10000, headers: COMMON_HEADERS }
+                );
+                const candles = (resp.data || []).reverse();
+                closes = candles.map(c => parseFloat(c[4]));
+                volumes = candles.map(c => parseFloat(c[5]));
+                break;
+            }
+
+            case "gmo": {
+                const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
+                const resp = await axios.get(
+                    `${REST_URLS.gmo}/public/v1/klines?symbol=${market}&interval=1hour&date=${today}`,
+                    { timeout: 10000 }
+                );
+                const list = resp.data?.data || [];
+                closes = list.map(c => parseFloat(c.close)).slice(-count);
+                volumes = list.map(c => parseFloat(c.volume)).slice(-count);
+                break;
+            }
+
+            case "coinone": {
+                const resp = await axios.get(
+                    `${REST_URLS.coinone}/public/v2/chart/KRW/${market.toUpperCase()}?interval=1h`,
+                    { timeout: 10000, headers: COMMON_HEADERS }
+                );
+                const list = resp.data?.chart || [];
+                closes = list.map(c => parseFloat(c.close)).slice(-count);
+                volumes = list.map(c => parseFloat(c.target_volume || c.volume || 0)).slice(-count);
+                break;
+            }
+
+            case "cryptocom": {
+                const resp = await axios.get(
+                    `${REST_URLS.cryptocom}/public/get-candlestick?instrument_name=${market}&timeframe=1h`,
+                    { timeout: 10000 }
+                );
+                const list = resp.data?.result?.data || [];
+                closes = list.map(c => parseFloat(c.c)).slice(-count);
+                volumes = list.map(c => parseFloat(c.v)).slice(-count);
+                break;
+            }
+
             default: {
-                // For exchanges without candle API support, try generic Upbit/Binance
+                // For exchanges without candle API support (bitflyer, coincheck)
                 console.warn(`[ExchangeAdapter] No candle support for ${exchange}, using fallback`);
                 return { closes: [], volumes: [] };
             }
@@ -333,8 +395,158 @@ async function fetchPrices(exchange, markets) {
                 break;
             }
 
+            case "bithumb": {
+                const resp = await axios.get(
+                    `${REST_URLS.bithumb}/public/ticker/ALL_KRW`,
+                    { timeout: 10000, headers: COMMON_HEADERS }
+                );
+                if (resp.data?.status === "0000" && resp.data?.data) {
+                    for (const [symbol, info] of Object.entries(resp.data.data)) {
+                        if (symbol === "date" || typeof info !== "object") continue;
+                        const market = `${symbol}_KRW`;
+                        if (markets.includes(market)) {
+                            prices[market] = parseFloat(info.closing_price);
+                        }
+                    }
+                }
+                break;
+            }
+
+            case "bitget": {
+                const resp = await axios.get(
+                    `${REST_URLS.bitget}/spot/market/tickers`,
+                    { timeout: 10000 }
+                );
+                for (const t of (resp.data?.data || [])) {
+                    if (markets.includes(t.symbol)) {
+                        prices[t.symbol] = parseFloat(t.lastPr);
+                    }
+                }
+                break;
+            }
+
+            case "kucoin": {
+                const resp = await axios.get(
+                    `${REST_URLS.kucoin}/market/allTickers`,
+                    { timeout: 10000 }
+                );
+                for (const t of (resp.data?.data?.ticker || [])) {
+                    if (markets.includes(t.symbol)) {
+                        prices[t.symbol] = parseFloat(t.last);
+                    }
+                }
+                break;
+            }
+
+            case "mexc": {
+                const resp = await axios.get(
+                    `${REST_URLS.mexc}/ticker/price`,
+                    { timeout: 10000 }
+                );
+                for (const t of resp.data) {
+                    if (markets.includes(t.symbol)) {
+                        prices[t.symbol] = parseFloat(t.price);
+                    }
+                }
+                break;
+            }
+
+            case "bitkub": {
+                const resp = await axios.get(
+                    `${REST_URLS.bitkub}/v3/market/ticker`,
+                    { timeout: 10000, headers: COMMON_HEADERS }
+                );
+                const data = resp.data;
+                if (Array.isArray(data)) {
+                    for (const t of data) {
+                        if (markets.includes(t.symbol)) prices[t.symbol] = parseFloat(t.last);
+                    }
+                } else if (typeof data === "object") {
+                    for (const [sym, info] of Object.entries(data)) {
+                        if (markets.includes(sym) && info?.last) prices[sym] = parseFloat(info.last);
+                    }
+                }
+                break;
+            }
+
+            case "coinbase": {
+                for (const m of markets) {
+                    try {
+                        const resp = await axios.get(
+                            `${REST_URLS.coinbase}/products/${m}/ticker`,
+                            { timeout: 8000, headers: COMMON_HEADERS }
+                        );
+                        if (resp.data?.price) prices[m] = parseFloat(resp.data.price);
+                    } catch { /* skip */ }
+                }
+                break;
+            }
+
+            case "bitflyer": {
+                for (const m of markets) {
+                    try {
+                        const resp = await axios.get(
+                            `${REST_URLS.bitflyer}/ticker?product_code=${m}`,
+                            { timeout: 8000, headers: COMMON_HEADERS }
+                        );
+                        if (resp.data?.ltp) prices[m] = resp.data.ltp;
+                    } catch { /* skip */ }
+                }
+                break;
+            }
+
+            case "gmo": {
+                const resp = await axios.get(
+                    `${REST_URLS.gmo}/public/v1/ticker`,
+                    { timeout: 10000 }
+                );
+                for (const t of (resp.data?.data || [])) {
+                    if (markets.includes(t.symbol)) prices[t.symbol] = parseFloat(t.last);
+                }
+                break;
+            }
+
+            case "coincheck": {
+                for (const m of markets) {
+                    try {
+                        const resp = await axios.get(
+                            `${REST_URLS.coincheck}/rate/${m}`,
+                            { timeout: 8000, headers: COMMON_HEADERS }
+                        );
+                        if (resp.data?.rate) prices[m] = parseFloat(resp.data.rate);
+                    } catch { /* skip */ }
+                }
+                break;
+            }
+
+            case "coinone": {
+                try {
+                    const resp = await axios.get(
+                        `${REST_URLS.coinone}/ticker?currency=all`,
+                        { timeout: 10000, headers: COMMON_HEADERS }
+                    );
+                    if (resp.data) {
+                        for (const m of markets) {
+                            if (resp.data[m]?.last) prices[m] = parseFloat(resp.data[m].last);
+                        }
+                    }
+                } catch { /* skip */ }
+                break;
+            }
+
+            case "cryptocom": {
+                const resp = await axios.get(
+                    `${REST_URLS.cryptocom}/public/get-tickers`,
+                    { timeout: 10000 }
+                );
+                for (const t of (resp.data?.result?.data || [])) {
+                    if (markets.includes(t.i)) prices[t.i] = parseFloat(t.a);
+                }
+                break;
+            }
+
             default: {
-                // Generic: fetch one by one
+                // Generic fallback: fetch one by one from candle
                 for (const m of markets) {
                     try {
                         const candle = await fetchCandles(exchange, m, 1);
@@ -463,6 +675,139 @@ async function placeOrder(exchange, accessKey, secretKey, passphrase, market, si
                 return { success: true, orderId: resp.data?.data?.[0]?.ordId };
             }
 
+            case "bithumb": {
+                const [base, quote] = market.split("_");
+                const endpoint = "/info/orders";
+                const nonce = Date.now();
+                const paramObj = { order_currency: base, payment_currency: quote, units: String(volume), price: String(Math.round(price)), type: side === "buy" ? "bid" : "ask" };
+                const paramStr = new URLSearchParams(paramObj).toString();
+                const hmacData = `${endpoint}\x00${paramStr}\x00${nonce}`;
+                const sig = crypto.createHmac("sha512", secretKey).update(hmacData).digest("hex");
+                const resp = await axios.post(`${REST_URLS.bithumb}${endpoint}`, paramStr, {
+                    headers: { "Api-Key": accessKey, "Api-Sign": sig, "Api-Nonce": String(nonce), "Content-Type": "application/x-www-form-urlencoded" },
+                    timeout: 10000,
+                });
+                return { success: resp.data?.status === "0000", orderId: resp.data?.order_id || `bithumb_${nonce}` };
+            }
+
+            case "bitget": {
+                const ts = Date.now();
+                const body = JSON.stringify({ symbol: market, side, orderType: "limit", price: String(price), size: String(volume), force: "gtc" });
+                const preSign = `${ts}POST/api/v2/spot/trade/place-order${body}`;
+                const sig = crypto.createHmac("sha256", secretKey).update(preSign).digest("base64");
+                const resp = await axios.post(`${REST_URLS.bitget}/spot/trade/place-order`, JSON.parse(body), {
+                    headers: { "ACCESS-KEY": accessKey, "ACCESS-SIGN": sig, "ACCESS-TIMESTAMP": String(ts), "ACCESS-PASSPHRASE": passphrase || "", "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: true, orderId: resp.data?.data?.orderId };
+            }
+
+            case "kucoin": {
+                const ts = Date.now();
+                const oid = uuidv4();
+                const body = JSON.stringify({ clientOid: oid, side, symbol: market, type: "limit", price: String(price), size: String(volume) });
+                const sig = crypto.createHmac("sha256", secretKey).update(`${ts}POST/api/v1/orders${body}`).digest("base64");
+                const ppSign = crypto.createHmac("sha256", secretKey).update(passphrase || "").digest("base64");
+                const resp = await axios.post(`${REST_URLS.kucoin}/orders`, JSON.parse(body), {
+                    headers: { "KC-API-KEY": accessKey, "KC-API-SIGN": sig, "KC-API-TIMESTAMP": String(ts), "KC-API-PASSPHRASE": ppSign, "KC-API-KEY-VERSION": "2", "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: true, orderId: resp.data?.data?.orderId };
+            }
+
+            case "mexc": {
+                const ts = Date.now();
+                const params = { symbol: market, side: side.toUpperCase(), type: "LIMIT", quantity: String(volume), price: String(price), timestamp: ts };
+                const qs = Object.entries(params).map(([k, v]) => `${k}=${v}`).join("&");
+                const sig = crypto.createHmac("sha256", secretKey).update(qs).digest("hex");
+                const resp = await axios.post(`${REST_URLS.mexc}/order?${qs}&signature=${sig}`, null, {
+                    headers: { "X-MEXC-APIKEY": accessKey }, timeout: 10000,
+                });
+                return { success: true, orderId: String(resp.data?.orderId || `mexc_${ts}`) };
+            }
+
+            case "bitkub": {
+                const ts = Date.now();
+                const body = JSON.stringify({ sym: market, amt: volume, rat: price, typ: "limit" });
+                const ep = side === "buy" ? "/api/v3/market/place-bid" : "/api/v3/market/place-ask";
+                const sig = crypto.createHmac("sha256", secretKey).update(`${ts}POST${ep}${body}`).digest("hex");
+                const resp = await axios.post(`https://api.bitkub.com${ep}`, JSON.parse(body), {
+                    headers: { "X-BTK-APIKEY": accessKey, "X-BTK-TIMESTAMP": String(ts), "X-BTK-SIGN": sig, "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: resp.data?.error === 0, orderId: String(resp.data?.result?.id || `bitkub_${ts}`) };
+            }
+
+            case "coinbase": {
+                const ts = Math.floor(Date.now() / 1000);
+                const body = JSON.stringify({ product_id: market, side, type: "limit", price: String(price), size: String(volume) });
+                const sig = crypto.createHmac("sha256", secretKey).update(`${ts}POST/orders${body}`).digest("base64");
+                const resp = await axios.post(`${REST_URLS.coinbase}/orders`, JSON.parse(body), {
+                    headers: { "CB-ACCESS-KEY": accessKey, "CB-ACCESS-SIGN": sig, "CB-ACCESS-TIMESTAMP": String(ts), "CB-ACCESS-PASSPHRASE": passphrase || "", "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: true, orderId: resp.data?.id };
+            }
+
+            case "bitflyer": {
+                const ts = Date.now();
+                const body = JSON.stringify({ product_code: market, child_order_type: "LIMIT", side: side.toUpperCase(), price: Math.round(price), size: volume });
+                const sig = crypto.createHmac("sha256", secretKey).update(`${ts}POST/v1/me/sendchildorder${body}`).digest("hex");
+                const resp = await axios.post(`${REST_URLS.bitflyer}/me/sendchildorder`, JSON.parse(body), {
+                    headers: { "ACCESS-KEY": accessKey, "ACCESS-TIMESTAMP": String(ts), "ACCESS-SIGN": sig, "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: true, orderId: resp.data?.child_order_acceptance_id };
+            }
+
+            case "gmo": {
+                const ts = Date.now();
+                const body = JSON.stringify({ symbol: market, side: side.toUpperCase(), executionType: "LIMIT", price: String(price), size: String(volume) });
+                const sig = crypto.createHmac("sha256", secretKey).update(`${ts}POST/private/v1/order${body}`).digest("hex");
+                const resp = await axios.post(`${REST_URLS.gmo}/private/v1/order`, JSON.parse(body), {
+                    headers: { "API-KEY": accessKey, "API-TIMESTAMP": String(ts), "API-SIGN": sig, "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: resp.data?.status === 0, orderId: resp.data?.data || `gmo_${ts}` };
+            }
+
+            case "coincheck": {
+                const nonce = Date.now();
+                const url = `${REST_URLS.coincheck}/exchange/orders`;
+                const body = JSON.stringify({ pair: market, order_type: side, rate: price, amount: volume });
+                const sig = crypto.createHmac("sha256", secretKey).update(`${nonce}${url}${body}`).digest("hex");
+                const resp = await axios.post(url, JSON.parse(body), {
+                    headers: { "ACCESS-KEY": accessKey, "ACCESS-NONCE": String(nonce), "ACCESS-SIGNATURE": sig, "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: !!resp.data?.success, orderId: String(resp.data?.id || `coincheck_${nonce}`) };
+            }
+
+            case "coinone": {
+                const nonce = Date.now();
+                const payload = { access_token: accessKey, nonce, price: String(Math.round(price)), qty: String(volume), target_currency: market, quote_currency: "krw" };
+                const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64");
+                const sig = crypto.createHmac("sha512", secretKey.toUpperCase()).update(payloadB64).digest("hex");
+                const ep = side === "buy" ? "/v2/order/limit_buy/" : "/v2/order/limit_sell/";
+                const resp = await axios.post(`${REST_URLS.coinone}${ep}`, payload, {
+                    headers: { "X-COINONE-PAYLOAD": payloadB64, "X-COINONE-SIGNATURE": sig, "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: resp.data?.result === "success", orderId: resp.data?.orderId || `coinone_${nonce}` };
+            }
+
+            case "cryptocom": {
+                const nonce = Date.now();
+                const method = "private/create-order";
+                const reqParams = { instrument_name: market, side: side.toUpperCase(), type: "LIMIT", price: String(price), quantity: String(volume), time_in_force: "GOOD_TILL_CANCEL" };
+                const paramStr = Object.keys(reqParams).sort().map(k => `${k}${reqParams[k]}`).join("");
+                const sig = crypto.createHmac("sha256", secretKey).update(`${method}${nonce}${accessKey}${paramStr}${nonce}`).digest("hex");
+                const resp = await axios.post(`${REST_URLS.cryptocom}/${method}`, {
+                    id: nonce, method, nonce, api_key: accessKey, sig, params: reqParams,
+                }, { headers: { "Content-Type": "application/json" }, timeout: 10000 });
+                return { success: !!resp.data?.result?.order_id, orderId: resp.data?.result?.order_id || `cryptocom_${nonce}` };
+            }
+
             default:
                 return { success: false, error: `Order placement not yet implemented for ${exchange}` };
         }
@@ -586,6 +931,50 @@ async function placeFuturesOrder(exchange, accessKey, secretKey, passphrase, mar
                     timeout: 10000,
                 });
                 return { success: true, orderId: resp.data?.data?.[0]?.ordId };
+            }
+
+            case "bitget": {
+                const ts = Date.now();
+                const body = JSON.stringify({
+                    symbol: market, productType: "USDT-FUTURES", marginMode: marginType === "isolated" ? "isolated" : "crossed",
+                    side: side === "buy" ? "open_long" : "open_short", orderType: "limit",
+                    price: String(price), size: String(volume), leverage: String(leverage), force: "gtc",
+                });
+                const preSign = `${ts}POST/api/v2/mix/order/place-order${body}`;
+                const sig = crypto.createHmac("sha256", secretKey).update(preSign).digest("base64");
+                const resp = await axios.post(`https://api.bitget.com/api/v2/mix/order/place-order`, JSON.parse(body), {
+                    headers: { "ACCESS-KEY": accessKey, "ACCESS-SIGN": sig, "ACCESS-TIMESTAMP": String(ts), "ACCESS-PASSPHRASE": passphrase || "", "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: true, orderId: resp.data?.data?.orderId };
+            }
+
+            case "kucoin": {
+                const ts = Date.now();
+                const oid = uuidv4();
+                const futSymbol = market.includes("-") ? market.replace("-", "") + "M" : market + "M";
+                const body = JSON.stringify({ clientOid: oid, symbol: futSymbol, leverage: String(leverage), side, type: "limit", price: String(price), size: parseInt(volume) });
+                const ep = "/api/v1/orders";
+                const sig = crypto.createHmac("sha256", secretKey).update(`${ts}POST${ep}${body}`).digest("base64");
+                const ppSign = crypto.createHmac("sha256", secretKey).update(passphrase || "").digest("base64");
+                const resp = await axios.post(`https://api-futures.kucoin.com${ep}`, JSON.parse(body), {
+                    headers: { "KC-API-KEY": accessKey, "KC-API-SIGN": sig, "KC-API-TIMESTAMP": String(ts), "KC-API-PASSPHRASE": ppSign, "KC-API-KEY-VERSION": "2", "Content-Type": "application/json" },
+                    timeout: 10000,
+                });
+                return { success: true, orderId: resp.data?.data?.orderId };
+            }
+
+            case "cryptocom": {
+                const nonce = Date.now();
+                const method = "private/create-order";
+                const derivInst = market.replace("_USDT", "USD-PERP");
+                const reqParams = { instrument_name: derivInst, side: side.toUpperCase(), type: "LIMIT", price: String(price), quantity: String(volume), time_in_force: "GOOD_TILL_CANCEL" };
+                const paramStr = Object.keys(reqParams).sort().map(k => `${k}${reqParams[k]}`).join("");
+                const sig = crypto.createHmac("sha256", secretKey).update(`${method}${nonce}${accessKey}${paramStr}${nonce}`).digest("hex");
+                const resp = await axios.post(`${REST_URLS.cryptocom}/${method}`, {
+                    id: nonce, method, nonce, api_key: accessKey, sig, params: reqParams,
+                }, { headers: { "Content-Type": "application/json" }, timeout: 10000 });
+                return { success: !!resp.data?.result?.order_id, orderId: resp.data?.result?.order_id };
             }
 
             default:
