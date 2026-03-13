@@ -28427,3 +28427,7 @@ Object.assign(exports, vpisActions);
 // ── VPIS: Self-Improvement Loops (Phase 6) ──────────────────────────────
 const vpisSelfImprove = require("./vpisSelfImprove");
 Object.assign(exports, vpisSelfImprove);
+
+// ── VPIS: Operations + Alerting (Phase 7) ───────────────────────────────
+const vpisOps = require("./vpisOperations");
+Object.assign(exports, vpisOps);

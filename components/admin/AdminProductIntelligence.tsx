@@ -43,6 +43,13 @@ import {
   FileText,
   Wrench,
   ScrollText,
+  Activity,
+  Shield,
+  DollarSign,
+  Bell,
+  BellOff,
+  HeartPulse,
+  CircleDot,
 } from 'lucide-solid';
 import type {
   DailyReport,
@@ -52,11 +59,12 @@ import type {
   IssueCluster,
   ConversationTurn,
   VpisAction,
+  VpisAlert,
 } from '../../services/vpis/vpisTypes';
 
 // ── Tab Types ──────────────────────────────────────────────────────────────
 
-type TabId = 'summary' | 'audit' | 'features' | 'bugs' | 'clusters' | 'queue' | 'actions';
+type TabId = 'summary' | 'audit' | 'features' | 'bugs' | 'clusters' | 'queue' | 'actions' | 'operations';
 
 interface TabDef {
   id: TabId;
@@ -72,6 +80,7 @@ const TABS: TabDef[] = [
   { id: 'clusters', label: 'Cluster Explorer', icon: Network },
   { id: 'queue', label: 'Decision Queue', icon: Inbox },
   { id: 'actions', label: 'Action Drafts', icon: FileOutput },
+  { id: 'operations', label: 'Operations', icon: Activity },
 ];
 
 // ── Shared Helpers ─────────────────────────────────────────────────────────
@@ -369,6 +378,9 @@ export const AdminProductIntelligence: Component = () => {
           </Match>
           <Match when={activeTab() === 'actions'}>
             <ActionManager actions={actions()} onRefresh={fetchDashboardData} />
+          </Match>
+          <Match when={activeTab() === 'operations'}>
+            <OperationsPanel />
           </Match>
         </Switch>
       </div>
@@ -1195,6 +1207,265 @@ const ActionManager: Component<ActionManagerProps> = (props) => {
             );
           }}
         </For>
+      </div>
+    </div>
+  );
+};
+
+// ── Operations Panel (Phase 7) ────────────────────────────────────────────
+
+interface OpsAlert {
+  id: string;
+  alertType: string;
+  severity: string;
+  message: string;
+  status: string;
+  triggeredAt: string;
+  acknowledgedBy?: string;
+  data?: any;
+}
+
+interface CostLog {
+  id: string;
+  date: string;
+  counts: Record<string, number>;
+  costs: Record<string, number>;
+  totalCostUSD: number;
+  withinBudget: boolean;
+}
+
+interface PipelineHealth {
+  date: string;
+  checks: Record<string, boolean>;
+  healthy: boolean;
+}
+
+const OperationsPanel: Component = () => {
+  const [opsAlerts, setOpsAlerts] = createSignal<OpsAlert[]>([]);
+  const [costHistory, setCostHistory] = createSignal<CostLog[]>([]);
+  const [pipelineHealth, setPipelineHealth] = createSignal<PipelineHealth | null>(null);
+  const [opsLoading, setOpsLoading] = createSignal(false);
+
+  const fetchOpsData = async () => {
+    setOpsLoading(true);
+    try {
+      const getOps = httpsCallable(functions, 'vpisGetOpsData');
+      const res = await getOps({});
+      const data = res.data as any;
+      if (data?.activeAlerts) setOpsAlerts(data.activeAlerts);
+      if (data?.costHistory) setCostHistory(data.costHistory);
+      if (data?.pipelineHealth) setPipelineHealth(data.pipelineHealth);
+    } catch (err) {
+      console.error('[VPIS Ops] Fetch failed:', err);
+    } finally {
+      setOpsLoading(false);
+    }
+  };
+
+  const acknowledgeAlert = async (alertId: string) => {
+    try {
+      const ackCall = httpsCallable(functions, 'vpisAcknowledgeAlert');
+      await ackCall({ alertId });
+      await fetchOpsData();
+    } catch (err) {
+      console.error('[VPIS Ops] Acknowledge failed:', err);
+    }
+  };
+
+  const triggerSelfImprove = async (module: string) => {
+    setOpsLoading(true);
+    try {
+      const improveCall = httpsCallable(functions, 'vpisManualImprove');
+      await improveCall({ module });
+      await fetchOpsData();
+    } catch (err) {
+      console.error('[VPIS Ops] Self-improve failed:', err);
+    } finally {
+      setOpsLoading(false);
+    }
+  };
+
+  onMount(fetchOpsData);
+
+  const alertSeverityStyle = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'bg-red-500/10 border-red-500/30 text-red-400';
+      case 'warning': return 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+      default: return 'bg-blue-500/10 border-blue-500/30 text-blue-400';
+    }
+  };
+
+  const alertTypeLabel = (type: string) => {
+    switch (type) {
+      case 'p1_bug_spike': return 'P1 Bug Spike';
+      case 'feature_inquiry_surge': return 'Feature Surge';
+      case 'hallucination_spike': return 'Hallucination';
+      case 'post_release_confusion': return 'Post-Release';
+      default: return type;
+    }
+  };
+
+  return (
+    <div class="space-y-6">
+      {/* Pipeline Health + Quick Actions */}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Pipeline Health */}
+        <div class="rounded-2xl border border-white/5 bg-[#0B0E14] p-6">
+          <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+            <HeartPulse class="w-4 h-4 text-green-400" /> Pipeline Health
+          </h3>
+          <Show when={pipelineHealth()} fallback={
+            <p class="text-xs text-slate-500">Loading...</p>
+          }>
+            {(health) => (
+              <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                  <div class={`w-3 h-3 rounded-full ${health().healthy ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                  <span class={`text-sm font-bold ${health().healthy ? 'text-green-400' : 'text-red-400'}`}>
+                    {health().healthy ? 'All Systems Operational' : 'Issues Detected'}
+                  </span>
+                </div>
+                <div class="space-y-2">
+                  <For each={Object.entries(health().checks)}>
+                    {([check, passed]) => (
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-400 font-mono">{check}</span>
+                        <span class={passed ? 'text-green-400' : 'text-red-400'}>
+                          {passed ? 'OK' : 'FAIL'}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            )}
+          </Show>
+        </div>
+
+        {/* Quick Actions */}
+        <div class="rounded-2xl border border-white/5 bg-[#0B0E14] p-6">
+          <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+            <Zap class="w-4 h-4 text-amber-400" /> Quick Actions
+          </h3>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => triggerSelfImprove('drift')}
+              disabled={opsLoading()}
+              class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-400 hover:text-white transition-all disabled:opacity-30"
+            >
+              <Shield class="w-3 h-3" /> Drift Check
+            </button>
+            <button
+              onClick={() => triggerSelfImprove('faq')}
+              disabled={opsLoading()}
+              class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-400 hover:text-white transition-all disabled:opacity-30"
+            >
+              <BookOpen class="w-3 h-3" /> Gen FAQs
+            </button>
+            <button
+              onClick={() => triggerSelfImprove('prompt')}
+              disabled={opsLoading()}
+              class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-400 hover:text-white transition-all disabled:opacity-30"
+            >
+              <Wrench class="w-3 h-3" /> Prompt Fix
+            </button>
+            <button
+              onClick={() => triggerSelfImprove('all')}
+              disabled={opsLoading()}
+              class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-xs text-cyan-400 hover:text-cyan-300 transition-all disabled:opacity-30"
+            >
+              <RefreshCw class={`w-3 h-3 ${opsLoading() ? 'animate-spin' : ''}`} /> Run All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Alerts */}
+      <div class="rounded-2xl border border-white/5 bg-[#0B0E14] p-6">
+        <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+          <Bell class="w-4 h-4 text-red-400" /> Active Alerts
+          <Show when={opsAlerts().length > 0}>
+            <span class="ml-1 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">
+              {opsAlerts().length}
+            </span>
+          </Show>
+        </h3>
+
+        <Show when={opsAlerts().length === 0}>
+          <div class="flex flex-col items-center py-8 text-slate-500">
+            <BellOff class="w-8 h-8 mb-2 opacity-30" />
+            <p class="text-xs">No active alerts</p>
+          </div>
+        </Show>
+
+        <div class="space-y-2">
+          <For each={opsAlerts()}>
+            {(alert) => (
+              <div class={`flex items-start gap-3 p-3 rounded-xl border ${alertSeverityStyle(alert.severity)}`}>
+                <div class="mt-0.5">
+                  <CircleDot class="w-4 h-4" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">
+                      {alertTypeLabel(alert.alertType)}
+                    </span>
+                    <span class={`text-[9px] px-1 py-0.5 rounded ${alert.severity === 'critical' ? 'bg-red-500/20' : 'bg-amber-500/20'}`}>
+                      {alert.severity}
+                    </span>
+                    <span class="text-[10px] text-slate-600 font-mono ml-auto">
+                      {alert.triggeredAt?.split('T')[0]}
+                    </span>
+                  </div>
+                  <p class="text-xs leading-relaxed">{alert.message}</p>
+                </div>
+                <button
+                  onClick={() => acknowledgeAlert(alert.id)}
+                  class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors flex-shrink-0"
+                  title="Acknowledge"
+                >
+                  <CheckCircle class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </For>
+        </div>
+      </div>
+
+      {/* Cost Tracking */}
+      <div class="rounded-2xl border border-white/5 bg-[#0B0E14] p-6">
+        <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+          <DollarSign class="w-4 h-4 text-green-400" /> Cost Tracking (7 days)
+        </h3>
+
+        <Show when={costHistory().length === 0}>
+          <p class="text-xs text-slate-500">No cost data yet. Data generates after the daily pipeline runs.</p>
+        </Show>
+
+        <Show when={costHistory().length > 0}>
+          <div class="space-y-2">
+            <For each={costHistory().slice(0, 7).reverse()}>
+              {(log) => (
+                <div class="flex items-center gap-3">
+                  <span class="text-[10px] text-slate-500 w-20 font-mono">{log.date}</span>
+                  <div class="flex-1 bg-white/5 rounded-full h-3 overflow-hidden">
+                    <div
+                      class={`h-full rounded-full transition-all ${log.withinBudget ? 'bg-green-500' : 'bg-red-500'}`}
+                      style={`width: ${Math.min((log.totalCostUSD / 5) * 100, 100)}%`}
+                    />
+                  </div>
+                  <span class={`text-xs font-mono font-bold w-16 text-right ${log.withinBudget ? 'text-green-400' : 'text-red-400'}`}>
+                    ${log.totalCostUSD.toFixed(3)}
+                  </span>
+                </div>
+              )}
+            </For>
+            <div class="flex justify-between text-[10px] text-slate-600 pt-1">
+              <span>Daily budget: $5.00</span>
+              <span>7d total: ${costHistory().reduce((s, l) => s + l.totalCostUSD, 0).toFixed(3)}</span>
+            </div>
+          </div>
+        </Show>
       </div>
     </div>
   );
