@@ -977,6 +977,38 @@ async function placeFuturesOrder(exchange, accessKey, secretKey, passphrase, mar
                 return { success: !!resp.data?.result?.order_id, orderId: resp.data?.result?.order_id };
             }
 
+            case "mexc": {
+                const ts = Date.now();
+                // Set leverage first
+                const levParams = { symbol: market, leverage, timestamp: ts };
+                const levQs = Object.entries(levParams).map(([k, v]) => `${k}=${v}`).join("&");
+                const levSig = crypto.createHmac("sha256", secretKey).update(levQs).digest("hex");
+                await axios.post(
+                    `https://contract.mexc.com/api/v1/private/position/change_leverage?${levQs}&signature=${levSig}`,
+                    null,
+                    { headers: { "X-MEXC-APIKEY": accessKey }, timeout: 10000 }
+                ).catch(() => { });
+
+                // Place futures order
+                const params = {
+                    symbol: market,
+                    side: side.toUpperCase(),
+                    type: "LIMIT",
+                    timeInForce: "GTC",
+                    quantity: String(volume),
+                    price: String(price),
+                    timestamp: Date.now(),
+                };
+                const qs = Object.entries(params).map(([k, v]) => `${k}=${v}`).join("&");
+                const sig = crypto.createHmac("sha256", secretKey).update(qs).digest("hex");
+                const resp = await axios.post(
+                    `https://contract.mexc.com/api/v1/private/order/submit?${qs}&signature=${sig}`,
+                    null,
+                    { headers: { "X-MEXC-APIKEY": accessKey }, timeout: 10000 }
+                );
+                return { success: true, orderId: String(resp.data?.data?.orderId || `mexc_fut_${ts}`) };
+            }
+
             default:
                 return { success: false, error: `Futures orders not supported for ${exchange}` };
         }
