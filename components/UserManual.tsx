@@ -95,7 +95,7 @@ const sections: Section[] = [
         ]
     },
     {
-        id: 'cex', title: 'CEX Portfolio', icon: '9',
+        id: 'cex', title: 'Quant', icon: '9',
         children: [
             { id: 'cex-connect', title: 'Connecting Exchanges' },
             { id: 'cex-exchanges', title: 'Supported Exchanges' },
@@ -467,7 +467,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         {[
                             { n: 'Chat', d: 'AI-powered assistant for all operations' },
                             { n: 'My Assets', d: 'View portfolio, balances, and token list' },
-                            { n: 'CEX Portfolio', d: 'Connected exchange portfolios' },
+                            { n: 'Quant', d: 'Connected exchange portfolios & trading engine' },
                             { n: 'Bridge', d: 'Cross-chain asset transfer' },
                             { n: 'Earn', d: 'Staking and reward programs' },
                             { n: 'Agent', d: 'AI agent hosting and automation' },
@@ -1144,7 +1144,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
             </div>
         );
 
-        // ─── CEX Portfolio ───
+        // ─── Quant ───
         case 'cex-connect': return (
             <div class="space-y-6">
                 <SectionHeader title="Connecting Your Exchange" desc="Link your centralized exchange account to Vision Chain using API credentials. Vision Chain supports 15 exchanges across Korea, Japan, USA, and global markets." />
@@ -1159,7 +1159,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Step-by-Step Connection Guide</h3>
                 <StepList steps={[
-                    { title: 'Navigate to CEX Portfolio', desc: 'Open the sidebar menu and tap "CEX Portfolio". If you have no exchanges connected yet, you will see the empty state with quick-connect cards for Upbit and Binance.' },
+                    { title: 'Navigate to Quant', desc: 'Open the sidebar menu and tap "Quant". If you have no exchanges connected yet, you will see the empty state with quick-connect cards for Upbit and Binance.' },
                     { title: 'Open the "Add Exchange" Modal', desc: 'Tap the "+" button in the header (or one of the quick-connect exchange cards). A modal will appear showing all 15 supported exchanges arranged in a 3-column grid.' },
                     { title: 'Select Your Exchange', desc: 'Tap on the exchange you want to connect. The selected exchange will be highlighted with a cyan border. Exchanges are sorted by region and popularity.' },
                     { title: 'Enter API Key', desc: 'Paste your API Key (also called "Access Key" on some exchanges) into the first credential field. This key is a public identifier and does not grant access alone.' },
@@ -1186,7 +1186,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelist Setup</h3>
                 <p class="text-sm text-gray-400 mb-3">Most exchanges require (or strongly recommend) restricting API access to specific IP addresses. Vision Chain provides a static server IP for this purpose.</p>
                 <StepList steps={[
-                    { title: 'View the Server IP', desc: 'Tap the "?" help icon on the CEX Portfolio page. The IP Setup Guide modal will display the static server IP address prominently at the top.' },
+                    { title: 'View the Server IP', desc: 'Tap the "?" help icon on the Quant page. The IP Setup Guide modal will display the static server IP address prominently at the top.' },
                     { title: 'Copy the IP Address', desc: 'Tap the "Copy" button next to the IP address. The IP will be copied to your clipboard.' },
                     { title: 'Add to Exchange API Settings', desc: 'Go to your exchange\'s API management page. Find the IP whitelist or IP restriction section for your API key. Paste the copied IP address and save.' },
                     { title: 'Verify Connection', desc: 'Return to Vision Chain and connect your exchange. If the IP is correctly whitelisted, the verification test will succeed immediately.' },
@@ -1393,11 +1393,11 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'cex-quant': return (
             <div class="space-y-6">
                 <SectionHeader title="Quant Engine - Strategy Settings" desc="Configure and deploy automated trading strategies on your connected exchanges. The Quant Engine provides 6 research-backed strategy templates with full parameter control." />
-                <Note><>Quant Engine is currently in BETA. Connect at least one exchange via CEX Portfolio to access Quant features. Access it by switching to the "Quant" tab in the CEX Portfolio page.</></Note>
+                <Note><>Quant Engine is currently in BETA. Connect at least one exchange via the Quant page to access Quant features. Access it by switching to the "Quant" tab.</></Note>
 
                 <h3 class="text-lg font-bold text-white mt-4 mb-3">How to Access</h3>
                 <StepList steps={[
-                    { title: 'Open CEX Portfolio', desc: 'Navigate to CEX Portfolio from the sidebar. You must have at least one exchange connected.' },
+                    { title: 'Open Quant', desc: 'Navigate to Quant from the sidebar. You must have at least one exchange connected.' },
                     { title: 'Switch to Quant Tab', desc: 'At the top of the page, tap the "Quant" tab (with the BETA badge). The tab navigation shows "Portfolio" and "Quant" side by side.' },
                     { title: 'Browse Strategy Templates', desc: 'The Quant Engine displays 6 pre-built strategy template cards. Each card shows the strategy name, category, risk level, recommended assets, and 30-day average return.' },
                 ]} />
@@ -1566,7 +1566,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelisting Explained</h3>
                 <div class="bg-[#0a0a12] border border-cyan-500/10 rounded-xl p-5 space-y-3">
                     <p class="text-xs text-gray-400 leading-relaxed">IP whitelisting is the most important security measure for API key protection. When you restrict your API key to our server's static IP address, only our server can make API calls using your credentials. Even if someone obtains your API Key and Secret Key, they cannot use them from any other IP address.</p>
-                    <p class="text-xs text-gray-400 leading-relaxed">Vision Chain operates from a single static IP address for all exchange API calls. This address is displayed in the "IP Setup Guide" modal (tap the "?" icon on the CEX Portfolio page). The IP is permanent and does not change.</p>
+                    <p class="text-xs text-gray-400 leading-relaxed">Vision Chain operates from a single static IP address for all exchange API calls. This address is displayed in the "IP Setup Guide" modal (tap the "?" icon on the Quant page). The IP is permanent and does not change.</p>
                     <p class="text-xs text-gray-400 leading-relaxed">Some exchanges (like Upbit) require IP whitelisting as mandatory. Others (like Binance) strongly recommend it but allow unrestricted access. We recommend always enabling IP restriction regardless of whether the exchange requires it.</p>
                 </div>
 
@@ -1595,7 +1595,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         'Always use read-only API keys -- never enable trading or withdrawal permissions',
                         'Whitelist our server IP on every exchange that supports it',
                         'Set API key expiration dates where available (e.g., Upbit allows 90-day rotation)',
-                        'Revoke API keys on the exchange website if you stop using the CEX Portfolio feature',
+                        'Revoke API keys on the exchange website if you stop using the Quant feature',
                         'Never share your API keys, Secret Keys, or Passphrases with anyone',
                         'Use a unique API key for Vision Chain -- do not reuse keys used by other services',
                         'Periodically review your connected exchanges and remove any no longer needed',
