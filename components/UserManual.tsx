@@ -159,6 +159,16 @@ const sections: Section[] = [
             { id: 'faq-contact', title: 'Contact Support' },
         ]
     },
+    {
+        id: 'feedback', title: 'Feedback & Reports', icon: '16',
+        children: [
+            { id: 'feedback-overview', title: 'Feedback System' },
+            { id: 'feedback-bugs', title: 'Bug Reports' },
+            { id: 'feedback-features', title: 'Feature Suggestions' },
+            { id: 'feedback-business', title: 'Business Proposals' },
+            { id: 'feedback-tips', title: 'Effective Feedback' },
+        ]
+    },
 ];
 
 // ─── Content Renderer ───
@@ -2169,6 +2179,185 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                             <div class="text-xs text-gray-500">{c.d}</div>
                         </div>
                     ))}
+                </div>
+            </div>
+        );
+
+        // ─── Feedback & Reports ───
+        case 'feedback-overview': return (
+            <div class="space-y-6">
+                <SectionHeader title="Feedback System" desc="Vision AI now features an intelligent feedback system that channels your voice directly into product improvement. Report bugs, suggest features, or submit business proposals through natural conversation." />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                        { t: 'Bug Reports', d: 'Describe issues you encounter and AI automatically classifies severity and routes to the development team' },
+                        { t: 'Feature Suggestions', d: 'Share improvement ideas. Similar requests from multiple users are grouped and prioritized automatically' },
+                        { t: 'Business Proposals', d: 'Submit partnership, listing, or collaboration proposals directly through the chatbot' },
+                        { t: 'Auto-Classification', d: 'AI detects, categorizes, and prioritizes all feedback using the Vision Product Intelligence System (VPIS)' },
+                    ].map(c => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <div class="text-sm font-bold text-white mb-1">{c.t}</div>
+                            <div class="text-xs text-gray-500">{c.d}</div>
+                        </div>
+                    ))}
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">How It Works</h3>
+                    <StepList steps={[
+                        { title: 'Auto-Detection', desc: 'AI automatically detects bug reports, feature requests, and business proposals from your conversation.' },
+                        { title: 'Structuring', desc: 'Detected content is organized by category, severity, and related features.' },
+                        { title: 'Grouping', desc: 'Similar requests from multiple users are clustered to identify patterns and demand.' },
+                        { title: 'Prioritization', desc: 'Frequency, impact, and urgency are combined to determine priority rankings.' },
+                        { title: 'Team Review', desc: 'The operations team reviews classified items and takes appropriate action.' },
+                    ]} />
+                </div>
+                <Tip><>No special form or command is needed. Simply talk to the chatbot as you normally would, and the AI will automatically detect and process your feedback.</></Tip>
+            </div>
+        );
+        case 'feedback-bugs': return (
+            <div class="space-y-6">
+                <SectionHeader title="Bug Reports" desc="Report issues you encounter while using Vision Chain. The AI automatically classifies the problem, assesses severity, and routes it to the development team." />
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
+                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                        <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
+                            <div>You Say</div><div>AI Detects</div>
+                        </div>
+                        {[
+                            { cmd: '"The send button doesn\'t respond when I click it"', act: 'UI bug, Send feature, severity: High' },
+                            { cmd: '"Tokens haven\'t arrived after bridge transfer. 3 hours now"', act: 'Bridge issue, pending transaction, severity: Critical' },
+                            { cmd: '"Portfolio page shows my balance as 0"', act: 'Display bug, Assets feature, severity: High' },
+                            { cmd: '"The app freezes when I open transaction history"', act: 'Performance bug, History feature, severity: Medium' },
+                            { cmd: '"Staking rewards show wrong APY percentage"', act: 'Data bug, Staking feature, severity: Medium' },
+                        ].map(r => (
+                            <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
+                                <code class="text-cyan-400 text-xs">{r.cmd}</code>
+                                <span class="text-gray-400 text-xs">{r.act}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">What AI Collects</h3>
+                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                        {[
+                            { n: 'Context', d: 'Which feature and action triggered the issue' },
+                            { n: 'Expected vs Actual', d: 'What should have happened vs what actually occurred' },
+                            { n: 'Severity', d: 'Automatically assessed as Critical, High, Medium, or Low' },
+                            { n: 'Feature Tags', d: 'Related features are automatically tagged (e.g., wallet, bridge, staking)' },
+                        ].map(item => (
+                            <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                                <span class="text-sm font-medium text-white">{item.n}</span>
+                                <span class="text-xs text-gray-500">{item.d}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <Note><>Bug reports are reviewed within 0-48 hours depending on severity. Critical issues are escalated immediately to the development team.</></Note>
+            </div>
+        );
+        case 'feedback-features': return (
+            <div class="space-y-6">
+                <SectionHeader title="Feature Suggestions" desc="Share your ideas for new features or improvements. Similar requests from multiple users are automatically grouped, and the most requested features are reviewed first." />
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
+                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                        <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
+                            <div>You Say</div><div>AI Categorizes As</div>
+                        </div>
+                        {[
+                            { cmd: '"Chart colors are hard to see in dark mode"', act: 'UX improvement, UI/Portfolio, priority by frequency' },
+                            { cmd: '"Add recurring schedule option for transfers"', act: 'Feature request, Send/Receive, linked to TimeLock' },
+                            { cmd: '"Let me download staking rewards as CSV"', act: 'Feature request, Staking/Reporting, data export' },
+                            { cmd: '"QR code scanning for quick mobile transfers"', act: 'Feature request, Send/Receive, mobile UX' },
+                            { cmd: '"Add price alerts for my watched tokens"', act: 'Feature request, Notifications, market data' },
+                        ].map(r => (
+                            <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
+                                <code class="text-cyan-400 text-xs">{r.cmd}</code>
+                                <span class="text-gray-400 text-xs">{r.act}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">Processing Pipeline</h3>
+                    <StepList steps={[
+                        { title: 'AI Structures Your Request', desc: 'The AI normalizes and categorizes your suggestion with relevant tags and feature associations.' },
+                        { title: 'Automatic Grouping', desc: 'Similar requests from different users are clustered together to measure demand.' },
+                        { title: 'Priority Scoring', desc: 'Each request receives a priority score based on frequency, business impact, and urgency.' },
+                        { title: 'Roadmap Review', desc: 'The operations team reviews high-priority items weekly and determines roadmap inclusion.' },
+                    ]} />
+                </div>
+                <Tip><>The more specific your suggestion, the faster it can be evaluated. Include details about what problem it would solve and how you envision it working.</></Tip>
+            </div>
+        );
+        case 'feedback-business': return (
+            <div class="space-y-6">
+                <SectionHeader title="Business Proposals" desc="Submit partnership, listing, collaboration, or marketing proposals directly through the chatbot." />
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
+                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                        {[
+                            { cmd: '"We\'d like to discuss listing VCN on our exchange"', act: 'Exchange listing inquiry, routed to business team' },
+                            { cmd: '"Interested in DeFi protocol integration partnership"', act: 'Technical partnership, routed to dev relations' },
+                            { cmd: '"Propose co-hosting a booth at blockchain conference"', act: 'Marketing collaboration, routed to marketing team' },
+                            { cmd: '"Want to run a joint community event"', act: 'Community partnership, routed to community team' },
+                            { cmd: '"Our fund is interested in VCN token investment"', act: 'Investment inquiry, routed to business development' },
+                        ].map(r => (
+                            <div class="flex items-start gap-4 px-5 py-3 border-b border-white/[0.03]">
+                                <code class="text-cyan-400 text-xs flex-1">{r.cmd}</code>
+                                <span class="text-gray-400 text-xs flex-1">{r.act}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">Response Timeline</div>
+                    {[
+                        { n: 'Initial Acknowledgment', d: 'Immediate AI confirmation that your proposal has been received' },
+                        { n: 'Team Review', d: '3-5 business days for a team member to review your proposal' },
+                        { n: 'Follow-up Contact', d: 'If applicable, a team representative will reach out via your provided contact info' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-500">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <Tip><>Include your contact information (email or messaging handle) in your proposal for a direct follow-up from the relevant team.</></Tip>
+            </div>
+        );
+        case 'feedback-tips': return (
+            <div class="space-y-6">
+                <SectionHeader title="Tips for Effective Feedback" desc="Get the most out of the feedback system by following these best practices." />
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Be Specific', d: '"Send button loading forever after click" is better than "it doesn\'t work"' },
+                        { n: 'Provide Context', d: 'Mention which page, what action you were performing, and when the issue occurred' },
+                        { n: 'Describe Expected Result', d: 'Frame as "When I did X, I expected Y, but Z happened" for clarity' },
+                        { n: 'Mention Frequency', d: 'Indicate if the issue happens every time, intermittently, or was a one-time occurrence' },
+                        { n: 'Include Device Info', d: 'Mention if you are on mobile or desktop, and which browser you are using' },
+                    ].map(item => (
+                        <div class="flex items-start gap-4 px-5 py-4 border-b border-white/[0.03]">
+                            <span class="text-sm font-bold text-cyan-400 w-40 flex-shrink-0">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">FAQ</h3>
+                    <div class="space-y-3">
+                        {[
+                            { q: 'Do I need a special command to submit feedback?', a: 'No. Simply talk to the chatbot naturally. The AI automatically detects and processes bug reports, feature requests, and proposals.' },
+                            { q: 'How do I know my feedback was received?', a: 'The AI sends a confirmation message when it detects actionable feedback in your conversation.' },
+                            { q: 'Is my personal information collected?', a: 'Personal identifiers (email, phone, wallet address) are automatically masked during analysis. Only the technical context needed for resolution is retained.' },
+                            { q: 'Can I submit feedback in Korean?', a: 'Yes. The system supports both Korean and English. Use whichever language is more comfortable for you.' },
+                        ].map(faq => (
+                            <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4">
+                                <div class="text-sm font-bold text-white mb-1">{faq.q}</div>
+                                <div class="text-xs text-gray-500">{faq.a}</div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
