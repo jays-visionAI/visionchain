@@ -293,6 +293,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         requiredRole: 'admin'
     },
     {
+        id: 'product-intelligence',
+        path: '/adminsystem/product-intelligence',
+        label: 'Product Intelligence',
+        icon: 'Lightbulb',
+        badge: 'NEW',
+        category: 'custom',
+        order: 19,
+        requiredRole: 'admin'
+    },
+    {
         id: 'api-pricing',
         path: '/adminsystem/api-pricing',
         label: 'API Pricing',

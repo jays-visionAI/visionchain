@@ -32,6 +32,7 @@ export const AdminRPConfig = lazy(() => import('../components/admin/AdminRPConfi
 export const AdminUserAnalytics = lazy(() => import('../components/admin/AdminUserAnalytics'));
 export const AdminRewardHub = lazy(() => import('../components/admin/AdminRewardHub'));
 export const AIStorageAdmin = lazy(() => import('../components/admin/AIStorageAdmin'));
+export const AdminProductIntelligence = lazy(() => import('../components/admin/AdminProductIntelligence'));
 
 // ── Consolidated Hub Pages (tabbed) ──
 export const AdminRPRewards = lazy(() => import('../components/admin/AdminRPRewards'));
@@ -395,6 +396,17 @@ export function AdminContentPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminContentHub />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminProductIntelligencePage() {
+    document.title = 'Product Intelligence | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminProductIntelligence />
             </AdminLayout>
         </Suspense>
     );

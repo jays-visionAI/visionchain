@@ -138,6 +138,7 @@ render(() => (
         <Route path="/adminsystem/reward-engine" component={Admin.AdminRewardHubPage} />
         <Route path="/adminsystem/ai-storage" component={Admin.AIStorageAdminPage} />
         <Route path="/adminsystem/content" component={Admin.AdminContentPage} />
+        <Route path="/adminsystem/product-intelligence" component={Admin.AdminProductIntelligencePage} />
 
       </Router>
     </I18nProvider>
