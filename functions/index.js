@@ -28406,3 +28406,8 @@ exports.sendAgentSetupEmail = onCall({
     return { success: false, error: err.message };
   }
 });
+
+
+// ── VPIS: Vision Product Intelligence System ─────────────────────────────
+const vpisModule = require("./vpisModule");
+Object.assign(exports, vpisModule);

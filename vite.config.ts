@@ -59,6 +59,7 @@ export default defineConfig(({ mode }) => {
             }
 
             // ── Admin ─────────────────────────────────────────────────────
+            if (id.includes('/components/admin/vpis/')) return 'admin-vpis';
             if (id.includes('/components/admin/tabs/')) return 'admin-tabs';
             if (id.includes('/components/admin/dashboard/')) return 'admin-dashboard';
             if (id.includes('/components/admin/users/')) return 'admin-users';
@@ -68,6 +69,9 @@ export default defineConfig(({ mode }) => {
               if (id.includes('adminRoleContext') || id.includes('AdminLayout')) return 'admin-core';
               return undefined;
             }
+
+            // ── VPIS Service ──────────────────────────────────────────────
+            if (id.includes('/services/vpis/')) return 'vpis-service';
 
             // ── Wallet: split each view into its own lazy chunk ───────────
             // Core always-present wallet pieces
