@@ -75,7 +75,7 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
         const blocks = previewRef.querySelectorAll('pre code:not(.language-mermaid)');
         if (blocks.length > 0) {
             try {
-                const hljs = (await import('../../../services/hljsLite')).default;
+                const hljs = (await import('highlight.js')).default;
                 blocks.forEach((block) => {
                     hljs.highlightElement(block as HTMLElement);
                 });
