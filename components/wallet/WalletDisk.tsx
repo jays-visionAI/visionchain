@@ -1,10 +1,10 @@
 import { createSignal, Show, For, onMount, createEffect, createMemo, onCleanup } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import {
-    HardDrive, UploadCloud, Folder, FolderPlus,
+    HardDrive, UploadCloud, Folder, FolderPlus, FolderOpen,
     File as FileIcon, FileText, FileImage, FileVideo, FileAudio,
-    MoreVertical, Search, Grid, List, ChevronRight,
-    Download, Trash2, Eye, EyeOff, X, ArrowLeft, Plus, Check, AlertTriangle, Copy
+    MoreVertical, Search, Grid, List, ChevronRight, ChevronDown,
+    Download, Trash2, Eye, EyeOff, X, ArrowLeft, Plus, Check, AlertTriangle, Copy, PanelLeft
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
@@ -225,6 +225,60 @@ export const WalletDisk = (props: {
     const [showMoveModal, setShowMoveModal] = createSignal(false);
     const [moveTargetFolder, setMoveTargetFolder] = createSignal<string | null>(null);
     const [allFolders, setAllFolders] = createSignal<DiskFolder[]>([]);
+
+    // Folder Tree State (Finder sidebar)
+    const [expandedFolders, setExpandedFolders] = createSignal<Set<string>>(new Set(['/']));
+    const [showSidebar, setShowSidebar] = createSignal(true);
+
+    // Build folder tree structure from flat list
+    interface FolderTreeNode {
+        folder: DiskFolder | null; // null for root
+        path: string;
+        name: string;
+        children: FolderTreeNode[];
+    }
+
+    const folderTree = createMemo((): FolderTreeNode => {
+        const root: FolderTreeNode = { folder: null, path: '/', name: 'My Disk', children: [] };
+        const all = allFolders();
+        // Also include current-view folders if not in allFolders
+        const currentFolders = folders();
+        const seen = new Set(all.map(f => f.path));
+        const combined = [...all];
+        for (const cf of currentFolders) {
+            if (!seen.has(cf.path)) combined.push(cf);
+        }
+        // Sort by path depth then name
+        combined.sort((a, b) => {
+            const da = a.path.split('/').length;
+            const db = b.path.split('/').length;
+            if (da !== db) return da - db;
+            return a.name.localeCompare(b.name);
+        });
+        const nodeMap = new Map<string, FolderTreeNode>();
+        nodeMap.set('/', root);
+        for (const f of combined) {
+            const node: FolderTreeNode = { folder: f, path: f.path, name: f.name, children: [] };
+            nodeMap.set(f.path, node);
+            // Find parent
+            const parentPath = f.path.substring(0, f.path.lastIndexOf('/')) || '/';
+            const parent = nodeMap.get(parentPath) || root;
+            // Avoid duplicates
+            if (!parent.children.some(c => c.path === f.path)) {
+                parent.children.push(node);
+            }
+        }
+        return root;
+    });
+
+    const toggleFolderExpanded = (path: string) => {
+        setExpandedFolders(prev => {
+            const next = new Set(prev);
+            if (next.has(path)) next.delete(path);
+            else next.add(path);
+            return next;
+        });
+    };
 
     let fileInputRef: HTMLInputElement | undefined;
 
@@ -485,11 +539,22 @@ export const WalletDisk = (props: {
             console.error('[Disk] Failed to load data:', e);
         } finally {
             setIsLoading(false);
+            // Refresh folder tree after data load
+            loadAllFoldersForTree();
         }
     };
 
+    // Load all folders for tree sidebar
+    const loadAllFoldersForTree = async () => {
+        if (!email()) return;
+        try {
+            const all = await listAllDiskFolders(email());
+            setAllFolders(all);
+        } catch (e) { console.warn('[Disk] Failed to load folder tree:', e); }
+    };
+
     onMount(() => {
-        if (email()) loadData();
+        if (email()) { loadData(); loadAllFoldersForTree(); }
         // Load nodeId from mobile_nodes (requires vcn_mn_ API key from localStorage)
         const mnApiKey = localStorage.getItem('mn_api_key');
         if (mnApiKey) {
@@ -1457,30 +1522,22 @@ export const WalletDisk = (props: {
                     </button>
                 </div>
 
-                {/* Distributed Toggle */}
+                {/* Distributed Indicator (Always ON) */}
                 <div class="relative">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setUseDistributed(!useDistributed());
-                        }}
+                    <div
                         onMouseEnter={() => { if (window.innerWidth > 768) setShowVNetTooltip(true); }}
                         onMouseLeave={() => setShowVNetTooltip(false)}
                         onTouchEnd={(e) => {
                             e.preventDefault();
-                            e.stopPropagation();
                             setShowVNetTooltip(!showVNetTooltip());
                             setShowPrivateTooltip(false);
                             if (!showVNetTooltip()) setTimeout(() => setShowVNetTooltip(false), 3000);
                         }}
-                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useDistributed()
-                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
-                            }`}
+                        class="h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold bg-amber-500/10 border-amber-500/30 text-amber-500 cursor-default"
                     >
-                        <Globe class={`w-4 h-4 ${useDistributed() ? 'text-amber-500' : 'text-gray-600'}`} />
+                        <Globe class="w-4 h-4 text-amber-500" />
                         <span class="hidden md:inline">VNet</span>
-                    </button>
+                    </div>
                     <Show when={showVNetTooltip()}>
                         <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
                             <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
@@ -1499,30 +1556,22 @@ export const WalletDisk = (props: {
                     </Show>
                 </div>
 
-                {/* Encryption Toggle */}
+                {/* Encryption Indicator (Always ON) */}
                 <div class="relative">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setUseEncryption(!useEncryption());
-                        }}
+                    <div
                         onMouseEnter={() => { if (window.innerWidth > 768) setShowPrivateTooltip(true); }}
                         onMouseLeave={() => setShowPrivateTooltip(false)}
                         onTouchEnd={(e) => {
                             e.preventDefault();
-                            e.stopPropagation();
                             setShowPrivateTooltip(!showPrivateTooltip());
                             setShowVNetTooltip(false);
                             if (!showPrivateTooltip()) setTimeout(() => setShowPrivateTooltip(false), 3000);
                         }}
-                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
-                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
-                            }`}
+                        class="h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold bg-blue-500/10 border-blue-500/30 text-blue-400 cursor-default"
                     >
-                        {useEncryption() ? <ShieldCheck class="w-4 h-4" /> : <ShieldAlert class="w-4 h-4 text-gray-600" />}
+                        <ShieldCheck class="w-4 h-4" />
                         <span class="hidden md:inline">Private</span>
-                    </button>
+                    </div>
                     <Show when={showPrivateTooltip()}>
                         <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
                             <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
@@ -1646,28 +1695,6 @@ export const WalletDisk = (props: {
             {/* ── My Disk Content ── */}
             <Show when={diskTab() === 'myDisk'}>
 
-                {/* ── Breadcrumbs ── */}
-                <div class="flex items-center gap-1 mb-4 text-sm shrink-0">
-                    <For each={breadcrumbs()}>
-                        {(crumb, i) => (
-                            <>
-                                <Show when={i() > 0}>
-                                    <ChevronRight class="w-3 h-3 text-gray-600" />
-                                </Show>
-                                <button
-                                    onClick={() => navigateToFolder(crumb.path)}
-                                    class={`px-1.5 py-0.5 rounded-md transition-all ${i() === breadcrumbs().length - 1
-                                        ? 'text-white font-bold'
-                                        : 'text-gray-400 hover:text-white hover:bg-white/[0.05]'
-                                        }`}
-                                >
-                                    {crumb.name}
-                                </button>
-                            </>
-                        )}
-                    </For>
-                </div>
-
                 {/* ── New Folder Modal ── */}
                 <Presence>
                     <Show when={showNewFolder()}>
@@ -1703,8 +1730,10 @@ export const WalletDisk = (props: {
                     </Show>
                 </Presence>
 
-                {/* ── File Content Area ── */}
-                <div class="flex-1 min-h-0 relative">
+                {/* ── Finder Layout: Sidebar + File Panel ── */}
+                <div class="flex-1 min-h-0 relative flex">
+
+                    {/* Subscription overlay */}
                     <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'}>
                         <div class="absolute inset-0 z-10 bg-[#12121a] rounded-2xl border border-white/5 flex flex-col items-center justify-center p-8 text-center min-h-[400px]">
                             <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6">
@@ -1748,318 +1777,376 @@ export const WalletDisk = (props: {
                                 ) : 'Subscribe Now'}
                             </button>
                             <div class="text-[10px] text-gray-500 mt-4 max-w-md">By subscribing, you approve Vision Network to deduct VCN automatically purely for storage usage. You can cancel anytime.</div>
-                            {/* Mobile NavBar clearance */}
                             <div class="h-14 lg:hidden" />
                         </div>
-
                     </Show>
 
-                    <Show
-                        when={!isLoading() && (filteredFolders().length > 0 || filteredFiles().length > 0)}
-                        fallback={
-                            <Show when={!isLoading() && usage().status !== 'none' && usage().status !== 'canceled' && usage().status !== 'expired'} fallback={
-                                <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'} fallback={
-                                    <div class="flex-1 flex items-center justify-center py-20">
-                                        <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-                                    </div>
-                                }>
-                                    {/* Covered by the overlay above */}
-                                    <div />
-                                </Show>
-                            }>
-                                {/* Empty State */}
-                                <div class="flex-1 bg-white/[0.02] border border-dashed border-white/[0.08] rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-[320px] cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all"
-                                    onClick={() => usage().status !== 'overdue' && fileInputRef?.click()}
-                                >
-                                    <div class="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center mb-5 border border-white/10 shadow-2xl">
-                                        <UploadCloud class="w-8 h-8 text-gray-400" />
-                                    </div>
-                                    <h3 class="text-lg font-bold text-white tracking-tight mb-2">
-                                        {searchQuery() ? 'No results found' : 'Drop files here or click to upload'}
-                                    </h3>
-                                    <p class="text-sm text-gray-400 max-w-sm">
-                                        {searchQuery()
-                                            ? `No files matching "${searchQuery()}"`
-                                            : 'Upload photos, videos, documents, or any files. All data is stored securely on the decentralized network.'}
-                                    </p>
-                                    <Show when={!searchQuery() && usage().status !== 'overdue'}>
+                    {/* ── Sidebar: Folder Tree ── */}
+                    {/* Mobile sidebar toggle */}
+                    <button
+                        onClick={() => setShowSidebar(!showSidebar())}
+                        class="lg:hidden fixed bottom-20 left-3 z-40 p-2.5 bg-cyan-500 text-black rounded-xl shadow-lg shadow-cyan-500/30 active:scale-95 transition-all"
+                    >
+                        <PanelLeft class="w-5 h-5" />
+                    </button>
+
+                    {/* Mobile sidebar backdrop */}
+                    <Show when={showSidebar()}>
+                        <div
+                            class="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+                            onClick={() => setShowSidebar(false)}
+                        />
+                    </Show>
+
+                    <div class={`
+                        ${showSidebar() ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                        fixed lg:relative z-40 lg:z-auto
+                        left-0 top-0 bottom-0 lg:left-auto lg:top-auto lg:bottom-auto
+                        w-64 lg:w-56 xl:w-64
+                        bg-[#0e0e14] lg:bg-white/[0.02]
+                        border-r border-white/[0.06] lg:border lg:border-white/[0.06]
+                        lg:rounded-2xl
+                        flex flex-col shrink-0
+                        transition-transform duration-200 ease-out
+                        overflow-hidden
+                        mr-0 lg:mr-3
+                    `}>
+                        {/* Sidebar header */}
+                        <div class="flex items-center justify-between p-3 border-b border-white/[0.06]">
+                            <div class="flex items-center gap-2">
+                                <HardDrive class="w-4 h-4 text-cyan-400" />
+                                <span class="text-xs font-black text-white uppercase tracking-wider">Folders</span>
+                            </div>
+                            <button
+                                onClick={() => setShowNewFolder(true)}
+                                class="p-1.5 text-gray-500 hover:text-cyan-400 hover:bg-white/[0.05] rounded-lg transition-all"
+                                title="New Folder"
+                            >
+                                <FolderPlus class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+
+                        {/* Tree content */}
+                        <div class="flex-1 overflow-y-auto py-2 custom-scrollbar" style="-webkit-overflow-scrolling: touch;">
+                            {/* Render tree recursively */}
+                            {(() => {
+                                const renderNode = (node: typeof folderTree extends () => infer T ? T : never, depth: number = 0): any => {
+                                    const isExpanded = expandedFolders().has(node.path);
+                                    const isActive = currentPath() === node.path;
+                                    const hasChildren = node.children.length > 0;
+
+                                    return (
+                                        <div>
+                                            <button
+                                                onClick={() => {
+                                                    navigateToFolder(node.path);
+                                                    if (hasChildren) {
+                                                        // Auto-expand when navigating
+                                                        setExpandedFolders(prev => { const n = new Set(prev); n.add(node.path); return n; });
+                                                    }
+                                                    // Close sidebar on mobile
+                                                    if (window.innerWidth < 1024) setShowSidebar(false);
+                                                }}
+                                                class={`w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-xs transition-all rounded-lg mx-1 ${
+                                                    isActive
+                                                        ? 'bg-cyan-500/15 text-cyan-400 font-bold'
+                                                        : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
+                                                }`}
+                                                style={{ "padding-left": `${depth * 16 + 8}px` }}
+                                            >
+                                                {/* Expand/collapse chevron */}
+                                                <div
+                                                    class={`w-4 h-4 flex items-center justify-center shrink-0 ${hasChildren ? 'opacity-100' : 'opacity-0'}`}
+                                                    onClick={(e) => {
+                                                        if (hasChildren) {
+                                                            e.stopPropagation();
+                                                            toggleFolderExpanded(node.path);
+                                                        }
+                                                    }}
+                                                >
+                                                    {isExpanded ? <ChevronDown class="w-3 h-3" /> : <ChevronRight class="w-3 h-3" />}
+                                                </div>
+                                                {/* Folder icon */}
+                                                {isActive || isExpanded
+                                                    ? <FolderOpen class="w-4 h-4 text-cyan-400 shrink-0" />
+                                                    : <Folder class="w-4 h-4 shrink-0" />
+                                                }
+                                                <span class="truncate">{node.name}</span>
+                                            </button>
+                                            {/* Children */}
+                                            <Show when={isExpanded && hasChildren}>
+                                                <For each={node.children}>
+                                                    {(child) => renderNode(child, depth + 1)}
+                                                </For>
+                                            </Show>
+                                        </div>
+                                    );
+                                };
+                                return renderNode(folderTree());
+                            })()}
+                        </div>
+                    </div>
+
+                    {/* ── Right Panel: Files Only ── */}
+                    <div class="flex-1 min-w-0 flex flex-col">
+                        {/* Breadcrumbs */}
+                        <div class="flex items-center gap-1 mb-3 text-sm shrink-0">
+                            <For each={breadcrumbs()}>
+                                {(crumb, i) => (
+                                    <>
+                                        <Show when={i() > 0}>
+                                            <ChevronRight class="w-3 h-3 text-gray-600" />
+                                        </Show>
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); fileInputRef?.click(); }}
-                                            class="mt-6 px-6 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold rounded-xl transition-all border border-white/10 text-sm active:scale-95"
+                                            onClick={() => navigateToFolder(crumb.path)}
+                                            class={`px-1.5 py-0.5 rounded-md transition-all ${i() === breadcrumbs().length - 1
+                                                ? 'text-white font-bold'
+                                                : 'text-gray-400 hover:text-white hover:bg-white/[0.05]'
+                                                }`}
                                         >
-                                            Select Files
+                                            {crumb.name}
                                         </button>
+                                    </>
+                                )}
+                            </For>
+                        </div>
+
+                        {/* File content */}
+                        <Show
+                            when={!isLoading() && filteredFiles().length > 0}
+                            fallback={
+                                <Show when={!isLoading() && usage().status !== 'none' && usage().status !== 'canceled' && usage().status !== 'expired'} fallback={
+                                    <Show when={usage().status === 'none' || usage().status === 'canceled' || usage().status === 'expired'} fallback={
+                                        <div class="flex-1 flex items-center justify-center py-20">
+                                            <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+                                        </div>
+                                    }>
+                                        <div />
                                     </Show>
+                                }>
+                                    {/* Empty State */}
+                                    <div class="flex-1 bg-white/[0.02] border border-dashed border-white/[0.08] rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-[320px] cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all"
+                                        onClick={() => usage().status !== 'overdue' && fileInputRef?.click()}
+                                    >
+                                        <div class="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center mb-5 border border-white/10 shadow-2xl">
+                                            <UploadCloud class="w-8 h-8 text-gray-400" />
+                                        </div>
+                                        <h3 class="text-lg font-bold text-white tracking-tight mb-2">
+                                            {searchQuery() ? 'No results found' : 'Drop files here or click to upload'}
+                                        </h3>
+                                        <p class="text-sm text-gray-400 max-w-sm">
+                                            {searchQuery()
+                                                ? `No files matching "${searchQuery()}"`
+                                                : currentPath() === '/' ? 'Upload photos, videos, documents, or any files.' : `No files in this folder yet.`}
+                                        </p>
+                                        <Show when={!searchQuery() && usage().status !== 'overdue'}>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); fileInputRef?.click(); }}
+                                                class="mt-6 px-6 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold rounded-xl transition-all border border-white/10 text-sm active:scale-95"
+                                            >
+                                                Select Files
+                                            </button>
+                                        </Show>
+                                    </div>
+                                </Show>
+                            }
+                        >
+                            <Show when={usage().status === 'overdue'}>
+                                <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-start gap-3 text-left">
+                                    <AlertTriangle class="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <div class="text-sm font-bold text-red-400 mb-1">Subscription Payment Overdue</div>
+                                        <div class="text-xs text-red-400/80">Uploads are disabled. Please assure your VCN balance is sufficient for auto-renewal to avoid losing your files next week.</div>
+                                    </div>
                                 </div>
                             </Show>
-                        }
-                    >
-                        <Show when={usage().status === 'overdue'}>
-                            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-start gap-3 text-left">
-                                <AlertTriangle class="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                <div>
-                                    <div class="text-sm font-bold text-red-400 mb-1">Subscription Payment Overdue</div>
-                                    <div class="text-xs text-red-400/80">Uploads are disabled. Please assure your VCN balance is sufficient for auto-renewal to avoid losing your files next week.</div>
-                                </div>
-                            </div>
-                        </Show>
 
-                        {/* ── Grid View ── */}
-                        <Show when={viewMode() === 'grid'}>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                {/* Folders */}
-                                <For each={filteredFolders()}>
-                                    {(folder) => (
-                                        <div
-                                            class={`relative group bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 transition-all ${selectedItems().has(folder.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
-                                                }`}
-                                            onTouchStart={(e) => handleTouchStart(folder, 'folder', e)}
-                                            onTouchEnd={handleTouchEnd}
-                                            onTouchMove={handleTouchMove}
-                                        >
-                                            {/* Selection Checkbox */}
+                            {/* ── Grid View (Files Only) ── */}
+                            <Show when={viewMode() === 'grid'}>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    <For each={filteredFiles()}>
+                                        {(file) => (
                                             <div
-                                                class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(folder.id)
-                                                    ? 'bg-cyan-500 border-cyan-500 text-black'
-                                                    : 'bg-black/40 border-white/20 text-transparent'
-                                                    } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsSelectMode(true);
-                                                    toggleSelection(folder.id);
-                                                }}
+                                                class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
+                                                    } ${deletingId() === file.id ? 'opacity-40' : ''}`}
+                                                onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                                onTouchStart={(e) => handleTouchStart(file, 'file', e)}
+                                                onTouchEnd={handleTouchEnd}
+                                                onTouchMove={handleTouchMove}
                                             >
-                                                <Check class="w-3.5 h-3.5" />
-                                            </div>
-
-                                            <button
-                                                onClick={() => isSelectMode() ? toggleSelection(folder.id) : navigateToFolder(folder.path)}
-                                                class="w-full flex flex-col items-center gap-2 text-center"
-                                            >
-                                                <Folder class="w-10 h-10 text-cyan-400/80 group-hover:text-cyan-400 transition-colors" />
-                                                <span class="text-xs font-semibold text-gray-300 truncate w-full">{folder.name}</span>
-                                            </button>
-                                            <button
-                                                data-ctx-trigger
-                                                onClick={(e) => openContextMenu(folder, 'folder', e)}
-                                                class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white transition-all"
-                                            >
-                                                <MoreVertical class="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </For>
-                                {/* Files */}
-                                <For each={filteredFiles()}>
-                                    {(file) => (
-                                        <div
-                                            class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
-                                                } ${deletingId() === file.id ? 'opacity-40' : ''}`}
-                                            onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
-                                            onTouchStart={(e) => handleTouchStart(file, 'file', e)}
-                                            onTouchEnd={handleTouchEnd}
-                                            onTouchMove={handleTouchMove}
-                                        >
-                                            {/* Selection Checkbox */}
-                                            <div
-                                                class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(file.id)
-                                                    ? 'bg-cyan-500 border-cyan-500 text-black'
-                                                    : 'bg-black/40 border-white/20 text-transparent'
-                                                    } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsSelectMode(true);
-                                                    toggleSelection(file.id);
-                                                }}
-                                            >
-                                                <Check class="w-3.5 h-3.5" />
-                                            </div>
-
-                                            {/* Thumbnail or Icon */}
-                                            <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
-                                                <Show
-                                                    when={file.thumbnailURL || file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
-                                                    fallback={
-                                                        <Show
-                                                            when={file.type.startsWith('video/')}
-                                                            fallback={
-                                                                <div class={fileTypeColor(file.type)}>
-                                                                    <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
-                                                                </div>
-                                                            }
-                                                        >
-                                                            <div class={`${fileTypeColor(file.type)} relative`}>
-                                                                <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
-                                                                <div class="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5">
-                                                                    <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-                                                                </div>
-                                                            </div>
-                                                        </Show>
-                                                    }
-                                                >
-                                                    <img
-                                                        src={file.thumbnailURL || file.thumbnail || file.downloadURL}
-                                                        alt={file.name}
-                                                        class="w-full h-full object-cover"
-                                                        loading="lazy"
-                                                    />
-                                                    <Show when={file.type.startsWith('video/')}>
-                                                        <div class="absolute inset-0 flex items-center justify-center bg-black/30">
-                                                            <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
-                                                                <svg class="w-3.5 h-3.5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-                                                            </div>
-                                                        </div>
-                                                    </Show>
-                                                </Show>
-
-                                                {/* Security & Storage Badges Overlay */}
-                                                <div class="absolute bottom-1.5 right-1.5 flex gap-1">
-                                                    <Show when={file.isEncrypted}>
-                                                        <div class="p-1 rounded bg-black/60 backdrop-blur-md border border-white/10" title="Client-side Encrypted">
-                                                            <ShieldCheck class="w-3 h-3 text-cyan-400" />
-                                                        </div>
-                                                    </Show>
-                                                    <Show when={file.storageType === 'distributed'}>
-                                                        <div class="px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-black uppercase tracking-tighter" title="Stored on Distributed Node Network">
-                                                            VNet
-                                                        </div>
-                                                    </Show>
-                                                </div>
-                                            </div>
-
-                                            <div class="w-full text-left">
-                                                <div class="flex items-center gap-1.5 min-w-0">
-                                                    <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
-                                                    <Show when={file.isPublished}>
-                                                        <div class="shrink-0 w-3.5 h-3.5 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/20" title="Published to Market">
-                                                            <Globe class="w-2 h-2 text-black" />
-                                                        </div>
-                                                    </Show>
-                                                </div>
-                                                <Show when={file.abstract}>
-                                                    <div class="text-[9px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{file.abstract}</div>
-                                                </Show>
-                                                <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
-                                                    {formatFileSize(file.size)} &bull; {new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                                    {file.optimized && <span class="px-1 py-0.5 rounded bg-green-500/10 text-green-400 text-[8px] font-bold">MP4</span>}
-                                                    {file.preserveOriginal && <span class="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[8px] font-bold">RAW</span>}
-                                                </div>
-                                            </div>
-
-                                            {/* Context button */}
-                                            <div class="absolute top-2 right-2 flex gap-1">
-                                                <Show when={decryptingFileId() === file.id}>
-                                                    <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 animate-spin">
-                                                        <RotateCw class="w-3.5 h-3.5" />
-                                                    </div>
-                                                </Show>
-                                                <button
-                                                    data-ctx-trigger
-                                                    onClick={(e) => openContextMenu(file, 'file', e)}
-                                                    class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white transition-all"
-                                                >
-                                                    <MoreVertical class="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
-                        </Show>
-
-                        {/* ── List View ── */}
-                        <Show when={viewMode() === 'list'}>
-                            <div class="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
-                                {/* Table Header */}
-                                <div class="grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-2.5 border-b border-white/[0.06] text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                    <span>Name</span>
-                                    <span>Size</span>
-                                    <span>Modified</span>
-                                    <span></span>
-                                </div>
-                                {/* Folders */}
-                                <For each={filteredFolders()}>
-                                    {(folder) => (
-                                        <div
-                                            class="w-full grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] group transition-all items-center text-left cursor-pointer"
-                                            onClick={() => navigateToFolder(folder.path)}
-                                            onTouchStart={(e) => handleTouchStart(folder, 'folder', e)}
-                                            onTouchEnd={handleTouchEnd}
-                                            onTouchMove={handleTouchMove}
-                                        >
-                                            <div class="flex items-center gap-3 min-w-0">
-                                                <Folder class="w-5 h-5 text-cyan-400 shrink-0" />
-                                                <span class="text-sm text-gray-200 truncate font-medium">{folder.name}</span>
-                                            </div>
-                                            <span class="text-xs text-gray-500">--</span>
-                                            <span class="text-xs text-gray-500">{new Date(folder.createdAt).toLocaleDateString()}</span>
-                                            <button
-                                                data-ctx-trigger
-                                                onClick={(e) => openContextMenu(folder, 'folder', e)}
-                                                class="p-1 rounded-md text-gray-500 hover:text-white transition-all active:bg-white/10"
-                                            >
-                                                <MoreVertical class="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </For>
-                                {/* Files */}
-                                <For each={filteredFiles()}>
-                                    {(file) => (
-                                        <div
-                                            class={`group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_120px_40px] gap-2 px-3 sm:px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
-                                                } ${deletingId() === file.id ? 'opacity-40' : ''}`}
-                                            onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
-                                            onTouchStart={(e) => handleTouchStart(file, 'file', e)}
-                                            onTouchEnd={handleTouchEnd}
-                                            onTouchMove={handleTouchMove}
-                                        >
-                                            <div class="flex items-center gap-3 min-w-0">
-                                                {/* List Selection Check */}
+                                                {/* Selection Checkbox */}
                                                 <div
+                                                    class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(file.id)
+                                                        ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                        : 'bg-black/40 border-white/20 text-transparent'
+                                                        } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setIsSelectMode(true);
                                                         toggleSelection(file.id);
                                                     }}
-                                                    class={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${selectedItems().has(file.id)
-                                                        ? 'bg-cyan-500 border-cyan-500 text-black'
-                                                        : 'bg-white/5 border-white/10 text-transparent group-hover:border-white/30'
-                                                        }`}
                                                 >
                                                     <Check class="w-3.5 h-3.5" />
                                                 </div>
-                                                <div class={`shrink-0 ${fileTypeColor(file.type)}`}>
-                                                    <FileTypeIcon type={file.type} name={file.name} />
+
+                                                {/* Thumbnail or Icon */}
+                                                <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
+                                                    <Show
+                                                        when={file.thumbnailURL || file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
+                                                        fallback={
+                                                            <Show
+                                                                when={file.type.startsWith('video/')}
+                                                                fallback={
+                                                                    <div class={fileTypeColor(file.type)}>
+                                                                        <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
+                                                                    </div>
+                                                                }
+                                                            >
+                                                                <div class={`${fileTypeColor(file.type)} relative`}>
+                                                                    <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
+                                                                    <div class="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5">
+                                                                        <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+                                                        }
+                                                    >
+                                                        <img
+                                                            src={file.thumbnailURL || file.thumbnail || file.downloadURL}
+                                                            alt={file.name}
+                                                            class="w-full h-full object-cover"
+                                                            loading="lazy"
+                                                        />
+                                                        <Show when={file.type.startsWith('video/')}>
+                                                            <div class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                                <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+                                                                    <svg class="w-3.5 h-3.5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                                </div>
+                                                            </div>
+                                                        </Show>
+                                                    </Show>
+
+                                                    {/* Security & Storage Badges Overlay */}
+                                                    <div class="absolute bottom-1.5 right-1.5 flex gap-1">
+                                                        <Show when={file.isEncrypted}>
+                                                            <div class="p-1 rounded bg-black/60 backdrop-blur-md border border-white/10" title="Client-side Encrypted">
+                                                                <ShieldCheck class="w-3 h-3 text-cyan-400" />
+                                                            </div>
+                                                        </Show>
+                                                        <Show when={file.storageType === 'distributed'}>
+                                                            <div class="px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-black uppercase tracking-tighter" title="Stored on Distributed Node Network">
+                                                                VNet
+                                                            </div>
+                                                        </Show>
+                                                    </div>
                                                 </div>
-                                                <span class="text-sm text-gray-200 truncate">{file.name}</span>
-                                                <div class="flex gap-1 shrink-0">
-                                                    <Show when={file.isPublished}>
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Market</span>
+
+                                                <div class="w-full text-left">
+                                                    <div class="flex items-center gap-1.5 min-w-0">
+                                                        <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
+                                                        <Show when={file.isPublished}>
+                                                            <div class="shrink-0 w-3.5 h-3.5 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/20" title="Published to Market">
+                                                                <Globe class="w-2 h-2 text-black" />
+                                                            </div>
+                                                        </Show>
+                                                    </div>
+                                                    <Show when={file.abstract}>
+                                                        <div class="text-[9px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{file.abstract}</div>
                                                     </Show>
-                                                    <Show when={file.isEncrypted}>
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[9px] font-black text-purple-400 uppercase tracking-tighter">Private</span>
+                                                    <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
+                                                        {formatFileSize(file.size)} &bull; {new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                        {file.optimized && <span class="px-1 py-0.5 rounded bg-green-500/10 text-green-400 text-[8px] font-bold">MP4</span>}
+                                                        {file.preserveOriginal && <span class="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[8px] font-bold">RAW</span>}
+                                                    </div>
+                                                </div>
+
+                                                {/* Context button */}
+                                                <div class="absolute top-2 right-2 flex gap-1">
+                                                    <Show when={decryptingFileId() === file.id}>
+                                                        <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 animate-spin">
+                                                            <RotateCw class="w-3.5 h-3.5" />
+                                                        </div>
                                                     </Show>
-                                                    <Show when={file.storageType === 'distributed'}>
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[9px] font-black text-amber-500 uppercase tracking-tighter">VNet</span>
-                                                    </Show>
+                                                    <button
+                                                        data-ctx-trigger
+                                                        onClick={(e) => openContextMenu(file, 'file', e)}
+                                                        class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white transition-all"
+                                                    >
+                                                        <MoreVertical class="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
-                                            <span class="text-xs text-gray-500 hidden sm:block">{formatFileSize(file.size)}</span>
-                                            <span class="text-xs text-gray-500 hidden sm:block">{new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                            <button
-                                                data-ctx-trigger
-                                                onClick={(e) => openContextMenu(file, 'file', e)}
-                                                class="p-1 rounded-md text-gray-500 hover:text-white transition-all active:bg-white/10"
+                                        )}
+                                    </For>
+                                </div>
+                            </Show>
+
+                            {/* ── List View (Files Only) ── */}
+                            <Show when={viewMode() === 'list'}>
+                                <div class="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
+                                    {/* Table Header */}
+                                    <div class="grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-2.5 border-b border-white/[0.06] text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                        <span>Name</span>
+                                        <span>Size</span>
+                                        <span>Modified</span>
+                                        <span></span>
+                                    </div>
+                                    <For each={filteredFiles()}>
+                                        {(file) => (
+                                            <div
+                                                class={`group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_120px_40px] gap-2 px-3 sm:px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
+                                                    } ${deletingId() === file.id ? 'opacity-40' : ''}`}
+                                                onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                                onTouchStart={(e) => handleTouchStart(file, 'file', e)}
+                                                onTouchEnd={handleTouchEnd}
+                                                onTouchMove={handleTouchMove}
                                             >
-                                                <MoreVertical class="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
+                                                <div class="flex items-center gap-3 min-w-0">
+                                                    <div
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsSelectMode(true);
+                                                            toggleSelection(file.id);
+                                                        }}
+                                                        class={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${selectedItems().has(file.id)
+                                                            ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                            : 'bg-white/5 border-white/10 text-transparent group-hover:border-white/30'
+                                                            }`}
+                                                    >
+                                                        <Check class="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <div class={`shrink-0 ${fileTypeColor(file.type)}`}>
+                                                        <FileTypeIcon type={file.type} name={file.name} />
+                                                    </div>
+                                                    <span class="text-sm text-gray-200 truncate">{file.name}</span>
+                                                    <div class="flex gap-1 shrink-0">
+                                                        <Show when={file.isPublished}>
+                                                            <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Market</span>
+                                                        </Show>
+                                                        <Show when={file.isEncrypted}>
+                                                            <span class="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[9px] font-black text-purple-400 uppercase tracking-tighter">Private</span>
+                                                        </Show>
+                                                        <Show when={file.storageType === 'distributed'}>
+                                                            <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[9px] font-black text-amber-500 uppercase tracking-tighter">VNet</span>
+                                                        </Show>
+                                                    </div>
+                                                </div>
+                                                <span class="text-xs text-gray-500 hidden sm:block">{formatFileSize(file.size)}</span>
+                                                <span class="text-xs text-gray-500 hidden sm:block">{new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                <button
+                                                    data-ctx-trigger
+                                                    onClick={(e) => openContextMenu(file, 'file', e)}
+                                                    class="p-1 rounded-md text-gray-500 hover:text-white transition-all active:bg-white/10"
+                                                >
+                                                    <MoreVertical class="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </For>
+                                </div>
+                            </Show>
                         </Show>
-                    </Show>
+                    </div>
                 </div>
 
                 {/* ── Context Menu (Universal: Bottom Sheet on mobile, Dropdown on desktop) ── */}
