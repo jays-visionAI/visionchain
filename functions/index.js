@@ -28411,3 +28411,11 @@ exports.sendAgentSetupEmail = onCall({
 // ── VPIS: Vision Product Intelligence System ─────────────────────────────
 const vpisModule = require("./vpisModule");
 Object.assign(exports, vpisModule);
+
+// ── VPIS: Answer Quality Evaluator (Phase 2) ────────────────────────────
+const vpisEvaluator = require("./vpisEvaluator");
+Object.assign(exports, vpisEvaluator);
+
+// ── VPIS: Bug/Feature Extractor + Clustering (Phase 3) ──────────────────
+const vpisExtractor = require("./vpisExtractor");
+Object.assign(exports, vpisExtractor);
