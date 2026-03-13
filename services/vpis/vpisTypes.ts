@@ -297,10 +297,12 @@ export interface VpisAction {
 
   status: 'draft' | 'reviewed' | 'approved' | 'applied' | 'rejected';
   reviewedBy?: string;
+  reviewedAt?: string;
   reviewNote?: string;
   appliedAt?: string;
 
   createdAt: string;
+  createdBy?: string;
 }
 
 // ── Phase 7: Alerts ────────────────────────────────────────────────────────

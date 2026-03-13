@@ -28419,3 +28419,7 @@ Object.assign(exports, vpisEvaluator);
 // ── VPIS: Bug/Feature Extractor + Clustering (Phase 3) ──────────────────
 const vpisExtractor = require("./vpisExtractor");
 Object.assign(exports, vpisExtractor);
+
+// ── VPIS: Action Drafter + Decision Workflow (Phase 5) ──────────────────
+const vpisActions = require("./vpisActionDrafter");
+Object.assign(exports, vpisActions);

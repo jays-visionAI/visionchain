@@ -34,6 +34,15 @@ import {
   ArrowDown,
   ArrowUp,
   Minus,
+  FileOutput,
+  Trash2,
+  Edit3,
+  ClipboardCheck,
+  Rocket,
+  BookOpen,
+  FileText,
+  Wrench,
+  ScrollText,
 } from 'lucide-solid';
 import type {
   DailyReport,
@@ -42,11 +51,12 @@ import type {
   ExtractedItem,
   IssueCluster,
   ConversationTurn,
+  VpisAction,
 } from '../../services/vpis/vpisTypes';
 
 // ── Tab Types ──────────────────────────────────────────────────────────────
 
-type TabId = 'summary' | 'audit' | 'features' | 'bugs' | 'clusters' | 'queue';
+type TabId = 'summary' | 'audit' | 'features' | 'bugs' | 'clusters' | 'queue' | 'actions';
 
 interface TabDef {
   id: TabId;
@@ -61,6 +71,7 @@ const TABS: TabDef[] = [
   { id: 'bugs', label: 'Bug Reports', icon: Bug },
   { id: 'clusters', label: 'Cluster Explorer', icon: Network },
   { id: 'queue', label: 'Decision Queue', icon: Inbox },
+  { id: 'actions', label: 'Action Drafts', icon: FileOutput },
 ];
 
 // ── Shared Helpers ─────────────────────────────────────────────────────────
@@ -119,6 +130,7 @@ export const AdminProductIntelligence: Component = () => {
   const [featureItems, setFeatureItems] = createSignal<ExtractedItem[]>([]);
   const [clusters, setClusters] = createSignal<IssueCluster[]>([]);
   const [queueItems, setQueueItems] = createSignal<ExtractedItem[]>([]);
+  const [actions, setActions] = createSignal<VpisAction[]>([]);
 
   // Filters
   const [dateRange, setDateRange] = createSignal('7d');
@@ -133,14 +145,16 @@ export const AdminProductIntelligence: Component = () => {
       const getReportsCall = httpsCallable(functions, 'vpisGetReports');
       const getExtracted = httpsCallable(functions, 'vpisGetExtractedItems');
       const getClusters = httpsCallable(functions, 'vpisGetClusters');
+      const getActionsCall = httpsCallable(functions, 'vpisGetActions');
 
-      const [summaryRes, reportsRes, bugsRes, featuresRes, clustersRes, queueRes] = await Promise.allSettled([
+      const [summaryRes, reportsRes, bugsRes, featuresRes, clustersRes, queueRes, actionsRes] = await Promise.allSettled([
         getDashboard({ type: 'summary' }),
         getReportsCall({ limitCount: 30 }),
         getExtracted({ itemType: 'bug_report', limitCount: 50 }),
         getExtracted({ itemType: 'feature_request', limitCount: 50 }),
         getClusters({ status: 'active', limitCount: 50 }),
         getExtracted({ status: 'new', limitCount: 50 }),
+        getActionsCall({ limitCount: 50 }),
       ]);
 
       if (summaryRes.status === 'fulfilled') {
@@ -166,6 +180,10 @@ export const AdminProductIntelligence: Component = () => {
       if (queueRes.status === 'fulfilled') {
         const data = queueRes.value.data as any;
         if (data?.items) setQueueItems(data.items);
+      }
+      if (actionsRes.status === 'fulfilled') {
+        const data = actionsRes.value.data as any;
+        if (data?.actions) setActions(data.actions);
       }
     } catch (err) {
       console.error('[VPIS Dashboard] Fetch failed:', err);
@@ -348,6 +366,9 @@ export const AdminProductIntelligence: Component = () => {
           </Match>
           <Match when={activeTab() === 'queue'}>
             <DecisionQueue items={queueItems()} onStatusChange={updateItemStatus} />
+          </Match>
+          <Match when={activeTab() === 'actions'}>
+            <ActionManager actions={actions()} onRefresh={fetchDashboardData} />
           </Match>
         </Switch>
       </div>
@@ -951,6 +972,228 @@ const DecisionQueue: Component<{
               </div>
             </div>
           )}
+        </For>
+      </div>
+    </div>
+  );
+};
+
+// ── Action Manager (Phase 5) ──────────────────────────────────────────────
+
+interface ActionManagerProps {
+  actions: VpisAction[];
+  onRefresh: () => void;
+}
+
+const ACTION_TYPE_META: Record<string, { label: string; icon: any; color: string }> = {
+  backlog_item: { label: 'Backlog', icon: ClipboardCheck, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  bug_ticket: { label: 'Bug Ticket', icon: Bug, color: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  faq_draft: { label: 'FAQ', icon: BookOpen, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  doc_update: { label: 'Doc Update', icon: FileText, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  prompt_fix: { label: 'Prompt Fix', icon: Wrench, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  release_note: { label: 'Release Note', icon: ScrollText, color: 'text-green-400 bg-green-500/10 border-green-500/20' },
+};
+
+const ACTION_STATUS_META: Record<string, string> = {
+  draft: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+  reviewed: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  approved: 'bg-green-500/10 text-green-400 border-green-500/20',
+  applied: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
+};
+
+const ActionManager: Component<ActionManagerProps> = (props) => {
+  const [expandedId, setExpandedId] = createSignal<string | null>(null);
+  const [statusFilter, setStatusFilter] = createSignal('all');
+  const [typeFilter, setTypeFilter] = createSignal('all');
+  const [actionLoading, setActionLoading] = createSignal(false);
+
+  const filtered = createMemo(() => {
+    let items = props.actions;
+    if (statusFilter() !== 'all') items = items.filter(a => a.status === statusFilter());
+    if (typeFilter() !== 'all') items = items.filter(a => a.actionType === typeFilter());
+    return items;
+  });
+
+  const reviewAction = async (actionId: string, status: string, reviewNote?: string) => {
+    setActionLoading(true);
+    try {
+      const reviewCall = httpsCallable(functions, 'vpisReviewAction');
+      await reviewCall({ actionId, status, reviewNote });
+      props.onRefresh();
+    } catch (err) {
+      console.error('[VPIS] Review action failed:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const deleteAction = async (actionId: string) => {
+    setActionLoading(true);
+    try {
+      const deleteCall = httpsCallable(functions, 'vpisDeleteAction');
+      await deleteCall({ actionId });
+      props.onRefresh();
+    } catch (err) {
+      console.error('[VPIS] Delete action failed:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <div class="space-y-4">
+      {/* Filters */}
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 font-semibold">Status:</span>
+          <select
+            class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white appearance-none cursor-pointer"
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All ({props.actions.length})</option>
+            <option value="draft">Draft ({props.actions.filter(a => a.status === 'draft').length})</option>
+            <option value="reviewed">Reviewed ({props.actions.filter(a => a.status === 'reviewed').length})</option>
+            <option value="approved">Approved ({props.actions.filter(a => a.status === 'approved').length})</option>
+            <option value="applied">Applied ({props.actions.filter(a => a.status === 'applied').length})</option>
+            <option value="rejected">Rejected ({props.actions.filter(a => a.status === 'rejected').length})</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 font-semibold">Type:</span>
+          <select
+            class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white appearance-none cursor-pointer"
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All Types</option>
+            <option value="backlog_item">Backlog Items</option>
+            <option value="bug_ticket">Bug Tickets</option>
+            <option value="faq_draft">FAQ Drafts</option>
+            <option value="doc_update">Doc Updates</option>
+            <option value="prompt_fix">Prompt Fixes</option>
+            <option value="release_note">Release Notes</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Empty State */}
+      <Show when={filtered().length === 0}>
+        <div class="flex flex-col items-center justify-center py-20 text-slate-500">
+          <FileOutput class="w-12 h-12 mb-4 opacity-30" />
+          <p class="text-sm font-semibold">No action drafts yet</p>
+          <p class="text-xs mt-1">Accept items in the Decision Queue to generate drafts, or they'll be auto-generated daily</p>
+        </div>
+      </Show>
+
+      {/* Action List */}
+      <div class="space-y-2">
+        <For each={filtered()}>
+          {(action) => {
+            const meta = () => ACTION_TYPE_META[action.actionType] || ACTION_TYPE_META.backlog_item;
+            const ActionIcon = meta().icon;
+            return (
+              <div class="rounded-xl border border-white/5 bg-[#0B0E14] overflow-hidden hover:border-white/10 transition-colors">
+                {/* Header */}
+                <button
+                  class="w-full flex items-center gap-3 p-4 text-left"
+                  onClick={() => setExpandedId(expandedId() === action.id ? null : action.id)}
+                >
+                  <div class={`w-9 h-9 rounded-lg flex items-center justify-center border ${meta().color}`}>
+                    <ActionIcon class="w-4 h-4" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm text-white font-semibold truncate">{action.draftContent.title}</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class={`text-[10px] px-1.5 py-0.5 rounded border ${meta().color}`}>
+                        {meta().label}
+                      </span>
+                      <span class={`text-[10px] px-1.5 py-0.5 rounded border ${ACTION_STATUS_META[action.status] || ''}`}>
+                        {action.status}
+                      </span>
+                      <span class="text-[10px] text-slate-600 font-mono">
+                        {action.sourceType}: {action.sourceId?.substring(0, 8)}...
+                      </span>
+                    </div>
+                  </div>
+                  <div class="text-[10px] text-slate-600 font-mono">
+                    {action.createdAt?.split('T')[0]}
+                  </div>
+                  {expandedId() === action.id
+                    ? <ChevronDown class="w-4 h-4 text-slate-500" />
+                    : <ChevronRight class="w-4 h-4 text-slate-500" />
+                  }
+                </button>
+
+                {/* Expanded Detail */}
+                <Show when={expandedId() === action.id}>
+                  <div class="px-4 pb-4 border-t border-white/5 pt-3 space-y-3">
+                    {/* Draft Body */}
+                    <div class="rounded-lg bg-white/[0.02] p-4 text-xs text-slate-300 leading-relaxed max-h-80 overflow-y-auto font-mono whitespace-pre-wrap">
+                      {action.draftContent.body || '(empty body)'}
+                    </div>
+
+                    {/* Metadata */}
+                    <Show when={action.draftContent.metadata && Object.keys(action.draftContent.metadata).length > 0}>
+                      <div class="flex flex-wrap gap-2">
+                        <For each={Object.entries(action.draftContent.metadata)}>
+                          {([key, val]) => (
+                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10 font-mono">
+                              {key}: {val}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+
+                    {/* Review Info */}
+                    <Show when={action.reviewedBy}>
+                      <div class="text-[10px] text-slate-500">
+                        Reviewed by <span class="text-white">{action.reviewedBy}</span>
+                        {action.reviewedAt && <> at <span class="font-mono">{action.reviewedAt.split('T')[0]}</span></>}
+                        {action.reviewNote && <> &mdash; <span class="text-slate-400 italic">"{action.reviewNote}"</span></>}
+                      </div>
+                    </Show>
+
+                    {/* Workflow Actions */}
+                    <div class="flex gap-2 pt-2">
+                      <Show when={action.status === 'draft'}>
+                        <button
+                          onClick={() => reviewAction(action.id, 'approved')}
+                          disabled={actionLoading()}
+                          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-500/10 text-green-400 text-[10px] font-semibold hover:bg-green-500/20 transition-colors border border-green-500/20 disabled:opacity-30"
+                        >
+                          <CheckCircle class="w-3 h-3" /> Approve
+                        </button>
+                        <button
+                          onClick={() => reviewAction(action.id, 'rejected', 'Not actionable')}
+                          disabled={actionLoading()}
+                          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 text-[10px] font-semibold hover:bg-red-500/20 transition-colors border border-red-500/20 disabled:opacity-30"
+                        >
+                          <XCircle class="w-3 h-3" /> Reject
+                        </button>
+                      </Show>
+                      <Show when={action.status === 'approved'}>
+                        <button
+                          onClick={() => reviewAction(action.id, 'applied')}
+                          disabled={actionLoading()}
+                          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 disabled:opacity-30"
+                        >
+                          <Rocket class="w-3 h-3" /> Mark Applied
+                        </button>
+                      </Show>
+                      <button
+                        onClick={() => deleteAction(action.id)}
+                        disabled={actionLoading()}
+                        class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 text-slate-500 text-[10px] font-semibold hover:bg-red-500/10 hover:text-red-400 transition-colors border border-white/10 disabled:opacity-30"
+                      >
+                        <Trash2 class="w-3 h-3" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            );
+          }}
         </For>
       </div>
     </div>
