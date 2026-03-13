@@ -931,13 +931,13 @@ export const VCNGameCenter = (props: GameCenterProps) => {
     return (
         <div ref={gameContainerRef}
             class={isFullscreenGame()
-                ? 'fixed inset-0 z-40 bg-[#09090b] flex flex-col overflow-hidden'
+                ? 'fixed inset-0 z-40 bg-[#09090b] flex flex-col pb-[68px] lg:pb-0'
                 : 'p-4 lg:p-8 pb-32 relative'
             }
-            style={isFullscreenGame() ? 'touch-action: none;' : ''}
+            style={isFullscreenGame() ? 'overflow: hidden;' : ''}
         >
             <div class={isFullscreenGame()
-                ? 'flex-1 flex flex-col min-h-0'
+                ? 'flex-1 flex flex-col min-h-0 overflow-y-auto'
                 : 'max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700'
             }>
 

@@ -34,10 +34,18 @@ export default defineConfig(({ mode }) => {
               if (id.includes('@google/generative-ai') || id.includes('@google/genai')) return 'vendor-gemini';
               if (id.includes('mermaid')) return 'vendor-mermaid'; // circular-dep-safe
               if (id.includes('marked') || id.includes('highlight')) return 'vendor-markdown';
-              if (id.includes('apexcharts') || id.includes('chart')) return 'vendor-charts';
+              // Chart libs: split heavy charting into separate lazy chunks
+              if (id.includes('klinecharts')) return 'vendor-kline';
+              if (id.includes('lightweight-charts')) return 'vendor-lightweight';
+              if (id.includes('apexcharts') || id.includes('solid-apexcharts')) return 'vendor-charts';
               if (id.includes('qrcode')) return 'vendor-qr';
               if (id.includes('motion') || id.includes('animate')) return 'vendor-motion';
               if (id.includes('axios')) return 'vendor-axios';
+              // Heavy libs that are only used in specific views
+              if (id.includes('quill')) return 'vendor-quill';
+              if (id.includes('papaparse')) return 'vendor-csv';
+              if (id.includes('bip39')) return 'vendor-bip39';
+              if (id.includes('source-map')) return 'vendor-sourcemap';
               // Crypto primitives
               const match = id.match(/node_modules\/([^\/]+)/);
               if (match) {
@@ -67,6 +75,12 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/components/wallet/WalletViewHeader')) return 'wallet-core';
             if (id.includes('/components/wallet/VisionLogo')) return 'wallet-core';
             if (id.includes('/components/wallet/VisionFullLogo')) return 'wallet-core';
+
+            // Game files – separate from wallet-core (loaded only when Game Center is opened)
+            if (id.includes('/components/wallet/VCNGameCenter')) return 'wallet-games';
+            if (id.match(/\/components\/wallet\/\w+Game\.tsx/)) return 'wallet-games';
+            if (id.includes('/components/wallet/GameDailyLeaderboard')) return 'wallet-games';
+            if (id.includes('/services/game/')) return 'wallet-games';
 
             // Heavy views – each gets its own async chunk
             if (id.includes('/components/wallet/WalletDashboard')) return 'wallet-dashboard';

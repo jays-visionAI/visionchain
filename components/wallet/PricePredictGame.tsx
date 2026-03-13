@@ -312,7 +312,7 @@ export const PricePredictGame = (props: PricePredictProps) => {
 
     // ── Render ──
     return (
-        <div class="space-y-5">
+        <div class="space-y-5 px-4 pb-6">
             {/* Back button */}
             <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
                 class="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors py-2"
