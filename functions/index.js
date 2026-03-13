@@ -28423,3 +28423,7 @@ Object.assign(exports, vpisExtractor);
 // ── VPIS: Action Drafter + Decision Workflow (Phase 5) ──────────────────
 const vpisActions = require("./vpisActionDrafter");
 Object.assign(exports, vpisActions);
+
+// ── VPIS: Self-Improvement Loops (Phase 6) ──────────────────────────────
+const vpisSelfImprove = require("./vpisSelfImprove");
+Object.assign(exports, vpisSelfImprove);
