@@ -171,6 +171,163 @@ const sections: Section[] = [
     },
 ];
 
+// ─── SVG Flow Diagrams ───
+
+/** Reusable horizontal flow with labeled nodes and arrows */
+const FlowDiagram = (p: { steps: { label: string; sub?: string; color?: string }[]; title?: string }) => {
+    const nodeW = 120, nodeH = 52, gap = 36, arrowW = 24;
+    const totalW = p.steps.length * (nodeW + gap) - gap + 40;
+    const totalH = nodeH + 50;
+    return (
+        <div class="my-6 overflow-x-auto">
+            <Show when={p.title}><div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{p.title}</div></Show>
+            <svg viewBox={`0 0 ${totalW} ${totalH}`} class="w-full max-h-24" style="min-width:480px">
+                <For each={p.steps}>{(step, i) => {
+                    const x = () => 20 + i() * (nodeW + gap);
+                    const y = 12;
+                    const col = step.color || '#22d3ee';
+                    return (
+                        <>
+                            <rect x={x()} y={y} width={nodeW} height={nodeH} rx="12" fill="none" stroke={col} stroke-width="1.5" opacity="0.4" />
+                            <rect x={x()} y={y} width={nodeW} height={nodeH} rx="12" fill={col} opacity="0.06" />
+                            <text x={x() + nodeW / 2} y={y + (step.sub ? 20 : 26)} text-anchor="middle" fill="white" font-size="11" font-weight="700">{step.label}</text>
+                            <Show when={step.sub}>
+                                <text x={x() + nodeW / 2} y={y + 36} text-anchor="middle" fill="#94a3b8" font-size="9">{step.sub}</text>
+                            </Show>
+                            <Show when={i() < p.steps.length - 1}>
+                                <line x1={x() + nodeW + 4} y1={y + nodeH / 2} x2={x() + nodeW + gap - 4} y2={y + nodeH / 2} stroke="#334155" stroke-width="1.5" />
+                                <polygon points={`${x() + nodeW + gap - 4},${y + nodeH / 2} ${x() + nodeW + gap - 12},${y + nodeH / 2 - 4} ${x() + nodeW + gap - 12},${y + nodeH / 2 + 4}`} fill="#334155" />
+                            </Show>
+                            <text x={x() + nodeW / 2} y={totalH - 4} text-anchor="middle" fill="#475569" font-size="9" font-weight="700">{i() + 1}</text>
+                        </>
+                    );
+                }}</For>
+            </svg>
+        </div>
+    );
+};
+
+/** Interface layout SVG showing sidebar + main areas */
+const LayoutDiagram = () => (
+    <div class="my-6 overflow-x-auto">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Desktop Layout</div>
+        <svg viewBox="0 0 560 220" class="w-full" style="min-width:400px;max-height:220px">
+            {/* Outer frame */}
+            <rect x="10" y="10" width="540" height="200" rx="12" fill="none" stroke="#1e293b" stroke-width="1.5" />
+            {/* Sidebar */}
+            <rect x="10" y="10" width="120" height="200" rx="12" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+            <text x="70" y="36" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="800">SIDEBAR</text>
+            {['Chat', 'Assets', 'Bridge', 'Earn', 'Agent', 'Disk', 'Settings'].map((item, i) => (
+                <>
+                    <rect x="22" y={50 + i * 22} width="96" height="16" rx="4" fill={i === 0 ? '#22d3ee' : 'transparent'} opacity={i === 0 ? 0.15 : 1} />
+                    <text x="32" y={62 + i * 22} fill={i === 0 ? '#22d3ee' : '#64748b'} font-size="9" font-weight={i === 0 ? '700' : '400'}>{item}</text>
+                </>
+            ))}
+            {/* Main Chat Area */}
+            <rect x="140" y="10" width="410" height="150" rx="0" fill="#050508" />
+            <text x="345" y="36" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="700">AI CHAT AREA</text>
+            {/* Chat bubbles */}
+            <rect x="160" y="50" width="160" height="24" rx="8" fill="#1e293b" />
+            <text x="170" y="66" fill="#94a3b8" font-size="9">Send 100 VCN to John</text>
+            <rect x="340" y="50" width="190" height="36" rx="8" fill="#0e3a4a" />
+            <text x="350" y="66" fill="#22d3ee" font-size="9">Preparing send flow...</text>
+            <text x="350" y="80" fill="#64748b" font-size="8">Token: VCN | Amount: 100</text>
+            {/* Agent Desk */}
+            <rect x="140" y="160" width="410" height="20" rx="0" fill="#0c0c16" stroke="#1e293b" stroke-width="0.5" />
+            <text x="160" y="174" fill="#475569" font-size="8" font-weight="700">AGENT DESK</text>
+            <rect x="230" y="164" width="60" height="12" rx="6" fill="#059669" opacity="0.15" />
+            <text x="245" y="173" fill="#34d399" font-size="7">Running</text>
+            {/* Input bar */}
+            <rect x="140" y="180" width="410" height="30" rx="0" fill="#0a0a12" stroke="#1e293b" stroke-width="0.5" />
+            <rect x="155" y="186" width="320" height="18" rx="8" fill="#1e293b" />
+            <text x="170" y="198" fill="#475569" font-size="9">Type a message...</text>
+            <circle cx="510" cy="195" r="8" fill="#22d3ee" opacity="0.15" />
+            <text x="510" y="199" text-anchor="middle" fill="#22d3ee" font-size="10">M</text>
+        </svg>
+    </div>
+);
+
+/** Bridge bidirectional flow */
+const BridgeDiagram = () => (
+    <div class="my-6 overflow-x-auto">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Bridge Architecture</div>
+        <svg viewBox="0 0 520 120" class="w-full" style="min-width:400px;max-height:120px">
+            {/* Vision Chain */}
+            <rect x="10" y="25" width="130" height="70" rx="14" fill="#0e3a4a" stroke="#22d3ee" stroke-width="1.5" opacity="0.8" />
+            <text x="75" y="52" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="800">Vision Chain</text>
+            <text x="75" y="72" text-anchor="middle" fill="#64748b" font-size="9">Lock / Unlock VCN</text>
+            {/* Arrows */}
+            <line x1="148" y1="50" x2="204" y2="50" stroke="#334155" stroke-width="1.5" />
+            <polygon points="204,50 196,46 196,54" fill="#334155" />
+            <line x1="316" y1="70" x2="148" y2="70" stroke="#334155" stroke-width="1.5" stroke-dasharray="4 3" />
+            <polygon points="148,70 156,66 156,74" fill="#334155" />
+            {/* TSS Validator */}
+            <rect x="208" y="15" width="100" height="90" rx="14" fill="#1a0a2e" stroke="#a78bfa" stroke-width="1.5" opacity="0.8" />
+            <text x="258" y="42" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="800">TSS</text>
+            <text x="258" y="56" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="800">Validator</text>
+            <text x="258" y="78" text-anchor="middle" fill="#64748b" font-size="8">Multi-sig</text>
+            <text x="258" y="90" text-anchor="middle" fill="#64748b" font-size="8">Verification</text>
+            {/* Arrows */}
+            <line x1="316" y1="50" x2="372" y2="50" stroke="#334155" stroke-width="1.5" />
+            <polygon points="372,50 364,46 364,54" fill="#334155" />
+            {/* Ethereum */}
+            <rect x="380" y="25" width="130" height="70" rx="14" fill="#1a1a2e" stroke="#818cf8" stroke-width="1.5" opacity="0.8" />
+            <text x="445" y="52" text-anchor="middle" fill="#818cf8" font-size="12" font-weight="800">Ethereum</text>
+            <text x="445" y="72" text-anchor="middle" fill="#64748b" font-size="9">Mint / Burn wVCN</text>
+        </svg>
+    </div>
+);
+
+/** Staking lifecycle diagram */
+const StakingDiagram = () => (
+    <div class="my-6 overflow-x-auto">
+        <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Staking Lifecycle</div>
+        <svg viewBox="0 0 600 110" class="w-full" style="min-width:500px;max-height:110px">
+            {[
+                { x: 10, label: 'Available', sub: 'VCN in wallet', col: '#22d3ee' },
+                { x: 130, label: 'Staked', sub: 'Earning rewards', col: '#f59e0b' },
+                { x: 250, label: 'Unstaking', sub: '7-day cooldown', col: '#ef4444' },
+                { x: 370, label: 'Withdrawable', sub: 'Ready to claim', col: '#10b981' },
+                { x: 490, label: 'Available', sub: 'Back in wallet', col: '#22d3ee' },
+            ].map((n, i) => (
+                <>
+                    <rect x={n.x} y="15" width="110" height="54" rx="12" fill="none" stroke={n.col} stroke-width="1.5" opacity="0.5" />
+                    <rect x={n.x} y="15" width="110" height="54" rx="12" fill={n.col} opacity="0.06" />
+                    <text x={n.x + 55} y="38" text-anchor="middle" fill="white" font-size="11" font-weight="700">{n.label}</text>
+                    <text x={n.x + 55} y="54" text-anchor="middle" fill="#94a3b8" font-size="8">{n.sub}</text>
+                    {i < 4 && (
+                        <>
+                            <line x1={n.x + 114} y1="42" x2={n.x + 126} y2="42" stroke="#334155" stroke-width="1.5" />
+                            <polygon points={`${n.x + 126},42 ${n.x + 120},38 ${n.x + 120},46`} fill="#334155" />
+                        </>
+                    )}
+                </>
+            ))}
+            {/* Labels under arrows */}
+            {['Stake', 'Request', 'Wait 7d', 'Withdraw'].map((label, i) => (
+                <text x={130 * i + 120} y="92" text-anchor="middle" fill="#475569" font-size="8" font-weight="600">{label}</text>
+            ))}
+            {/* Reward arrow loop */}
+            <path d="M185,15 L185,5 Q185,0 195,0 L245,0 Q255,0 255,5 L255,15" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.5" stroke-dasharray="3 2" />
+            <text x="222" y="8" text-anchor="middle" fill="#f59e0b" font-size="7" opacity="0.7">Claim Rewards</text>
+        </svg>
+    </div>
+);
+
+/** Feedback pipeline diagram */
+const FeedbackDiagram = () => (
+    <FlowDiagram
+        title="VPIS Feedback Pipeline"
+        steps={[
+            { label: 'Detect', sub: 'AI auto-scan', color: '#22d3ee' },
+            { label: 'Classify', sub: 'Bug / Feature / Biz', color: '#a78bfa' },
+            { label: 'Group', sub: 'Cluster similar', color: '#f59e0b' },
+            { label: 'Prioritize', sub: 'Score & rank', color: '#f97316' },
+            { label: 'Review', sub: 'Team action', color: '#10b981' },
+        ]}
+    />
+);
+
 // ─── Content Renderer ───
 // Content pages are defined as functions returning JSX
 
@@ -283,6 +440,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'gs-navigation': return (
             <div class="space-y-6">
                 <SectionHeader title="Interface Overview" desc="Learn how to navigate the Vision Chain wallet across desktop and mobile." />
+                <LayoutDiagram />
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">Mobile Navigation</h3>
                     <div class="space-y-2">
@@ -447,6 +605,13 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'send-basic': return (
             <div class="space-y-6">
                 <SectionHeader title="Sending Tokens" desc="Send VCN, ETH, or other supported tokens to any wallet address or contact." />
+                <FlowDiagram title="Send Flow" steps={[
+                    { label: 'Select Token', sub: 'VCN or ETH' },
+                    { label: 'Recipient', sub: 'Address or contact' },
+                    { label: 'Amount', sub: 'Enter value' },
+                    { label: 'Review', sub: 'Check details' },
+                    { label: 'Sign', sub: 'Wallet password', color: '#10b981' },
+                ]} />
                 <Prerequisites items={['Wallet setup complete', 'Sufficient token balance for the transfer', 'Recipient wallet address or saved contact']} />
                 <StepList steps={[
                     { title: 'Start Send Flow', desc: 'Tap "Send" from the Assets page, use the quick action button, or type "Send" in the AI Chat.' },
@@ -572,6 +737,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'bridge-overview': return (
             <div class="space-y-6">
                 <SectionHeader title="Cross-Chain Bridge Overview" desc="Transfer tokens between Vision Chain and Ethereum securely using the Vision Bridge." />
+                <BridgeDiagram />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'Bi-directional', d: 'Transfer VCN between Vision Chain and Ethereum Sepolia in both directions' },
@@ -626,6 +792,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'staking-overview': return (
             <div class="space-y-6">
                 <SectionHeader title="Staking Overview" desc="Stake VCN tokens as a Bridge Validator to earn rewards from bridge fees and subsidy pools. All staking transactions are gasless." />
+                <StakingDiagram />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'Annual APY 12-20%', d: 'Rewards are dynamically calculated based on total network stake, bridge volume, and subsidy pool balance. The actual APY is displayed in real-time on the staking page.' },
@@ -766,6 +933,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'agent-create': return (
             <div class="space-y-6">
                 <SectionHeader title="Creating an Agent" desc="Step-by-step guide through the 4-step agent creation wizard." />
+                <FlowDiagram title="Agent Creation Wizard" steps={[
+                    { label: 'Name', sub: 'Register agent', color: '#22d3ee' },
+                    { label: 'Action', sub: 'Select type', color: '#a78bfa' },
+                    { label: 'Configure', sub: 'Set parameters', color: '#f59e0b' },
+                    { label: 'Deploy', sub: 'Schedule & go', color: '#10b981' },
+                ]} />
                 <Prerequisites items={['Logged in to Vision Chain wallet', 'No existing agent (one agent per account initially)']} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Step 1: Name Your Agent</h3>
@@ -2187,6 +2360,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         case 'feedback-overview': return (
             <div class="space-y-6">
                 <SectionHeader title="Feedback System" desc="Vision AI now features an intelligent feedback system that channels your voice directly into product improvement. Report bugs, suggest features, or submit business proposals through natural conversation." />
+                <FeedbackDiagram />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'Bug Reports', d: 'Describe issues you encounter and AI automatically classifies severity and routes to the development team' },
