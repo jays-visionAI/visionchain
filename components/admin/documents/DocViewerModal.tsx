@@ -80,7 +80,7 @@ export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
         if (blocks.length === 0) return;
 
         try {
-            const hljs = (await import('highlight.js')).default;
+            const hljs = (await import('../../../services/hljsLite')).default;
             blocks.forEach((block) => {
                 hljs.highlightElement(block as HTMLElement);
             });
