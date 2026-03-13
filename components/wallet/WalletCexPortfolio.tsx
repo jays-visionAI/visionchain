@@ -336,7 +336,7 @@ const WalletCexPortfolio = (): JSX.Element => {
     const [viewCurrency, setViewCurrency] = createSignal<'krw' | 'usd'>('krw');
 
     // Top-level tab
-    const [activeTab, setActiveTab] = createSignal<CexTab>('portfolio');
+    const [activeTab, setActiveTab] = createSignal<CexTab>('quant');
 
     // === Data Loading ===
     const loadData = async () => {
