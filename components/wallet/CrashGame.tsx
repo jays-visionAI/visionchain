@@ -251,7 +251,7 @@ export const CrashGame = (props: CrashGameProps) => {
             </button>
 
             <Show when={phase() === 'ready'}>
-                <div class="flex-1 flex flex-col items-center justify-center gap-6 px-4">
+                <div class="flex-1 flex flex-col items-center justify-center gap-6 px-4 pt-8">
                     <div class="w-20 h-20 bg-gradient-to-br from-red-500/20 to-amber-500/20 rounded-3xl flex items-center justify-center">
                         <svg viewBox="0 0 24 24" class="w-12 h-12" fill="none">
                             <path d="M12 2L8 10h8L12 2z" fill="#F59E0B" />
@@ -324,11 +324,18 @@ export const CrashGame = (props: CrashGameProps) => {
                                 <div class="text-4xl font-black text-red-400 mb-2">CRASHED!</div>
                                 <div class="text-sm text-gray-400">at x{crashPoint().toFixed(2)}</div>
                                 <div class="text-sm text-gray-600 mt-2">All rewards lost!</div>
-                                <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                    class="mt-6 px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                    style="touch-action: manipulation;">
-                                    Done
-                                </button>
+                                <div class="mt-6 flex gap-3">
+                                    <button onClick={() => { setPhase('ready'); setMultiplier(1.0); }}
+                                        class="px-6 py-3 bg-gradient-to-r from-red-500/20 to-amber-500/20 border border-red-500/30 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/30 transition-all"
+                                        style="touch-action: manipulation;">
+                                        Play Again
+                                    </button>
+                                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                        class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                        style="touch-action: manipulation;">
+                                        Back
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </Show>
@@ -358,11 +365,18 @@ export const CrashGame = (props: CrashGameProps) => {
                                         <span class="text-xs text-purple-400/60 font-bold">RP</span>
                                     </div>
                                 </div>
-                                <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                    class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                    style="touch-action: manipulation;">
-                                    Done
-                                </button>
+                                <div class="flex gap-3">
+                                    <button onClick={() => { setPhase('ready'); setMultiplier(1.0); setCashedOutAt(0); }}
+                                        class="px-6 py-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl text-sm font-bold text-green-400 hover:bg-green-500/30 transition-all"
+                                        style="touch-action: manipulation;">
+                                        Play Again
+                                    </button>
+                                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                        class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                        style="touch-action: manipulation;">
+                                        Back
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </Show>

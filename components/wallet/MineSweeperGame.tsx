@@ -13,6 +13,7 @@ interface Cell {
     id: number;
     isMine: boolean;
     state: CellState;
+    adjacentMines: number;
 }
 
 const GRID_SIZE = 10;
@@ -32,6 +33,41 @@ function getGrade(revealed: number): string {
 
 function getMultiplier(revealed: number): number {
     return +(1 + revealed * 0.15).toFixed(2);
+}
+
+// Number colors for adjacent mine counts (classic minesweeper colors)
+const NUMBER_COLORS: Record<number, string> = {
+    1: '#3B82F6', // blue
+    2: '#22C55E', // green
+    3: '#EF4444', // red
+    4: '#7C3AED', // purple
+    5: '#DC2626', // dark red
+    6: '#0891B2', // teal
+    7: '#1F2937', // dark
+    8: '#6B7280', // gray
+};
+
+// ─── Helper: get neighbors ──────────────────────────────────────────────────
+
+function getNeighborIndices(index: number): number[] {
+    const row = Math.floor(index / GRID_SIZE);
+    const col = index % GRID_SIZE;
+    const neighbors: number[] = [];
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = row + dr;
+            const nc = col + dc;
+            if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+                neighbors.push(nr * GRID_SIZE + nc);
+            }
+        }
+    }
+    return neighbors;
+}
+
+function countAdjacentMines(index: number, grid: Cell[]): number {
+    return getNeighborIndices(index).filter(i => grid[i].isMine).length;
 }
 
 // ─── Gem SVG ────────────────────────────────────────────────────────────────
@@ -75,7 +111,7 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
 
     const initGrid = () => {
         const grid: Cell[] = Array.from({ length: TOTAL_CELLS }, (_, i) => ({
-            id: i, isMine: false, state: 'hidden' as CellState,
+            id: i, isMine: false, state: 'hidden' as CellState, adjacentMines: 0,
         }));
         // Place mines
         const indices = Array.from({ length: TOTAL_CELLS }, (_, i) => i);
@@ -86,9 +122,40 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
         for (let i = 0; i < MINE_COUNT; i++) {
             grid[indices[i]].isMine = true;
         }
+        // Calculate adjacent mine counts for all cells
+        for (let i = 0; i < TOTAL_CELLS; i++) {
+            grid[i].adjacentMines = countAdjacentMines(i, grid);
+        }
         setCells(grid);
         setRevealedCount(0);
         setPhase('playing');
+    };
+
+    // Flood-fill reveal: if a cell has 0 adjacent mines, reveal all neighbors recursively
+    const floodReveal = (grid: Cell[], startId: number): Cell[] => {
+        const newGrid = [...grid];
+        const queue = [startId];
+        let revealed = 0;
+
+        while (queue.length > 0) {
+            const idx = queue.shift()!;
+            const cell = newGrid[idx];
+            if (cell.state !== 'hidden' || cell.isMine) continue;
+
+            newGrid[idx] = { ...cell, state: 'revealed' };
+            revealed++;
+
+            // If this cell has 0 adjacent mines, add all hidden neighbors to queue
+            if (cell.adjacentMines === 0) {
+                for (const ni of getNeighborIndices(idx)) {
+                    if (newGrid[ni].state === 'hidden' && !newGrid[ni].isMine) {
+                        queue.push(ni);
+                    }
+                }
+            }
+        }
+
+        return newGrid;
     };
 
     const handleCellClick = (cell: Cell) => {
@@ -115,10 +182,18 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
             GameAudio.play('gemReveal');
             try { navigator.vibrate?.([8]); } catch { }
 
-            setCells(prev => prev.map(c =>
-                c.id === cell.id ? { ...c, state: 'revealed' } : c
-            ));
-            const newCount = revealedCount() + 1;
+            // Use flood-fill if this cell has 0 adjacent mines
+            let newGrid: Cell[];
+            if (cell.adjacentMines === 0) {
+                newGrid = floodReveal(cells(), cell.id);
+            } else {
+                newGrid = cells().map(c =>
+                    c.id === cell.id ? { ...c, state: 'revealed' as CellState } : c
+                );
+            }
+
+            setCells(newGrid);
+            const newCount = newGrid.filter(c => c.state === 'revealed').length;
             setRevealedCount(newCount);
             setLastRevealId(cell.id);
 
@@ -164,7 +239,7 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
                     <h2 class="text-2xl font-black text-white">Mine Sweeper</h2>
                     <p class="text-sm text-gray-500 text-center max-w-xs">
                         Tap cells to reveal gems. Avoid the {MINE_COUNT} hidden mines!<br />
-                        Each gem increases your multiplier. Cash out anytime.
+                        Numbers show adjacent mines. Cash out anytime.
                     </p>
 
                     {/* How to Play */}
@@ -175,13 +250,13 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
                                 <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
                                     <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 15l-2 5L9 9l11 4-5 2z" /><path d="M15 15l5 5" /></svg>
                                 </div>
-                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Tap cells to reveal gems</div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Tap cells to reveal</div>
                             </div>
                             <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                                <div class="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
-                                    <svg viewBox="0 0 24 24" class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></svg>
+                                <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                    <span class="text-sm font-black text-blue-400">3</span>
                                 </div>
-                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Avoid mines or lose all!</div>
+                                <div class="text-[9px] text-gray-400 text-center font-bold leading-tight">Numbers = nearby mines</div>
                             </div>
                             <div class="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                                 <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
@@ -251,7 +326,13 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
                                         style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
                                     >
                                         <Show when={cell.state === 'revealed'}>
-                                            <GemSVG size="w-3 h-3 sm:w-4 sm:h-4" />
+                                            <Show when={cell.adjacentMines > 0}
+                                                fallback={<GemSVG size="w-3 h-3 sm:w-4 sm:h-4" />}
+                                            >
+                                                <span class="text-[10px] sm:text-xs font-black" style={{ color: NUMBER_COLORS[cell.adjacentMines] || '#fff' }}>
+                                                    {cell.adjacentMines}
+                                                </span>
+                                            </Show>
                                         </Show>
                                         <Show when={cell.state === 'mine' || cell.state === 'exploded'}>
                                             <svg viewBox="0 0 24 24" class="w-3 h-3 sm:w-4 sm:h-4">
@@ -272,11 +353,18 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
                                 <div class="text-5xl font-black text-red-400 mb-4">BOOM!</div>
                                 <div class="text-sm text-gray-400">Hit a mine after {revealedCount()} reveals</div>
                                 <div class="text-sm text-gray-600 mt-2">All rewards lost!</div>
-                                <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                    class="mt-6 px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                    style="touch-action: manipulation;">
-                                    Done
-                                </button>
+                                <div class="mt-6 flex gap-3 justify-center">
+                                    <button onClick={() => { setPhase('ready'); setRevealedCount(0); setCells([]); }}
+                                        class="px-6 py-3 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/30 transition-all"
+                                        style="touch-action: manipulation;">
+                                        Play Again
+                                    </button>
+                                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                        class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                        style="touch-action: manipulation;">
+                                        Back
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </Show>
@@ -305,11 +393,18 @@ export const MineSweeperGame = (props: MineSweeperProps) => {
                                         <span class="text-xs text-purple-400/60 font-bold">RP</span>
                                     </div>
                                 </div>
-                                <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                    class="mt-6 px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                    style="touch-action: manipulation;">
-                                    Done
-                                </button>
+                                <div class="mt-6 flex gap-3 justify-center">
+                                    <button onClick={() => { setPhase('ready'); setRevealedCount(0); setCells([]); }}
+                                        class="px-6 py-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl text-sm font-bold text-green-400 hover:bg-green-500/30 transition-all"
+                                        style="touch-action: manipulation;">
+                                        Play Again
+                                    </button>
+                                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                        class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                        style="touch-action: manipulation;">
+                                        Back
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </Show>

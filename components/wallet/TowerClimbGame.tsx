@@ -533,11 +533,18 @@ export const TowerClimbGame = (props: TowerClimbProps) => {
                             <div class="text-sm text-gray-600">All rewards lost!</div>
                         </Show>
 
-                        <button onClick={() => { stopWalkAnim(); GameAudio.stopBGM(); props.onBack(); }}
-                            class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors"
-                            style="touch-action: manipulation;">
-                            Done
-                        </button>
+                        <div class="flex gap-3 justify-center">
+                            <button onClick={() => { stopWalkAnim(); setPhase('ready'); setShowReward(false); setCurrentFloor(0); }}
+                                class="px-6 py-3 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/30 transition-all"
+                                style="touch-action: manipulation;">
+                                Play Again
+                            </button>
+                            <button onClick={() => { stopWalkAnim(); GameAudio.stopBGM(); props.onBack(); }}
+                                class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors"
+                                style="touch-action: manipulation;">
+                                Back
+                            </button>
+                        </div>
                     </div>
                 </Show>
             </Show>

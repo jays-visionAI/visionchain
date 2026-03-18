@@ -136,7 +136,7 @@ const DEFAULT_DAILY_PREDICT = 3;
 const DEFAULT_DAILY_TOWER = 3;
 const DEFAULT_DAILY_MINE = 3;
 const DEFAULT_DAILY_FLAPPY = 3;
-const DEFAULT_DAILY_SLOTS = 5;
+const DEFAULT_DAILY_SLOTS = 3;
 const DEFAULT_DAILY_CRASH = 3;
 
 // Scratch Card reward tiers
@@ -948,6 +948,7 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                     titleAccent="Center"
                     description="Play daily mini-games to earn VCN and RP rewards. Invite friends for bonus plays!"
                     icon={GameCenterIcon}
+                    hideDescriptionOnMobile={true}
                 />
 
                 {/* Today's Earnings Banner */}

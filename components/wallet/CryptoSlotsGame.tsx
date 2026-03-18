@@ -330,17 +330,32 @@ export const CryptoSlotsGame = (props: CryptoSlotsProps) => {
                         </div>
                     </Show>
 
-                    {/* Spin Button */}
-                    <button onClick={phase() === 'result' ? () => { GameAudio.stopBGM(); props.onBack(); } : spin}
-                        disabled={phase() === 'spinning'}
-                        class={`w-full py-4 rounded-2xl font-black text-lg transition-all
-                            ${phase() === 'spinning' ? 'bg-gray-800 text-gray-600 cursor-wait' : ''}
-                            ${phase() === 'idle' ? 'bg-gradient-to-r from-amber-500 to-red-500 text-white hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95' : ''}
-                            ${phase() === 'result' ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-gray-400' : ''}
-                        `}
-                        style="touch-action: manipulation; min-height: 52px;">
-                        {phase() === 'spinning' ? 'SPINNING...' : phase() === 'result' ? 'Done' : 'PULL LEVER'}
-                    </button>
+                    {/* Spin / Play Again Button */}
+                    <Show when={phase() !== 'result'}>
+                        <button onClick={spin}
+                            disabled={phase() === 'spinning'}
+                            class={`w-full py-4 rounded-2xl font-black text-lg transition-all
+                                ${phase() === 'spinning' ? 'bg-gray-800 text-gray-600 cursor-wait' : ''}
+                                ${phase() === 'idle' ? 'bg-gradient-to-r from-amber-500 to-red-500 text-white hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95' : ''}
+                            `}
+                            style="touch-action: manipulation; min-height: 52px;">
+                            {phase() === 'spinning' ? 'SPINNING...' : 'PULL LEVER'}
+                        </button>
+                    </Show>
+                    <Show when={phase() === 'result'}>
+                        <div class="flex gap-3">
+                            <button onClick={() => { setPhase('idle'); setMatchCount(0); setIsJackpot(false); setReward({ vcn: 0, rp: 0 }); }}
+                                class="flex-1 py-4 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-500/20 to-red-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30 transition-all"
+                                style="touch-action: manipulation; min-height: 52px;">
+                                Play Again
+                            </button>
+                            <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                class="flex-1 py-4 rounded-2xl font-black text-sm bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-gray-400 transition-all"
+                                style="touch-action: manipulation; min-height: 52px;">
+                                Back
+                            </button>
+                        </div>
+                    </Show>
                 </div>
             </div>
             </Show>

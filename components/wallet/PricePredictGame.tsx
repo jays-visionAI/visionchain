@@ -147,7 +147,7 @@ export const PricePredictGame = (props: PricePredictProps) => {
     const [gameOver, setGameOver] = createSignal(false);
     const [heartbeatInterval, setHeartbeatInterval] = createSignal<ReturnType<typeof setInterval> | null>(null);
 
-    const MAX_ROUNDS = 5;
+    const MAX_ROUNDS = 3;
     let timerInterval: ReturnType<typeof setInterval> | null = null;
     let observeTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -523,10 +523,16 @@ export const PricePredictGame = (props: PricePredictProps) => {
                         </div>
                     </div>
 
-                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                        class="px-8 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors">
-                        Done
-                    </button>
+                    <div class="flex gap-3 justify-center">
+                        <button onClick={() => { setGameOver(false); setTotalPlays(0); setTotalCorrect(0); setStreak(0); startRound(); }}
+                            class="px-6 py-3 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 rounded-xl text-sm font-bold text-indigo-400 hover:bg-indigo-500/30 transition-all">
+                            Play Again
+                        </button>
+                        <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                            class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors">
+                            Back
+                        </button>
+                    </div>
                 </div>
             </Show>
         </div>

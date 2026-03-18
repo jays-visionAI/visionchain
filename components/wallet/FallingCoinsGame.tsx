@@ -582,9 +582,13 @@ export const FallingCoinsGame = (props: FallingCoinsProps) => {
 
                         {/* Actions */}
                         <div class="flex items-center gap-3 w-full max-w-xs">
+                            <button onClick={() => { setGameState('ready'); setResult(null); setScore(0); setObjects([]); setConsecutiveCatches(0); setIsFever(false); setFeverCount(0); }}
+                                class="flex-1 px-4 py-3 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl text-sm font-bold text-amber-400 hover:bg-amber-500/30 transition-all">
+                                Play Again
+                            </button>
                             <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
                                 class="flex-1 px-4 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors">
-                                Done
+                                Back
                             </button>
                         </div>
                     </div>

@@ -534,9 +534,13 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
 
                     {/* Actions */}
                     <div class="flex items-center gap-3 w-full max-w-xs">
+                        <button onClick={() => { initGame(); GameAudio.startBGM('memory'); }}
+                            class="flex-1 px-4 py-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl text-sm font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all">
+                            Play Again
+                        </button>
                         <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
                             class="flex-1 px-4 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors">
-                            Done
+                            Back
                         </button>
                     </div>
                 </div>

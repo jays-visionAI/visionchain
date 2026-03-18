@@ -340,11 +340,18 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
                             </div>
                         </div>
 
-                        <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                            class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                            style="touch-action: manipulation;">
-                            Done
-                        </button>
+                        <div class="flex gap-3 justify-center">
+                            <button onClick={() => { setPhase('ready'); setScore(0); setResult(null); }}
+                                class="px-6 py-3 bg-gradient-to-r from-amber-500/20 to-green-500/20 border border-amber-500/30 rounded-xl text-sm font-bold text-amber-400 hover:bg-amber-500/30 transition-all"
+                                style="touch-action: manipulation;">
+                                Play Again
+                            </button>
+                            <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                style="touch-action: manipulation;">
+                                Back
+                            </button>
+                        </div>
                     </div>
                 </div>
             </Show>
