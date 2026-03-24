@@ -714,10 +714,166 @@ Verify block headers to earn bonus weight.
 
 ---
 
-## Complete API Reference (76 Actions)
+## Phase 11: Vision Disk (Distributed Storage for AI Agents)
+
+Vision Disk provides distributed file storage, semantic search, and long-term memory for AI agents and 3rd party partners.
+
+### 11.1 Provision Storage
+
+Allocate disk storage quota for your agent.
+
+```json
+{
+  "action": "disk.provision",
+  "api_key": "vcn_YOUR_KEY",
+  "quota_gb": 10,
+  "tier": "standard",
+  "features": ["semantic_search", "long_term_memory"]
+}
+```
+
+**Tiers:** `free`, `standard`, `premium`, `enterprise`
+
+### 11.2 Upload Files
+
+Store files with distributed chunking and Merkle verification.
+
+```json
+{
+  "action": "disk.write",
+  "api_key": "vcn_YOUR_KEY",
+  "file_name": "customer_data.json",
+  "file_type": "application/json",
+  "folder": "/conversations",
+  "data": "<base64 encoded>",
+  "tags": ["customer_A", "chat"],
+  "source_type": "chat_log",
+  "auto_index": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "file_id": "abc123",
+  "name": "customer_data.json",
+  "size": 4096,
+  "chunks": 1,
+  "cid": "vdisk_a1b2c3d4e5f6",
+  "content_hash": "sha256..."
+}
+```
+
+### 11.3 Download Files
+
+```json
+{ "action": "disk.read", "api_key": "vcn_YOUR_KEY", "file_id": "abc123" }
+```
+
+### 11.4 List Files
+
+```json
+{
+  "action": "disk.list",
+  "api_key": "vcn_YOUR_KEY",
+  "folder": "/conversations",
+  "search": "customer",
+  "tags": ["chat"],
+  "limit": 50
+}
+```
+
+### 11.5 Delete Files
+
+```json
+{ "action": "disk.delete", "api_key": "vcn_YOUR_KEY", "file_id": "abc123" }
+```
+
+### 11.6 Semantic Search
+
+Search across indexed files using natural language queries with dual embedding models.
+
+```json
+{
+  "action": "disk.query",
+  "api_key": "vcn_YOUR_KEY",
+  "query": "customer A recent purchase history",
+  "model": "gemini",
+  "top_k": 5,
+  "filters": {
+    "tags": ["customer_A"],
+    "source_type": "chat_log"
+  }
+}
+```
+
+**Models:** `gemini` (text-embedding-004), `openai` (text-embedding-3-small)
+
+### 11.7 Long-Term Memory
+
+Store and retrieve persistent memories for AI agents.
+
+```json
+{
+  "action": "disk.memory",
+  "api_key": "vcn_YOUR_KEY",
+  "operation": "create",
+  "category": "user_preference",
+  "key": "customer_a_style",
+  "content": "Customer A prefers concise answers in Korean honorifics",
+  "importance": 0.9,
+  "ttl_days": 365
+}
+```
+
+**Operations:** `create`, `read`, `update`, `delete`, `list`, `search`
+
+**Search memories:**
+```json
+{
+  "action": "disk.memory",
+  "api_key": "vcn_YOUR_KEY",
+  "operation": "search",
+  "query": "customer A preferences",
+  "category": "user_preference"
+}
+```
+
+### 11.8 Check Usage
+
+```json
+{ "action": "disk.usage", "api_key": "vcn_YOUR_KEY" }
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "usage": {
+    "total_bytes": 524288000,
+    "total_mb": 500.0,
+    "file_count": 234,
+    "chunk_count": 1520,
+    "memory_count": 89,
+    "embedding_count": 3040,
+    "indexed_file_count": 180
+  },
+  "quota": {
+    "quota_gb": 10,
+    "used_percent": 4.88,
+    "remaining_bytes": 10213130240,
+    "tier": "standard"
+  }
+}
+```
+
+---
+
+## Complete API Reference (84 Actions)
 
 All actions use `domain.method` format and are sent as POST to the gateway endpoint.
-64 actions via Agent Gateway + 12 actions via Vision Node local API.
+72 actions via Agent Gateway + 12 actions via Vision Node local API.
 
 ### Pricing Tiers
 
@@ -823,6 +979,19 @@ All actions use `domain.method` format and are sent as POST to the gateway endpo
 | `storage.get` | Yes | T1 | Read value |
 | `storage.list` | Yes | T1 | Enumerate keys |
 | `storage.delete` | Yes | T2 | Remove key |
+
+### disk (8 actions)
+
+| Action | Auth | Tier | Description |
+|--------|------|------|---------|
+| `disk.provision` | Yes | T2 | Allocate storage quota for agent/partner |
+| `disk.write` | Yes | T2 | Upload file (distributed chunking + Merkle) |
+| `disk.read` | Yes | T1 | Download file with integrity verification |
+| `disk.list` | Yes | T1 | List files with folder/tag/search filters |
+| `disk.delete` | Yes | T2 | Delete file + chunks + AI data |
+| `disk.query` | Yes | T3 | Semantic search via dual embeddings |
+| `disk.memory` | Yes | T2 | Long-term memory CRUD for agents |
+| `disk.usage` | Yes | T1 | Storage quota and usage stats |
 
 ### pipeline (4 actions)
 
