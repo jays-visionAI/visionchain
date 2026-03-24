@@ -201,13 +201,13 @@ async function sendHeartbeat() {
             nodeStats.storageBonus = result.storage_bonus || 0;
             nodeStats.chunksHeld = result.chunks_held || 0;
             nodeStats.storedGB = result.stored_gb || 0;
-            // 3-tier rewards
-            nodeStats.pendingReward = result.pending_reward || nodeStats.pendingReward;
-            nodeStats.totalEarned = result.total_earned || nodeStats.totalEarned;
-            nodeStats.pendingUsdt = result.pending_usdt || nodeStats.pendingUsdt;
-            nodeStats.totalUsdtEarned = result.total_usdt_earned || nodeStats.totalUsdtEarned;
-            nodeStats.pendingRp = result.pending_rp || nodeStats.pendingRp;
-            nodeStats.totalRpEarned = result.total_rp_earned || nodeStats.totalRpEarned;
+            // 3-tier rewards (use ?? to correctly handle "0" and 0 values after claim)
+            nodeStats.pendingReward = result.pending_reward ?? nodeStats.pendingReward;
+            nodeStats.totalEarned = result.total_earned ?? nodeStats.totalEarned;
+            nodeStats.pendingUsdt = result.pending_usdt ?? nodeStats.pendingUsdt;
+            nodeStats.totalUsdtEarned = result.total_usdt_earned ?? nodeStats.totalUsdtEarned;
+            nodeStats.pendingRp = result.pending_rp ?? nodeStats.pendingRp;
+            nodeStats.totalRpEarned = result.total_rp_earned ?? nodeStats.totalRpEarned;
         }
 
         // Update uptime

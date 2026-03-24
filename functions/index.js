@@ -14016,14 +14016,14 @@ exports.agentGateway = onRequest({
         }
 
         const prevUsdtPending = parseFloat(mnData.pending_usdt || "0");
-        const newUsdtPending = isNewEpoch ? usdtReward : prevUsdtPending + usdtReward;
+        const newUsdtPending = prevUsdtPending + usdtReward; // Always accumulate — only claim_reward resets to 0
 
         // --- Tier 2: VCN (Uptime Mining) ---
         // Rate: 0.001 VCN/sec at weight 1.0x (testnet incentive rate, ~5000x mainnet target)
         const VCN_REWARD_RATE_PER_SEC = 0.001;
         const vcnReward = weight * uptimeDelta * VCN_REWARD_RATE_PER_SEC;
         const prevVcnPending = parseFloat(mnData.pending_reward || "0");
-        const newVcnPending = isNewEpoch ? vcnReward : prevVcnPending + vcnReward;
+        const newVcnPending = prevVcnPending + vcnReward; // Always accumulate — only claim_reward resets to 0
 
         // --- Tier 3: RP (Participation Points — pre-listing VCN substitute) ---
         // Base: 1 RP per heartbeat + storage bonus (1 RP per 10 chunks held)
@@ -14031,7 +14031,7 @@ exports.agentGateway = onRequest({
         const rpStorageBonus = Math.floor(chunksHeld / 10); // 1 RP per 10 chunks
         const rpReward = rpBase + rpStorageBonus;
         const prevRpPending = parseFloat(mnData.pending_rp || "0");
-        const newRpPending = isNewEpoch ? rpReward : prevRpPending + rpReward;
+        const newRpPending = prevRpPending + rpReward; // Always accumulate — only claim_reward resets to 0
 
         const prevTodayUptime = isNewEpoch ? 0 : (mnData.today_uptime_seconds || 0);
 
