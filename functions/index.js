@@ -9889,6 +9889,19 @@ exports.agentGateway = onRequest({
             { action: "storage.delete", auth: true, tier: "T2", cost: "0.1", params: { key: "required" }, response: ["deleted", "key"], desc: "Delete key" },
           ],
         },
+        disk: {
+          description: "Vision Disk - Distributed storage, semantic search, and long-term memory for AI agents and 3rd party partners.",
+          actions: [
+            { action: "disk.provision", auth: true, tier: "T2", cost: "0.1", params: { target_agent: "optional", quota_gb: "optional (1-1000, default 5)", tier: "optional (free|standard|premium|enterprise)", features: "optional (array)" }, response: ["disk_id", "tenant", "quota_gb", "tier", "features_enabled", "status"], desc: "Provision disk storage for agent" },
+            { action: "disk.write", auth: true, tier: "T2", cost: "0.1", params: { file_name: "required", data: "required (base64)", file_type: "optional", folder: "optional", tags: "optional (array)", source_type: "optional", auto_index: "optional (boolean)" }, response: ["file_id", "name", "size", "chunks", "cid", "content_hash"], desc: "Upload file to Vision Disk" },
+            { action: "disk.read", auth: true, tier: "T1", cost: "0", params: { file_id: "required" }, response: ["file_id", "name", "type", "size", "data", "content_hash", "cid"], desc: "Download file from Vision Disk" },
+            { action: "disk.list", auth: true, tier: "T1", cost: "0", params: { folder: "optional", search: "optional", source_type: "optional", tags: "optional (array)", limit: "optional (1-200)" }, response: ["total", "files[]"], desc: "List files with filters" },
+            { action: "disk.delete", auth: true, tier: "T2", cost: "0.1", params: { file_id: "required" }, response: ["file_id", "name", "deleted_chunks"], desc: "Delete file and its chunks" },
+            { action: "disk.query", auth: true, tier: "T3", cost: "0.5", params: { query: "required", model: "optional (gemini|openai)", top_k: "optional (1-20)", filters: "optional ({tags, source_type, date_range})" }, response: ["query", "model", "total_results", "results[]"], desc: "Semantic search across indexed files" },
+            { action: "disk.memory", auth: true, tier: "T2", cost: "0.1", params: { operation: "required (create|read|update|delete|list|search)", category: "optional", key: "optional", content: "optional", importance: "optional (0-1)", memory_id: "optional", query: "optional", ttl_days: "optional" }, response: ["memory_id", "category", "content"], desc: "Long-term memory CRUD for AI agents" },
+            { action: "disk.usage", auth: true, tier: "T1", cost: "0", params: {}, response: ["tenant", "usage", "quota"], desc: "Storage usage and quota info" },
+          ],
+        },
         pipeline: {
           actions: [
             { action: "pipeline.create", auth: true, tier: "T2", cost: "0.1", params: { name: "required", steps: "required (array)", trigger: "optional", schedule: "optional" }, response: ["pipeline_id", "name", "steps_count"], desc: "Create multi-step pipeline" },
@@ -9932,7 +9945,7 @@ exports.agentGateway = onRequest({
           ],
         },
       },
-      total_actions: 64,
+      total_actions: 72,
       authentication: {
         methods: ["Authorization: Bearer <api_key>", "x-api-key: <api_key>", "POST body: api_key"],
         preferred: "Authorization: Bearer <api_key>",
@@ -10403,6 +10416,8 @@ exports.agentGateway = onRequest({
       // Stage 2 - new domains
       "node.register": "T2", "node.heartbeat": "T1", "node.status": "T1", "node.peers": "T1",
       "storage.set": "T2", "storage.get": "T1", "storage.list": "T1", "storage.delete": "T2",
+      "disk.provision": "T2", "disk.write": "T2", "disk.read": "T1", "disk.list": "T1",
+      "disk.delete": "T2", "disk.query": "T3", "disk.memory": "T2", "disk.usage": "T1",
       "pipeline.create": "T2", "pipeline.execute": "T3", "pipeline.list": "T1", "pipeline.delete": "T2",
       "webhook.subscribe": "T2", "webhook.unsubscribe": "T2", "webhook.list": "T1",
       "webhook.test": "T1", "webhook.logs": "T1",
@@ -16471,6 +16486,825 @@ exports.agentGateway = onRequest({
     }
 
     // =====================================================
+    // VISION DISK DOMAIN (8 endpoints)
+    // Provides 3rd party partners (NotClaw etc.) with
+    // distributed storage, semantic search, and long-term memory
+    // =====================================================
+
+    // Helper: resolve disk tenant email from agent or user context
+    const resolveDiskTenant = (agentCtx) => {
+      if (agentCtx._isUser) return agentCtx.email;
+      return (agentCtx.ownerEmail || "").toLowerCase();
+    };
+
+    // Helper: get or create disk allocation for a tenant
+    const getDiskAllocation = async (tenantEmail) => {
+      const allocDoc = await db.collection("disk_allocations").doc(tenantEmail).get();
+      if (allocDoc.exists) return allocDoc.data();
+      return null;
+    };
+
+    // Helper: calculate current disk usage
+    const calculateDiskUsage = async (tenantEmail) => {
+      const filesSnap = await db.collection("users").doc(tenantEmail)
+        .collection("disk_files").get();
+      let totalBytes = 0;
+      let fileCount = 0;
+      filesSnap.docs.forEach((d) => {
+        totalBytes += d.data().size || 0;
+        fileCount++;
+      });
+      const chunksSnap = await db.collection("users").doc(tenantEmail)
+        .collection("ai_chunks").count().get();
+      const memoriesSnap = await db.collection("users").doc(tenantEmail)
+        .collection("ai_memories").count().get();
+      return {
+        total_bytes: totalBytes,
+        file_count: fileCount,
+        chunk_count: chunksSnap.data().count,
+        memory_count: memoriesSnap.data().count,
+      };
+    };
+
+    // --- disk.provision ---
+    if (canonicalAction === "disk.provision") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+        const { target_agent: targetAgent, quota_gb: quotaGb, tier, features } = body;
+        const resolvedQuota = Math.max(1, Math.min(parseInt(quotaGb) || 5, 1000));
+        const resolvedTier = ["free", "standard", "premium", "enterprise"].includes(tier) ? tier : "standard";
+        const resolvedFeatures = Array.isArray(features) ? features : ["semantic_search", "long_term_memory"];
+
+        // Determine target email: either provision for a sub-agent or self
+        let targetEmail = tenantEmail;
+        if (targetAgent) {
+          const targetSnap = await db.collection("agents").doc(targetAgent.toLowerCase()).get();
+          if (targetSnap.exists) {
+            targetEmail = (targetSnap.data().ownerEmail || "").toLowerCase();
+            if (!targetEmail) {
+              return res.status(400).json({ error: `Target agent '${targetAgent}' has no owner_email` });
+            }
+          } else {
+            return res.status(404).json({ error: `Agent '${targetAgent}' not found` });
+          }
+        }
+
+        const now = new Date().toISOString();
+        const allocRef = db.collection("disk_allocations").doc(targetEmail);
+        const existing = await allocRef.get();
+
+        const allocData = {
+          tenant_email: targetEmail,
+          quota_gb: resolvedQuota,
+          quota_bytes: resolvedQuota * 1024 * 1024 * 1024,
+          tier: resolvedTier,
+          features: resolvedFeatures,
+          provisioned_by: agent.id || tenantEmail,
+          status: "active",
+          updated_at: now,
+          ...(existing.exists ? {} : { created_at: now }),
+        };
+
+        await allocRef.set(allocData, { merge: true });
+
+        // Ensure the user document exists for the tenant
+        const userRef = db.collection("users").doc(targetEmail);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+          await userRef.set({
+            email: targetEmail,
+            createdAt: now,
+            role: "user",
+            disk_provisioned: true,
+          });
+        } else {
+          await userRef.update({ disk_provisioned: true });
+        }
+
+        console.log(`[Disk API] Provisioned ${resolvedQuota}GB for ${targetEmail} by ${agent.id}`);
+
+        return res.status(200).json({
+          success: true,
+          disk_id: targetEmail,
+          tenant: targetEmail,
+          quota_gb: resolvedQuota,
+          tier: resolvedTier,
+          features_enabled: resolvedFeatures,
+          status: "active",
+        });
+      } catch (e) {
+        console.error("[Disk API] provision error:", e);
+        return res.status(500).json({ error: `Disk provision failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.write ---
+    if (canonicalAction === "disk.write") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const { file_name: fileName, file_type: fileType, folder, data: fileDataB64, tags, source_type: sourceType, auto_index: autoIndex } = body;
+        if (!fileName) return res.status(400).json({ error: "Missing required field: file_name" });
+        if (!fileDataB64) return res.status(400).json({ error: "Missing required field: data (base64)" });
+
+        // Check quota
+        const alloc = await getDiskAllocation(tenantEmail);
+        if (alloc) {
+          const usage = await calculateDiskUsage(tenantEmail);
+          const newBytes = Buffer.byteLength(fileDataB64, "base64");
+          if (usage.total_bytes + newBytes > alloc.quota_bytes) {
+            return res.status(402).json({
+              error: "Disk quota exceeded",
+              usage_bytes: usage.total_bytes,
+              quota_bytes: alloc.quota_bytes,
+              file_size: newBytes,
+            });
+          }
+        }
+
+        // Decode data
+        const buffer = Buffer.from(fileDataB64, "base64");
+        const fileSize = buffer.length;
+        const now = new Date().toISOString();
+
+        // Compute content hash
+        const crypto = require("crypto");
+        const contentHash = crypto.createHash("sha256").update(buffer).digest("hex");
+
+        // Check for duplicates (same hash)
+        const dupSnap = await db.collection("users").doc(tenantEmail)
+          .collection("disk_files")
+          .where("contentHash", "==", contentHash)
+          .limit(1).get();
+        if (!dupSnap.empty) {
+          const existingFile = dupSnap.docs[0];
+          return res.status(200).json({
+            success: true,
+            file_id: existingFile.id,
+            name: existingFile.data().name,
+            duplicate: true,
+            message: "Identical file already exists",
+          });
+        }
+
+        // Chunk the file (same as diskUpload pattern)
+        const CHUNK_SIZE = 700 * 1024; // 700KB
+        const chunkHashes = [];
+        const chunkBatch = db.batch();
+        for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+          const chunk = buffer.slice(i, Math.min(i + CHUNK_SIZE, buffer.length));
+          const chunkHash = crypto.createHash("sha256").update(chunk).digest("hex");
+          chunkHashes.push(chunkHash);
+          const chunkRef = db.collection("staging_chunks").doc(chunkHash);
+          chunkBatch.set(chunkRef, {
+            data: chunk.toString("base64"),
+            size: chunk.length,
+            file_key: `${tenantEmail}/${fileName}`,
+            index: Math.floor(i / CHUNK_SIZE),
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          // Also register in chunk_registry
+          const regRef = db.collection("chunk_registry").doc(chunkHash);
+          chunkBatch.set(regRef, {
+            hash: chunkHash,
+            size: chunk.length,
+            file_key: `${tenantEmail}/${fileName}`,
+            replicas: 0,
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+        await chunkBatch.commit();
+
+        // Compute merkle root
+        const computeMerkleRootLocal = (hashes) => {
+          if (hashes.length === 0) return "";
+          if (hashes.length === 1) return hashes[0];
+          const next = [];
+          for (let i = 0; i < hashes.length; i += 2) {
+            const left = hashes[i];
+            const right = i + 1 < hashes.length ? hashes[i + 1] : left;
+            next.push(crypto.createHash("sha256").update(left + right).digest("hex"));
+          }
+          return computeMerkleRootLocal(next);
+        };
+
+        const merkleRoot = computeMerkleRootLocal(chunkHashes);
+        const cid = `vdisk_${contentHash.substring(0, 16)}`;
+
+        // Save file metadata
+        const fileRef = db.collection("users").doc(tenantEmail).collection("disk_files").doc();
+        const fileDoc = {
+          name: fileName,
+          type: fileType || "application/octet-stream",
+          size: fileSize,
+          folder: folder || "/",
+          createdAt: now,
+          updatedAt: now,
+          storageType: "distributed",
+          storagePath: `distributed://${cid}`,
+          cid,
+          merkleRoot,
+          chunkHashes,
+          chunkCount: chunkHashes.length,
+          contentHash,
+          tags: tags || [],
+          sourceType: sourceType || "other",
+          uploadedBy: agent.id || "api",
+          uploadMethod: "agent_gateway",
+          indexingStatus: autoIndex ? "queued" : "none",
+        };
+        await fileRef.set(fileDoc);
+
+        console.log(`[Disk API] File written: ${fileName} (${fileSize} bytes, ${chunkHashes.length} chunks) for ${tenantEmail}`);
+
+        return res.status(200).json({
+          success: true,
+          file_id: fileRef.id,
+          name: fileName,
+          size: fileSize,
+          chunks: chunkHashes.length,
+          cid,
+          merkle_root: merkleRoot,
+          content_hash: contentHash,
+          auto_index: autoIndex || false,
+        });
+      } catch (e) {
+        console.error("[Disk API] write error:", e);
+        return res.status(500).json({ error: `Disk write failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.read ---
+    if (canonicalAction === "disk.read") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const { file_id: fileId } = body;
+        if (!fileId) return res.status(400).json({ error: "Missing required field: file_id" });
+
+        const fileSnap = await db.collection("users").doc(tenantEmail)
+          .collection("disk_files").doc(fileId).get();
+        if (!fileSnap.exists) {
+          return res.status(404).json({ error: "File not found" });
+        }
+
+        const fileMeta = fileSnap.data();
+        const chunkHashes = fileMeta.chunkHashes || [];
+
+        // Reassemble from chunks
+        const chunks = [];
+        for (const hash of chunkHashes) {
+          const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
+          if (stagingDoc.exists && stagingDoc.data().data) {
+            chunks.push(Buffer.from(stagingDoc.data().data, "base64"));
+          } else {
+            return res.status(500).json({ error: `Chunk ${hash} not available` });
+          }
+        }
+
+        const assembled = Buffer.concat(chunks);
+
+        // Verify merkle root if present
+        if (fileMeta.merkleRoot) {
+          const crypto = require("crypto");
+          const computeMR = (hashes) => {
+            if (hashes.length === 0) return "";
+            if (hashes.length === 1) return hashes[0];
+            const next = [];
+            for (let i = 0; i < hashes.length; i += 2) {
+              const left = hashes[i];
+              const right = i + 1 < hashes.length ? hashes[i + 1] : left;
+              next.push(crypto.createHash("sha256").update(left + right).digest("hex"));
+            }
+            return computeMR(next);
+          };
+          const computedRoot = computeMR(chunkHashes);
+          if (computedRoot !== fileMeta.merkleRoot) {
+            return res.status(500).json({ error: "Data integrity check failed: Merkle root mismatch" });
+          }
+        }
+
+        // Update last retrieved
+        await fileSnap.ref.update({ lastRetrievedAt: new Date().toISOString() });
+
+        return res.status(200).json({
+          success: true,
+          file_id: fileId,
+          name: fileMeta.name,
+          type: fileMeta.type,
+          size: assembled.length,
+          data: assembled.toString("base64"),
+          content_hash: fileMeta.contentHash,
+          cid: fileMeta.cid,
+        });
+      } catch (e) {
+        console.error("[Disk API] read error:", e);
+        return res.status(500).json({ error: `Disk read failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.list ---
+    if (canonicalAction === "disk.list") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const { folder, search, source_type: sourceType, tags: filterTags, limit: rawLimit, offset } = body;
+        const filesCol = db.collection("users").doc(tenantEmail).collection("disk_files");
+        let q = filesCol.orderBy("createdAt", "desc");
+
+        if (folder) {
+          q = filesCol.where("folder", "==", folder).orderBy("createdAt", "desc");
+        }
+        if (sourceType) {
+          q = filesCol.where("sourceType", "==", sourceType).orderBy("createdAt", "desc");
+        }
+
+        const queryLimit = Math.min(parseInt(rawLimit) || 50, 200);
+        q = q.limit(queryLimit);
+
+        const snap = await q.get();
+        let files = snap.docs.map((d) => ({
+          file_id: d.id,
+          name: d.data().name,
+          type: d.data().type,
+          size: d.data().size,
+          folder: d.data().folder,
+          tags: d.data().tags || [],
+          source_type: d.data().sourceType || "other",
+          indexing_status: d.data().indexingStatus || "none",
+          created_at: d.data().createdAt,
+          updated_at: d.data().updatedAt,
+          cid: d.data().cid,
+          content_hash: d.data().contentHash,
+        }));
+
+        // Client-side filters (Firestore compound query limitations)
+        if (search) {
+          const q = search.toLowerCase();
+          files = files.filter((f) => f.name.toLowerCase().includes(q));
+        }
+        if (filterTags && Array.isArray(filterTags) && filterTags.length > 0) {
+          files = files.filter((f) => filterTags.some((t) => (f.tags || []).includes(t)));
+        }
+
+        return res.status(200).json({
+          success: true,
+          total: files.length,
+          files,
+        });
+      } catch (e) {
+        console.error("[Disk API] list error:", e);
+        return res.status(500).json({ error: `Disk list failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.delete ---
+    if (canonicalAction === "disk.delete") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const { file_id: fileId } = body;
+        if (!fileId) return res.status(400).json({ error: "Missing required field: file_id" });
+
+        const fileRef = db.collection("users").doc(tenantEmail).collection("disk_files").doc(fileId);
+        const fileSnap = await fileRef.get();
+        if (!fileSnap.exists) {
+          return res.status(404).json({ error: "File not found" });
+        }
+
+        const fileMeta = fileSnap.data();
+        const chunkHashes = fileMeta.chunkHashes || [];
+
+        // Delete chunks
+        const batch = db.batch();
+        for (const hash of chunkHashes) {
+          batch.delete(db.collection("staging_chunks").doc(hash));
+          batch.delete(db.collection("chunk_registry").doc(hash));
+        }
+
+        // Delete AI data if indexed
+        if (fileMeta.indexingStatus === "indexed") {
+          const chunksSnap = await db.collection("users").doc(tenantEmail)
+            .collection("ai_chunks").where("fileId", "==", fileId).get();
+          chunksSnap.docs.forEach((d) => {
+            batch.delete(d.ref);
+            // Also delete embeddings
+            batch.delete(db.collection("users").doc(tenantEmail)
+              .collection("ai_embeddings_openai").doc(d.id));
+            batch.delete(db.collection("users").doc(tenantEmail)
+              .collection("ai_embeddings_gemini").doc(d.id));
+          });
+          // Delete index jobs
+          const jobsSnap = await db.collection("users").doc(tenantEmail)
+            .collection("ai_index_jobs").where("fileId", "==", fileId).get();
+          jobsSnap.docs.forEach((d) => batch.delete(d.ref));
+        }
+
+        // Delete file metadata
+        batch.delete(fileRef);
+        await batch.commit();
+
+        console.log(`[Disk API] Deleted ${fileMeta.name} (${chunkHashes.length} chunks) for ${tenantEmail}`);
+
+        return res.status(200).json({
+          success: true,
+          file_id: fileId,
+          name: fileMeta.name,
+          deleted_chunks: chunkHashes.length,
+        });
+      } catch (e) {
+        console.error("[Disk API] delete error:", e);
+        return res.status(500).json({ error: `Disk delete failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.query (semantic search) ---
+    if (canonicalAction === "disk.query") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const { query: queryText, model, top_k: topK, filters } = body;
+        if (!queryText) return res.status(400).json({ error: "Missing required field: query" });
+
+        const limit = Math.min(parseInt(topK) || 5, 20);
+        const modelTarget = model === "openai" ? "openai" : "gemini";
+
+        // 1. Generate query embedding
+        let queryVector = null;
+        if (modelTarget === "gemini") {
+          try {
+            const geminiKey = process.env.GEMINI_API_KEY;
+            if (geminiKey) {
+              const { GoogleGenerativeAI } = require("@google/generative-ai");
+              const genAI = new GoogleGenerativeAI(geminiKey);
+              const embModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+              const result = await embModel.embedContent(queryText.substring(0, 10000));
+              queryVector = result.embedding.values;
+            }
+          } catch (embErr) {
+            console.warn("[Disk API] Gemini embedding failed:", embErr.message);
+          }
+        }
+        if (!queryVector && modelTarget === "openai") {
+          try {
+            const openaiKey = process.env.OPENAI_API_KEY;
+            if (openaiKey) {
+              const OpenAI = require("openai");
+              const openai = new OpenAI({ apiKey: openaiKey });
+              const resp = await openai.embeddings.create({
+                model: "text-embedding-3-small", input: queryText.substring(0, 8000), dimensions: 1536,
+              });
+              queryVector = resp.data[0].embedding;
+            }
+          } catch (embErr) {
+            console.warn("[Disk API] OpenAI embedding failed:", embErr.message);
+          }
+        }
+
+        // 2. Keyword search (always available as fallback)
+        const keywords = queryText.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+        const chunksCol = db.collection("users").doc(tenantEmail).collection("ai_chunks");
+        let chunksQuery = chunksCol.limit(200);
+        const chunksSnap = await chunksQuery.get();
+
+        const results = [];
+        const cosineSim = (a, b) => {
+          if (!a || !b || a.length !== b.length) return 0;
+          let dot = 0; let magA = 0; let magB = 0;
+          for (let i = 0; i < a.length; i++) {
+            dot += a[i] * b[i];
+            magA += a[i] * a[i];
+            magB += b[i] * b[i];
+          }
+          return dot / (Math.sqrt(magA) * Math.sqrt(magB) + 1e-10);
+        };
+
+        // Score via vector similarity
+        if (queryVector) {
+          const embCollection = modelTarget === "gemini" ? "ai_embeddings_gemini" : "ai_embeddings_openai";
+          for (const chunkDoc of chunksSnap.docs) {
+            const embDoc = await db.collection("users").doc(tenantEmail)
+              .collection(embCollection).doc(chunkDoc.id).get();
+            if (embDoc.exists && embDoc.data().vector) {
+              const sim = cosineSim(queryVector, embDoc.data().vector);
+              if (sim > 0.3) {
+                results.push({
+                  chunk_id: chunkDoc.id,
+                  file_id: chunkDoc.data().fileId,
+                  text: chunkDoc.data().text?.substring(0, 500),
+                  summary: chunkDoc.data().summary,
+                  keywords: chunkDoc.data().keywords,
+                  score: Math.round(sim * 1000) / 1000,
+                  match_type: "vector",
+                });
+              }
+            }
+          }
+        }
+
+        // Fallback: keyword matching
+        if (results.length < limit) {
+          for (const chunkDoc of chunksSnap.docs) {
+            const text = (chunkDoc.data().text || "").toLowerCase();
+            const chunkKeywords = chunkDoc.data().keywords || [];
+            const keywordScore = keywords.reduce((s, kw) =>
+              s + (text.includes(kw) ? 1 : 0) + (chunkKeywords.includes(kw) ? 2 : 0), 0);
+            if (keywordScore > 0 && !results.find((r) => r.chunk_id === chunkDoc.id)) {
+              results.push({
+                chunk_id: chunkDoc.id,
+                file_id: chunkDoc.data().fileId,
+                text: chunkDoc.data().text?.substring(0, 500),
+                summary: chunkDoc.data().summary,
+                keywords: chunkDoc.data().keywords,
+                score: keywordScore / keywords.length,
+                match_type: "keyword",
+              });
+            }
+          }
+        }
+
+        // Apply metadata filters
+        let filteredResults = results;
+        if (filters) {
+          if (filters.tags && Array.isArray(filters.tags)) {
+            // Need to look up file metadata for tag filtering
+            const fileCache = {};
+            for (const r of filteredResults) {
+              if (!fileCache[r.file_id]) {
+                const fSnap = await db.collection("users").doc(tenantEmail)
+                  .collection("disk_files").doc(r.file_id).get();
+                fileCache[r.file_id] = fSnap.exists ? fSnap.data() : {};
+              }
+              r._fileTags = fileCache[r.file_id].tags || [];
+            }
+            filteredResults = filteredResults.filter((r) =>
+              filters.tags.some((t) => (r._fileTags || []).includes(t)));
+            filteredResults.forEach((r) => delete r._fileTags);
+          }
+          if (filters.source_type) {
+            const fileCache2 = {};
+            for (const r of filteredResults) {
+              if (!fileCache2[r.file_id]) {
+                const fSnap = await db.collection("users").doc(tenantEmail)
+                  .collection("disk_files").doc(r.file_id).get();
+                fileCache2[r.file_id] = fSnap.exists ? fSnap.data() : {};
+              }
+              r._sourceType = fileCache2[r.file_id].sourceType;
+            }
+            filteredResults = filteredResults.filter((r) => r._sourceType === filters.source_type);
+            filteredResults.forEach((r) => delete r._sourceType);
+          }
+        }
+
+        // Sort by score descending, take top_k
+        filteredResults.sort((a, b) => b.score - a.score);
+        const topResults = filteredResults.slice(0, limit);
+
+        return res.status(200).json({
+          success: true,
+          query: queryText,
+          model: modelTarget,
+          total_results: topResults.length,
+          results: topResults,
+        });
+      } catch (e) {
+        console.error("[Disk API] query error:", e);
+        return res.status(500).json({ error: `Disk query failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.memory (long-term memory CRUD) ---
+    if (canonicalAction === "disk.memory") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const { operation, category, key, content, importance, ttl_days: ttlDays, memory_id: memoryId, query: queryText } = body;
+        if (!operation) return res.status(400).json({ error: "Missing required field: operation (create|read|update|delete|list|search)" });
+
+        const memoriesCol = db.collection("users").doc(tenantEmail).collection("ai_memories");
+        const now = new Date().toISOString();
+
+        if (operation === "create") {
+          if (!content) return res.status(400).json({ error: "Missing required field: content" });
+
+          // Check memory limit (max 5000 per tenant)
+          const countSnap = await memoriesCol.count().get();
+          if (countSnap.data().count >= 5000) {
+            return res.status(400).json({ error: "Memory limit reached (max 5000 per tenant)" });
+          }
+
+          const memRef = memoriesCol.doc();
+          const memData = {
+            category: category || "general",
+            key: key || null,
+            content,
+            importance: Math.max(0, Math.min(parseFloat(importance) || 0.5, 1.0)),
+            created_at: now,
+            updated_at: now,
+            created_by: agent.id || "api",
+            access_count: 0,
+            last_accessed: null,
+            ...(ttlDays ? { expires_at: new Date(Date.now() + ttlDays * 86400000).toISOString() } : {}),
+          };
+          await memRef.set(memData);
+
+          return res.status(200).json({
+            success: true,
+            memory_id: memRef.id,
+            category: memData.category,
+            key: memData.key,
+            created: true,
+          });
+        }
+
+        if (operation === "read") {
+          if (!memoryId) return res.status(400).json({ error: "Missing required field: memory_id" });
+          const memSnap = await memoriesCol.doc(memoryId).get();
+          if (!memSnap.exists) return res.status(404).json({ error: "Memory not found" });
+
+          // Update access stats
+          await memSnap.ref.update({
+            access_count: admin.firestore.FieldValue.increment(1),
+            last_accessed: now,
+          });
+
+          const d = memSnap.data();
+          return res.status(200).json({
+            success: true,
+            memory_id: memSnap.id,
+            category: d.category,
+            key: d.key,
+            content: d.content,
+            importance: d.importance,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+            access_count: (d.access_count || 0) + 1,
+          });
+        }
+
+        if (operation === "update") {
+          if (!memoryId) return res.status(400).json({ error: "Missing required field: memory_id" });
+          const memSnap = await memoriesCol.doc(memoryId).get();
+          if (!memSnap.exists) return res.status(404).json({ error: "Memory not found" });
+
+          const updates = { updated_at: now };
+          if (content !== undefined) updates.content = content;
+          if (category !== undefined) updates.category = category;
+          if (key !== undefined) updates.key = key;
+          if (importance !== undefined) updates.importance = Math.max(0, Math.min(parseFloat(importance), 1.0));
+          if (ttlDays !== undefined) updates.expires_at = new Date(Date.now() + ttlDays * 86400000).toISOString();
+
+          await memSnap.ref.update(updates);
+          return res.status(200).json({ success: true, memory_id: memoryId, updated: true });
+        }
+
+        if (operation === "delete") {
+          if (!memoryId) return res.status(400).json({ error: "Missing required field: memory_id" });
+          const memSnap = await memoriesCol.doc(memoryId).get();
+          if (!memSnap.exists) return res.status(404).json({ error: "Memory not found" });
+          await memSnap.ref.delete();
+          return res.status(200).json({ success: true, memory_id: memoryId, deleted: true });
+        }
+
+        if (operation === "list") {
+          let q = memoriesCol.orderBy("updated_at", "desc");
+          if (category) {
+            q = memoriesCol.where("category", "==", category).orderBy("updated_at", "desc");
+          }
+          const listLimit = Math.min(parseInt(body.limit) || 50, 200);
+          q = q.limit(listLimit);
+          const snap = await q.get();
+
+          const memories = snap.docs.map((d) => ({
+            memory_id: d.id,
+            category: d.data().category,
+            key: d.data().key,
+            content: d.data().content?.substring(0, 200),
+            importance: d.data().importance,
+            created_at: d.data().created_at,
+            updated_at: d.data().updated_at,
+            access_count: d.data().access_count || 0,
+          }));
+
+          return res.status(200).json({ success: true, total: memories.length, memories });
+        }
+
+        if (operation === "search") {
+          if (!queryText) return res.status(400).json({ error: "Missing required field: query (for search)" });
+          const keywords = queryText.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+          let q = memoriesCol.orderBy("importance", "desc").limit(200);
+          if (category) {
+            q = memoriesCol.where("category", "==", category).orderBy("importance", "desc").limit(200);
+          }
+          const snap = await q.get();
+
+          const scored = snap.docs.map((d) => {
+            const text = ((d.data().content || "") + " " + (d.data().key || "") + " " + (d.data().category || "")).toLowerCase();
+            const score = keywords.reduce((s, kw) => s + (text.includes(kw) ? 1 : 0), 0);
+            return { doc: d, score };
+          }).filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+
+          const results = scored.slice(0, parseInt(body.limit) || 10).map((s) => ({
+            memory_id: s.doc.id,
+            category: s.doc.data().category,
+            key: s.doc.data().key,
+            content: s.doc.data().content,
+            importance: s.doc.data().importance,
+            relevance_score: s.score / keywords.length,
+          }));
+
+          return res.status(200).json({ success: true, query: queryText, total: results.length, results });
+        }
+
+        return res.status(400).json({ error: `Unknown operation: ${operation}. Use: create, read, update, delete, list, search` });
+      } catch (e) {
+        console.error("[Disk API] memory error:", e);
+        return res.status(500).json({ error: `Disk memory failed: ${e.message}` });
+      }
+    }
+
+    // --- disk.usage ---
+    if (canonicalAction === "disk.usage") {
+      try {
+        const tenantEmail = resolveDiskTenant(agent);
+        if (!tenantEmail) {
+          return res.status(400).json({ error: "Agent must have an owner_email to use Vision Disk" });
+        }
+
+        const usage = await calculateDiskUsage(tenantEmail);
+        const alloc = await getDiskAllocation(tenantEmail);
+
+        // Get embedding counts
+        let embeddingCount = 0;
+        try {
+          const oaiSnap = await db.collection("users").doc(tenantEmail)
+            .collection("ai_embeddings_openai").count().get();
+          const gemSnap = await db.collection("users").doc(tenantEmail)
+            .collection("ai_embeddings_gemini").count().get();
+          embeddingCount = (oaiSnap.data().count || 0) + (gemSnap.data().count || 0);
+        } catch (_) { /* ignore */ }
+
+        // Get indexed file count
+        let indexedCount = 0;
+        try {
+          const idxSnap = await db.collection("users").doc(tenantEmail)
+            .collection("disk_files").where("indexingStatus", "==", "indexed").count().get();
+          indexedCount = idxSnap.data().count || 0;
+        } catch (_) { /* ignore */ }
+
+        return res.status(200).json({
+          success: true,
+          tenant: tenantEmail,
+          usage: {
+            total_bytes: usage.total_bytes,
+            total_mb: Math.round(usage.total_bytes / 1024 / 1024 * 100) / 100,
+            file_count: usage.file_count,
+            chunk_count: usage.chunk_count,
+            memory_count: usage.memory_count,
+            embedding_count: embeddingCount,
+            indexed_file_count: indexedCount,
+          },
+          quota: alloc ? {
+            quota_gb: alloc.quota_gb,
+            quota_bytes: alloc.quota_bytes,
+            used_percent: Math.round(usage.total_bytes / alloc.quota_bytes * 10000) / 100,
+            remaining_bytes: Math.max(0, alloc.quota_bytes - usage.total_bytes),
+            tier: alloc.tier,
+            features: alloc.features,
+            status: alloc.status,
+          } : {
+            quota_gb: 0,
+            message: "No disk allocation. Use disk.provision to allocate storage.",
+          },
+        });
+      } catch (e) {
+        console.error("[Disk API] usage error:", e);
+        return res.status(500).json({ error: `Disk usage failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
 
     return res.status(400).json({
       error: `Unknown action: ${action}`,
@@ -16487,6 +17321,8 @@ exports.agentGateway = onRequest({
         "settlement.set_wallet", "settlement.get_wallet",
         "node.register", "node.heartbeat", "node.status", "node.peers",
         "storage.set", "storage.get", "storage.list", "storage.delete",
+        "disk.provision", "disk.write", "disk.read", "disk.list",
+        "disk.delete", "disk.query", "disk.memory", "disk.usage",
         "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
         "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
         "chunk.register", "chunk.assignments", "chunk.stored", "chunk.fetch_staging",

@@ -3,6 +3,8 @@ import { createContext, useContext, createSignal, createMemo, JSX } from 'solid-
 // Import locale files
 import en from './locales/en.json';
 import ko from './locales/ko.json';
+import jp from './locales/jp.json';
+import th from './locales/th.json';
 
 // ============================================================
 // Types
@@ -27,11 +29,15 @@ interface I18nContextValue {
 const LOCALES: Record<LocaleCode, NestedRecord> = {
     en: en as NestedRecord,
     ko: ko as NestedRecord,
+    jp: jp as NestedRecord,
+    th: th as NestedRecord,
 };
 
 const AVAILABLE_LOCALES = [
     { code: 'en', label: 'English', native: 'English' },
     { code: 'ko', label: 'Korean', native: '한국어' },
+    { code: 'jp', label: 'Japanese', native: '日本語' },
+    { code: 'th', label: 'Thai', native: 'ไทย' },
 ];
 
 const STORAGE_KEY = 'visionchain_locale';

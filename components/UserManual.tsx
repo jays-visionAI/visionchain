@@ -1,6 +1,8 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { A } from '@solidjs/router';
+import { useI18n } from '../i18n/i18nContext';
+import { getManualContent, getManualLabel } from '../i18n/userManualContent';
 
 // ─── SVG Icons ───
 const svg = {
@@ -18,158 +20,62 @@ const I = (p: { d: keyof typeof svg; c?: string }) => <span class={p.c ?? 'w-4 h
 // ─── Section Definitions ───
 interface Section { id: string; title: string; icon: string; children: { id: string; title: string }[]; }
 
-const sections: Section[] = [
-    {
-        id: 'getting-started', title: 'Getting Started', icon: '1',
-        children: [
-            { id: 'gs-overview', title: 'Overview' },
-            { id: 'gs-signup', title: 'Account Creation & Login' },
-            { id: 'gs-wallet', title: 'Wallet Setup' },
-            { id: 'gs-navigation', title: 'Interface Overview' },
-        ]
-    },
-    {
-        id: 'ai-chat', title: 'AI Chat', icon: '2',
-        children: [
-            { id: 'chat-overview', title: 'Chat Interface' },
-            { id: 'chat-quick', title: 'Quick Actions' },
-            { id: 'chat-voice', title: 'Voice Input' },
-            { id: 'chat-intent', title: 'AI Commands' },
-            { id: 'chat-history', title: 'Chat History' },
-            { id: 'chat-agent-desk', title: 'Agent Desk' },
-            { id: 'chat-tips', title: 'Daily Tips' },
-        ]
-    },
-    {
-        id: 'assets', title: 'My Assets', icon: '3',
-        children: [
-            { id: 'assets-dashboard', title: 'Portfolio Dashboard' },
-            { id: 'assets-tokens', title: 'Token List & Balances' },
-            { id: 'assets-multichain', title: 'Multi-Chain Balances' },
-            { id: 'assets-history', title: 'Transaction History' },
-        ]
-    },
-    {
-        id: 'send-receive', title: 'Send & Receive', icon: '4',
-        children: [
-            { id: 'send-basic', title: 'Sending Tokens' },
-            { id: 'send-contact', title: 'Contact-based Transfer' },
-            { id: 'send-scheduled', title: 'Scheduled Transfer' },
-            { id: 'send-batch', title: 'Batch Transfer' },
-            { id: 'receive-tokens', title: 'Receiving Tokens' },
-        ]
-    },
-    {
-        id: 'bridge', title: 'Cross-Chain Bridge', icon: '5',
-        children: [
-            { id: 'bridge-overview', title: 'Bridge Overview' },
-            { id: 'bridge-forward', title: 'Vision to Ethereum' },
-            { id: 'bridge-reverse', title: 'Ethereum to Vision' },
-            { id: 'bridge-monitor', title: 'Transaction Monitoring' },
-        ]
-    },
-    {
-        id: 'staking', title: 'Staking & Earn', icon: '6',
-        children: [
-            { id: 'staking-overview', title: 'Staking Overview' },
-            { id: 'staking-how', title: 'How to Stake' },
-            { id: 'staking-rewards', title: 'Rewards & Unstaking' },
-        ]
-    },
-    {
-        id: 'agent', title: 'AI Agent', icon: '7',
-        children: [
-            { id: 'agent-overview', title: 'What is Agent Hosting?' },
-            { id: 'agent-create', title: 'Creating an Agent' },
-            { id: 'agent-actions', title: 'Action Types' },
-            { id: 'agent-manage', title: 'Managing Agents' },
-            { id: 'agent-logs', title: 'Logs & Monitoring' },
-        ]
-    },
-    {
-        id: 'insight', title: 'Vision Insight', icon: '8',
-        children: [
-            { id: 'insight-overview', title: 'Intelligence Dashboard' },
-            { id: 'insight-news', title: 'AI News Feed' },
-            { id: 'insight-signals', title: 'Trading Signals' },
-        ]
-    },
-    {
-        id: 'cex', title: 'Quant', icon: '9',
-        children: [
-            { id: 'cex-connect', title: 'Connecting Exchanges' },
-            { id: 'cex-exchanges', title: 'Supported Exchanges' },
-            { id: 'cex-portfolio', title: 'Portfolio Overview' },
-            { id: 'cex-quant', title: 'Quant Engine (BETA)' },
-            { id: 'cex-security', title: 'Security & IP Whitelist' },
-        ]
-    },
-    {
-        id: 'disk', title: 'Vision Disk', icon: '10',
-        children: [
-            { id: 'disk-overview', title: 'Cloud Storage Overview' },
-            { id: 'disk-upload', title: 'Upload & Download' },
-            { id: 'disk-folders', title: 'Folder Management' },
-            { id: 'disk-share', title: 'Sharing & Publishing' },
-            { id: 'disk-encryption', title: 'Encryption & Passkey' },
-            { id: 'disk-ai-memory', title: 'AI Memory & Indexing' },
-            { id: 'disk-chatbot', title: 'AI Chat File Sharing' },
-            { id: 'disk-plans', title: 'Storage Plans' },
-        ]
-    },
-    {
-        id: 'nodes', title: 'Nodes', icon: '11',
-        children: [
-            { id: 'nodes-overview', title: 'Vision Node Overview' },
-            { id: 'nodes-purchase', title: 'Purchasing Nodes' },
-            { id: 'nodes-install', title: 'Installation Guide' },
-        ]
-    },
-    {
-        id: 'mint', title: 'Token Minting', icon: '12',
-        children: [
-            { id: 'mint-overview', title: 'Mint Studio' },
-            { id: 'mint-create', title: 'Creating a Token' },
-        ]
-    },
-    {
-        id: 'social', title: 'Social Features', icon: '13',
-        children: [
-            { id: 'contacts-manage', title: 'Contacts Management' },
-            { id: 'referral-program', title: 'Referral Program' },
-            { id: 'quest-campaign', title: 'Quests & Campaigns' },
-        ]
-    },
-    {
-        id: 'settings', title: 'Settings & Security', icon: '14',
-        children: [
-            { id: 'settings-profile', title: 'Profile Management' },
-            { id: 'settings-2fa', title: '2FA Setup' },
-            { id: 'settings-backup', title: 'Wallet Backup & Restore' },
-            { id: 'settings-language', title: 'Language Settings' },
-            { id: 'settings-notifications', title: 'Notification Settings' },
-        ]
-    },
-    {
-        id: 'faq', title: 'Troubleshooting', icon: '15',
-        children: [
-            { id: 'faq-login', title: 'Login Issues' },
-            { id: 'faq-tx', title: 'Transaction Failures' },
-            { id: 'faq-bridge', title: 'Bridge Issues' },
-            { id: 'faq-contact', title: 'Contact Support' },
-        ]
-    },
-    {
-        id: 'feedback', title: 'Feedback & Reports', icon: '16',
-        children: [
-            { id: 'feedback-overview', title: 'Feedback System' },
-            { id: 'feedback-bugs', title: 'Bug Reports' },
-            { id: 'feedback-features', title: 'Feature Suggestions' },
-            { id: 'feedback-business', title: 'Business Proposals' },
-            { id: 'feedback-tips', title: 'Effective Feedback' },
-        ]
-    },
+// Map child IDs to translation keys under userManual.children.*
+const childKeyMap: Record<string, string> = {
+    'gs-overview': 'gsOverview', 'gs-signup': 'gsSignup', 'gs-wallet': 'gsWallet', 'gs-navigation': 'gsNavigation',
+    'chat-overview': 'chatOverview', 'chat-quick': 'chatQuick', 'chat-voice': 'chatVoice', 'chat-intent': 'chatIntent',
+    'chat-history': 'chatHistory', 'chat-agent-desk': 'chatAgentDesk', 'chat-tips': 'chatTips',
+    'assets-dashboard': 'assetsDashboard', 'assets-tokens': 'assetsTokens', 'assets-multichain': 'assetsMultichain', 'assets-history': 'assetsHistory',
+    'send-basic': 'sendBasic', 'send-contact': 'sendContact', 'send-scheduled': 'sendScheduled', 'send-batch': 'sendBatch', 'receive-tokens': 'receiveTokens',
+    'bridge-overview': 'bridgeOverview', 'bridge-forward': 'bridgeForward', 'bridge-reverse': 'bridgeReverse', 'bridge-monitor': 'bridgeMonitor',
+    'staking-overview': 'stakingOverview', 'staking-how': 'stakingHow', 'staking-rewards': 'stakingRewards',
+    'agent-overview': 'agentOverview', 'agent-create': 'agentCreate', 'agent-actions': 'agentActions', 'agent-manage': 'agentManage', 'agent-logs': 'agentLogs',
+    'insight-overview': 'insightOverview', 'insight-news': 'insightNews', 'insight-signals': 'insightSignals',
+    'cex-connect': 'cexConnect', 'cex-exchanges': 'cexExchanges', 'cex-portfolio': 'cexPortfolio', 'cex-quant': 'cexQuant', 'cex-security': 'cexSecurity',
+    'disk-overview': 'diskOverview', 'disk-upload': 'diskUpload', 'disk-folders': 'diskFolders', 'disk-share': 'diskShare',
+    'disk-encryption': 'diskEncryption', 'disk-ai-memory': 'diskAiMemory', 'disk-chatbot': 'diskChatbot', 'disk-plans': 'diskPlans',
+    'nodes-overview': 'nodesOverview', 'nodes-purchase': 'nodesPurchase', 'nodes-install': 'nodesInstall',
+    'mint-overview': 'mintOverview', 'mint-create': 'mintCreate',
+    'contacts-manage': 'contactsManage', 'referral-program': 'referralProgram', 'quest-campaign': 'questCampaign',
+    'settings-profile': 'settingsProfile', 'settings-2fa': 'settings2fa', 'settings-backup': 'settingsBackup',
+    'settings-language': 'settingsLanguage', 'settings-notifications': 'settingsNotifications',
+    'faq-login': 'faqLogin', 'faq-tx': 'faqTx', 'faq-bridge': 'faqBridge', 'faq-contact': 'faqContact',
+    'feedback-overview': 'feedbackOverview', 'feedback-bugs': 'feedbackBugs', 'feedback-features': 'feedbackFeatures',
+    'feedback-business': 'feedbackBusiness', 'feedback-tips': 'feedbackTips',
+};
+
+// Section structure (IDs + translation keys); titles resolved at render via t()
+const sectionDefs: { id: string; sectionKey: string; icon: string; childIds: string[] }[] = [
+    { id: 'getting-started', sectionKey: 'gettingStarted', icon: '1', childIds: ['gs-overview','gs-signup','gs-wallet','gs-navigation'] },
+    { id: 'ai-chat', sectionKey: 'aiChat', icon: '2', childIds: ['chat-overview','chat-quick','chat-voice','chat-intent','chat-history','chat-agent-desk','chat-tips'] },
+    { id: 'assets', sectionKey: 'myAssets', icon: '3', childIds: ['assets-dashboard','assets-tokens','assets-multichain','assets-history'] },
+    { id: 'send-receive', sectionKey: 'sendReceive', icon: '4', childIds: ['send-basic','send-contact','send-scheduled','send-batch','receive-tokens'] },
+    { id: 'bridge', sectionKey: 'crossChainBridge', icon: '5', childIds: ['bridge-overview','bridge-forward','bridge-reverse','bridge-monitor'] },
+    { id: 'staking', sectionKey: 'stakingEarn', icon: '6', childIds: ['staking-overview','staking-how','staking-rewards'] },
+    { id: 'agent', sectionKey: 'aiAgent', icon: '7', childIds: ['agent-overview','agent-create','agent-actions','agent-manage','agent-logs'] },
+    { id: 'insight', sectionKey: 'visionInsight', icon: '8', childIds: ['insight-overview','insight-news','insight-signals'] },
+    { id: 'cex', sectionKey: 'quant', icon: '9', childIds: ['cex-connect','cex-exchanges','cex-portfolio','cex-quant','cex-security'] },
+    { id: 'disk', sectionKey: 'visionDisk', icon: '10', childIds: ['disk-overview','disk-upload','disk-folders','disk-share','disk-encryption','disk-ai-memory','disk-chatbot','disk-plans'] },
+    { id: 'nodes', sectionKey: 'nodes', icon: '11', childIds: ['nodes-overview','nodes-purchase','nodes-install'] },
+    { id: 'mint', sectionKey: 'tokenMinting', icon: '12', childIds: ['mint-overview','mint-create'] },
+    { id: 'social', sectionKey: 'socialFeatures', icon: '13', childIds: ['contacts-manage','referral-program','quest-campaign'] },
+    { id: 'settings', sectionKey: 'settingsSecurity', icon: '14', childIds: ['settings-profile','settings-2fa','settings-backup','settings-language','settings-notifications'] },
+    { id: 'faq', sectionKey: 'troubleshooting', icon: '15', childIds: ['faq-login','faq-tx','faq-bridge','faq-contact'] },
+    { id: 'feedback', sectionKey: 'feedbackReports', icon: '16', childIds: ['feedback-overview','feedback-bugs','feedback-features','feedback-business','feedback-tips'] },
 ];
+
+/** Build locale-aware sections from translation keys */
+function buildSections(t: (key: string) => string): Section[] {
+    return sectionDefs.map(def => ({
+        id: def.id,
+        title: t(`userManual.sections.${def.sectionKey}`),
+        icon: def.icon,
+        children: def.childIds.map(cid => ({
+            id: cid,
+            title: t(`userManual.children.${childKeyMap[cid]}`),
+        })),
+    }));
+}
 
 // ─── SVG Flow Diagrams ───
 
@@ -332,21 +238,21 @@ const FeedbackDiagram = () => (
 // Content pages are defined as functions returning JSX
 
 // Helper Components
-const Tip = (p: { children: JSX.Element }) => (
+const Tip = (p: { children: JSX.Element; label?: string }) => (
     <div class="bg-cyan-500/5 border border-cyan-500/15 rounded-xl p-5 my-4">
-        <h4 class="text-xs font-black uppercase tracking-widest text-cyan-400 mb-2">TIP</h4>
+        <h4 class="text-xs font-black uppercase tracking-widest text-cyan-400 mb-2">{p.label || 'TIP'}</h4>
         <div class="text-sm text-gray-400">{p.children}</div>
     </div>
 );
-const Warning = (p: { children: JSX.Element }) => (
+const Warning = (p: { children: JSX.Element; label?: string }) => (
     <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-5 my-4">
-        <h4 class="text-xs font-black uppercase tracking-widest text-red-400 mb-2">WARNING</h4>
+        <h4 class="text-xs font-black uppercase tracking-widest text-red-400 mb-2">{p.label || 'WARNING'}</h4>
         <div class="text-sm text-gray-400">{p.children}</div>
     </div>
 );
-const Note = (p: { children: JSX.Element }) => (
+const Note = (p: { children: JSX.Element; label?: string }) => (
     <div class="bg-amber-500/5 border border-amber-500/15 rounded-xl p-5 my-4">
-        <h4 class="text-xs font-black uppercase tracking-widest text-amber-400 mb-2">NOTE</h4>
+        <h4 class="text-xs font-black uppercase tracking-widest text-amber-400 mb-2">{p.label || 'NOTE'}</h4>
         <div class="text-sm text-gray-400">{p.children}</div>
     </div>
 );
@@ -360,9 +266,9 @@ const StepList = (p: { steps: { title: string; desc: string }[] }) => (
         )}</For>
     </div>
 );
-const Prerequisites = (p: { items: string[] }) => (
+const Prerequisites = (p: { items: string[]; label?: string }) => (
     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5 my-4">
-        <h4 class="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">PREREQUISITES</h4>
+        <h4 class="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">{p.label || 'PREREQUISITES'}</h4>
         <ul class="space-y-1.5 text-sm text-gray-400">
             <For each={p.items}>{(item) => <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-cyan-500 flex-shrink-0" />{item}</li>}</For>
         </ul>
@@ -376,70 +282,74 @@ const SectionHeader = (p: { title: string; desc: string }) => (
 );
 
 // ─── Content Pages ───
-function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element {
+function getContent(id: string, onNavigate?: (id: string) => void, locale: string = 'en'): JSX.Element {
+    const c = getManualContent(id, locale);
+    const L = (key: string) => getManualLabel(key, locale);
     switch (id) {
         // ─── Getting Started ───
         case 'gs-overview': return (
             <div class="space-y-6">
-                <SectionHeader title="Welcome to Vision Chain" desc="Vision Chain is an AI-powered blockchain ecosystem. This manual will guide you through every feature of the Vision Chain Wallet." />
+                <SectionHeader title={c.title || 'Welcome to Vision Chain'} desc={c.desc || 'Vision Chain is an AI-powered blockchain ecosystem. This manual will guide you through every feature of the Vision Chain Wallet.'} />
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
+                    {(c.features || [
                         { n: 'AI Chat', d: 'Talk to Vision AI for transactions, questions, and blockchain operations' },
                         { n: 'Multi-Chain', d: 'Manage assets across Vision Chain, Ethereum, Polygon, and Base' },
                         { n: 'Gasless', d: 'All transactions are gasless through the Vision Paymaster system' },
-                    ].map(c => (
+                    ]).map((f: any) => (
                         <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                            <div class="text-sm font-bold text-white mb-1">{c.n}</div>
-                            <div class="text-xs text-gray-500">{c.d}</div>
+                            <div class="text-sm font-bold text-white mb-1">{f.n}</div>
+                            <div class="text-xs text-gray-500">{f.d}</div>
                         </div>
                     ))}
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-4">Quick Navigation</h3>
+                    <h3 class="text-lg font-bold text-white mb-4">{c.quickNavTitle || 'Quick Navigation'}</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {[
-                            { t: 'New User?', d: 'Start with Account Creation & Login', s: 'gs-signup' },
-                            { t: 'Have an Account?', d: 'Learn about the AI Chat interface', s: 'chat-overview' },
-                            { t: 'Want to Send?', d: 'Go to Send & Receive guide', s: 'send-basic' },
-                            { t: 'Need Security?', d: 'Check Settings & 2FA setup', s: 'settings-2fa' },
-                        ].map(n => (
-                            <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => onNavigate?.(n.s)}>
+                        {(c.quickNav || [
+                            { t: 'New User?', d: 'Start with Account Creation & Login' },
+                            { t: 'Have an Account?', d: 'Learn about the AI Chat interface' },
+                            { t: 'Want to Send?', d: 'Go to Send & Receive guide' },
+                            { t: 'Need Security?', d: 'Check Settings & 2FA setup' },
+                        ]).map((n: any, idx: number) => {
+                            const targets = ['gs-signup', 'chat-overview', 'send-basic', 'settings-2fa'];
+                            return (
+                            <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => onNavigate?.(targets[idx])}>
                                 <div class="text-sm font-bold text-cyan-400">{n.t}</div>
                                 <div class="text-xs text-gray-500 mt-0.5">{n.d}</div>
                             </div>
-                        ))}
+                        )})}
                     </div>
                 </div>
             </div>
         );
-        case 'gs-signup': return (
+        case 'gs-signup': { const s = getManualContent('gs-signup', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Account Creation & Login" desc="Create your Vision Chain account to access the wallet and all features." />
-                <StepList steps={[
+                <SectionHeader title={s.title || 'Account Creation & Login'} desc={s.desc || 'Create your Vision Chain account to access the wallet and all features.'} />
+                <StepList steps={s.steps || [
                     { title: 'Visit visionchain.co', desc: 'Navigate to the main website and click "Launch App" or go directly to visionchain.co/wallet.' },
                     { title: 'Click Sign Up', desc: 'On the login page, tap "Sign Up" to create a new account.' },
                     { title: 'Enter Your Details', desc: 'Provide your email, username, and a strong password. Optionally enter a referral code if invited by a friend.' },
                     { title: 'Verify Email', desc: 'Check your inbox for a verification email and click the activation link.' },
                     { title: 'Login', desc: 'Return to the login page and sign in with your credentials. You will be directed to the AI Chat screen.' },
                 ]} />
-                <Tip><>If you have a referral code from a friend, enter it during signup to receive bonus VCN tokens. Both you and your referrer will earn rewards.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || 'If you have a referral code from a friend, enter it during signup to receive bonus VCN tokens. Both you and your referrer will earn rewards.'}</></Tip>
             </div>
-        );
-        case 'gs-wallet': return (
+        ); }
+        case 'gs-wallet': { const s = getManualContent('gs-wallet', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Wallet Setup" desc="Your blockchain wallet is automatically created upon first login. A seed phrase is generated for backup and recovery." />
-                <StepList steps={[
+                <SectionHeader title={s.title || 'Wallet Setup'} desc={s.desc || 'Your blockchain wallet is automatically created upon first login. A seed phrase is generated for backup and recovery.'} />
+                <StepList steps={s.steps || [
                     { title: 'Auto-Generation', desc: 'Upon first login, a wallet is automatically generated with a unique address. No manual setup required.' },
                     { title: 'Seed Phrase Backup', desc: 'Navigate to Settings > Wallet Backup. Write down your 12-word seed phrase and store it securely offline.' },
                     { title: 'Set Wallet Password', desc: 'Create a separate wallet password for transaction signing. This is different from your login password.' },
                     { title: 'Cloud Sync (Optional)', desc: 'Enable Cloud Sync in Settings to backup your encrypted wallet to Vision Cloud for recovery across devices.' },
                 ]} />
-                <Warning><>Your seed phrase is the only way to recover your wallet if you lose access. Never share it with anyone. Vision Chain support will never ask for your seed phrase.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || 'Your seed phrase is the only way to recover your wallet if you lose access. Never share it with anyone. Vision Chain support will never ask for your seed phrase.'}</></Warning>
             </div>
-        );
-        case 'gs-navigation': return (
+        ); }
+        case 'gs-navigation': { const s = getManualContent('gs-navigation', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Interface Overview" desc="Learn how to navigate the Vision Chain wallet across desktop and mobile." />
+                <SectionHeader title={s.title || "Interface Overview"} desc={s.desc || "Learn how to navigate the Vision Chain wallet across desktop and mobile."} />
                 <LayoutDiagram />
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">Mobile Navigation</h3>
@@ -487,12 +397,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     </div>
                 </div>
             </div>
-        );
+        ); }
 
         // ─── AI Chat ───
-        case 'chat-overview': return (
+        case 'chat-overview': { const s = getManualContent('chat-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="AI Chat Interface" desc="Vision AI is your intelligent assistant for all blockchain operations. Simply type or speak to send tokens, check balances, or get answers." />
+                <SectionHeader title={s.title || "AI Chat Interface"} desc={s.desc || "Vision AI is your intelligent assistant for all blockchain operations. Simply type or speak to send tokens, check balances, or get answers."} />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'Natural Language', d: 'Type commands like "Send 100 VCN to John" and the AI will handle the transaction flow' },
@@ -506,12 +416,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Tip><>The AI Chat is the default landing screen after login. You can access all wallet features through natural language commands without navigating menus.</></Tip>
+                <Tip label={L('tip')}><>The AI Chat is the default landing screen after login. You can access all wallet features through natural language commands without navigating menus.</></Tip>
             </div>
-        );
-        case 'chat-quick': return (
+        ); }
+        case 'chat-quick': { const s = getManualContent('chat-quick', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Quick Actions" desc="Pre-defined action buttons on the welcome screen for instant access to common features." />
+                <SectionHeader title={s.title || "Quick Actions"} desc={s.desc || "Pre-defined action buttons on the welcome screen for instant access to common features."} />
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Learn about Vision Chain', d: 'Get an overview of the Vision Chain ecosystem', t: 'chat' },
@@ -525,23 +435,23 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Note><>Quick Actions are configurable by administrators. The buttons shown may vary based on active campaigns and promotions.</></Note>
+                <Note label={L('note')}><>Quick Actions are configurable by administrators. The buttons shown may vary based on active campaigns and promotions.</></Note>
             </div>
-        );
-        case 'chat-voice': return (
+        ); }
+        case 'chat-voice': { const s = getManualContent('chat-voice', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Voice Input" desc="Use your voice to interact with Vision AI. Supports Korean and English with real-time transcription." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Voice Input"} desc={s.desc || "Use your voice to interact with Vision AI. Supports Korean and English with real-time transcription."} />
+                <StepList steps={s.steps || [
                     { title: 'Tap the Microphone', desc: 'In the chat input area, tap the microphone icon to start recording.' },
                     { title: 'Speak Clearly', desc: 'Speak your command in Korean or English. The AI will automatically detect the language.' },
                     { title: 'Review & Send', desc: 'The transcribed text appears in the input field. Review and tap send, or edit before sending.' },
                 ]} />
-                <Tip><>Voice input supports phonetic matching for contact names. You can say "Send 100 VCN to Sangkyun" and the AI will find the closest matching contact even with Korean pronunciation variations.</></Tip>
+                <Tip label={L('tip')}><>Voice input supports phonetic matching for contact names. You can say "Send 100 VCN to Sangkyun" and the AI will find the closest matching contact even with Korean pronunciation variations.</></Tip>
             </div>
-        );
-        case 'chat-intent': return (
+        ); }
+        case 'chat-intent': { const s = getManualContent('chat-intent', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="AI Intent Commands" desc="The AI understands natural language intents and can execute complex blockchain operations." />
+                <SectionHeader title={s.title || "AI Intent Commands"} desc={s.desc || "The AI understands natural language intents and can execute complex blockchain operations."} />
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
                         <div>Command Example</div><div>Action</div>
@@ -562,21 +472,21 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'chat-history': return (
+        ); }
+        case 'chat-history': { const s = getManualContent('chat-history', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Chat History & Sessions" desc="Access previous conversations and switch between chat sessions." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Chat History & Sessions"} desc={s.desc || "Access previous conversations and switch between chat sessions."} />
+                <StepList steps={s.steps || [
                     { title: 'Open Chat History', desc: 'On mobile, tap the clock icon at top-right. On desktop, the history panel is in the sidebar.' },
                     { title: 'Browse Sessions', desc: 'View all previous chat sessions sorted by date. Each session shows the first message as a title.' },
                     { title: 'Switch Sessions', desc: 'Tap any session to load that conversation. Your current session is auto-saved.' },
                     { title: 'New Conversation', desc: 'Tap "New Chat" to start a fresh conversation. Previous sessions remain accessible.' },
                 ]} />
             </div>
-        );
-        case 'chat-agent-desk': return (
+        ); }
+        case 'chat-agent-desk': { const s = getManualContent('chat-agent-desk', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Agent Desk" desc="Monitor background AI agents and batch operations from the Agent Desk panel above the chat input." />
+                <SectionHeader title={s.title || "Agent Desk"} desc={s.desc || "Monitor background AI agents and batch operations from the Agent Desk panel above the chat input."} />
                 <p class="text-sm text-gray-400">The Agent Desk shows all currently active AI agents, pending transactions, and background tasks. Each agent chip displays its status, progress, and allows you to view details or dismiss completed tasks.</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -592,19 +502,19 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'chat-tips': return (
+        ); }
+        case 'chat-tips': { const s = getManualContent('chat-tips', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Daily Tips" desc="The 'Did You Know?' card on the welcome screen shows daily tips and insights about Vision Chain features." />
+                <SectionHeader title={s.title || "Daily Tips"} desc={s.desc || "The 'Did You Know?' card on the welcome screen shows daily tips and insights about Vision Chain features."} />
                 <p class="text-sm text-gray-400">A rotating tip card appears at the top of the welcome screen. Navigate through tips using the arrow buttons. Tap "GO" to jump to the relevant feature mentioned in the tip.</p>
-                <Tip><>Daily tips are updated regularly by administrators. They cover new features, best practices, and ecosystem news.</></Tip>
+                <Tip label={L('tip')}><>Daily tips are updated regularly by administrators. They cover new features, best practices, and ecosystem news.</></Tip>
             </div>
-        );
+        ); }
 
         // ─── Send & Receive ───
-        case 'send-basic': return (
+        case 'send-basic': { const s = getManualContent('send-basic', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Sending Tokens" desc="Send VCN, ETH, or other supported tokens to any wallet address or contact." />
+                <SectionHeader title={s.title || "Sending Tokens"} desc={s.desc || "Send VCN, ETH, or other supported tokens to any wallet address or contact."} />
                 <FlowDiagram title="Send Flow" steps={[
                     { label: 'Select Token', sub: 'VCN or ETH' },
                     { label: 'Recipient', sub: 'Address or contact' },
@@ -612,8 +522,8 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { label: 'Review', sub: 'Check details' },
                     { label: 'Sign', sub: 'Wallet password', color: '#10b981' },
                 ]} />
-                <Prerequisites items={['Wallet setup complete', 'Sufficient token balance for the transfer', 'Recipient wallet address or saved contact']} />
-                <StepList steps={[
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['Wallet setup complete', 'Sufficient token balance for the transfer', 'Recipient wallet address or saved contact']} />
+                <StepList steps={s.steps || [
                     { title: 'Start Send Flow', desc: 'Tap "Send" from the Assets page, use the quick action button, or type "Send" in the AI Chat.' },
                     { title: 'Select Token', desc: 'Choose the token you want to send (VCN or ETH).' },
                     { title: 'Choose Recipient', desc: 'Select a contact from your list, or enter a wallet address manually.' },
@@ -621,56 +531,56 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Review & Confirm', desc: 'Review the transaction details including recipient, amount, and estimated gas.' },
                     { title: 'Enter Wallet Password', desc: 'Enter your wallet password to sign and submit the transaction.' },
                 ]} />
-                <Warning><>Always double-check the recipient address before confirming. Blockchain transactions are irreversible and cannot be refunded.</></Warning>
-                <Tip><>You can also say "Send 100 VCN to John" in the AI Chat. The AI will find the matching contact and pre-fill the transaction details for you.</></Tip>
+                <Warning label={L('warning')}><>Always double-check the recipient address before confirming. Blockchain transactions are irreversible and cannot be refunded.</></Warning>
+                <Tip label={L('tip')}><>You can also say "Send 100 VCN to John" in the AI Chat. The AI will find the matching contact and pre-fill the transaction details for you.</></Tip>
             </div>
-        );
-        case 'send-contact': return (
+        ); }
+        case 'send-contact': { const s = getManualContent('send-contact', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Contact-based Transfer" desc="Send tokens to saved contacts by name instead of entering wallet addresses manually." />
+                <SectionHeader title={s.title || "Contact-based Transfer"} desc={s.desc || "Send tokens to saved contacts by name instead of entering wallet addresses manually."} />
                 <p class="text-sm text-gray-400">When you start a send flow, your saved contacts appear for quick selection. You can search by name, and the AI Chat also supports phonetic name matching for voice commands.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Open Send Flow', desc: 'Start a send transaction using any method (button, chat, or quick action).' },
                     { title: 'Search Contact', desc: 'Type a name in the recipient field to filter your contacts.' },
                     { title: 'Select Contact', desc: 'Tap the contact to auto-fill their wallet address.' },
                     { title: 'Continue', desc: 'Enter the amount and complete the transaction as normal.' },
                 ]} />
             </div>
-        );
-        case 'send-scheduled': return (
+        ); }
+        case 'send-scheduled': { const s = getManualContent('send-scheduled', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Scheduled Transfer (TimeLock)" desc="Schedule transfers for future execution using the TimeLock Agent." />
+                <SectionHeader title={s.title || "Scheduled Transfer (TimeLock)"} desc={s.desc || "Schedule transfers for future execution using the TimeLock Agent."} />
                 <p class="text-sm text-gray-400">The TimeLock Agent allows you to schedule token transfers that execute automatically after a specified delay. This is useful for recurring payments, vesting schedules, or delayed transactions.</p>
-                <Note><>Scheduled transfers require sufficient balance at the time of execution, not at the time of scheduling.</></Note>
+                <Note label={L('note')}><>Scheduled transfers require sufficient balance at the time of execution, not at the time of scheduling.</></Note>
             </div>
-        );
-        case 'send-batch': return (
+        ); }
+        case 'send-batch': { const s = getManualContent('send-batch', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Batch Transfer" desc="Send tokens to multiple recipients at once. Ideal for payroll, airdrops, or community distributions." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Batch Transfer"} desc={s.desc || "Send tokens to multiple recipients at once. Ideal for payroll, airdrops, or community distributions."} />
+                <StepList steps={s.steps || [
                     { title: 'Select Multiple Recipients', desc: 'In the send flow, tap "Multi-send" to enable batch mode. Select contacts or enter multiple addresses.' },
                     { title: 'Set Amounts', desc: 'Enter individual amounts for each recipient, or set a uniform amount for all.' },
                     { title: 'Review Batch', desc: 'A summary shows all recipients and amounts. Review carefully before confirming.' },
                     { title: 'Execute', desc: 'Confirm and sign the batch transaction. Each transfer is executed sequentially.' },
                 ]} />
             </div>
-        );
-        case 'receive-tokens': return (
+        ); }
+        case 'receive-tokens': { const s = getManualContent('receive-tokens', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Receiving Tokens" desc="Share your wallet address or QR code to receive tokens from others." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Receiving Tokens"} desc={s.desc || "Share your wallet address or QR code to receive tokens from others."} />
+                <StepList steps={s.steps || [
                     { title: 'Go to Receive', desc: 'Navigate to Assets > Receive, or say "How do I receive tokens?" in the AI Chat.' },
                     { title: 'Copy Address', desc: 'Tap the copy button to copy your wallet address to the clipboard.' },
                     { title: 'Share QR Code', desc: 'Show the QR code to the sender. They can scan it with any compatible wallet.' },
                 ]} />
-                <Tip><>Your wallet address is the same across all supported networks on Vision Chain. For receiving on other chains (Ethereum, Polygon), use the same address.</></Tip>
+                <Tip label={L('tip')}><>Your wallet address is the same across all supported networks on Vision Chain. For receiving on other chains (Ethereum, Polygon), use the same address.</></Tip>
             </div>
-        );
+        ); }
 
         // ─── Assets ───
-        case 'assets-dashboard': return (
+        case 'assets-dashboard': { const s = getManualContent('assets-dashboard', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Portfolio Dashboard" desc="View your complete portfolio at a glance, including total value, token breakdown, and recent activity." />
+                <SectionHeader title={s.title || "Portfolio Dashboard"} desc={s.desc || "View your complete portfolio at a glance, including total value, token breakdown, and recent activity."} />
                 <p class="text-sm text-gray-400">The Portfolio Dashboard is your central hub for monitoring all on-chain assets. It displays your total portfolio value in USD, individual token balances, and a visual breakdown of your holdings.</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -686,10 +596,10 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'assets-tokens': return (
+        ); }
+        case 'assets-tokens': { const s = getManualContent('assets-tokens', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Token List & Balances" desc="Detailed view of all tokens in your wallet with real-time pricing." />
+                <SectionHeader title={s.title || "Token List & Balances"} desc={s.desc || "Detailed view of all tokens in your wallet with real-time pricing."} />
                 <p class="text-sm text-gray-400">Your wallet automatically detects and displays all ERC-20 tokens held in your address. The primary tokens are VCN (Vision Chain native token) and ETH (for gas on Ethereum-compatible chains).</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Token</div><div>Description</div><div>Usage</div></div>
@@ -706,17 +616,17 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'assets-multichain': return (
+        ); }
+        case 'assets-multichain': { const s = getManualContent('assets-multichain', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Multi-Chain Balances" desc="View and manage assets across Vision Chain, Ethereum Sepolia, Polygon, and Base networks." />
+                <SectionHeader title={s.title || "Multi-Chain Balances"} desc={s.desc || "View and manage assets across Vision Chain, Ethereum Sepolia, Polygon, and Base networks."} />
                 <p class="text-sm text-gray-400">Vision Chain Wallet supports multiple blockchain networks. Your wallet address works across all supported chains, and you can switch between them to view balances on each network.</p>
-                <Tip><>Use the Cross-Chain Bridge to move tokens between Vision Chain and Ethereum. Your wallet address remains the same across all networks.</></Tip>
+                <Tip label={L('tip')}><>Use the Cross-Chain Bridge to move tokens between Vision Chain and Ethereum. Your wallet address remains the same across all networks.</></Tip>
             </div>
-        );
-        case 'assets-history': return (
+        ); }
+        case 'assets-history': { const s = getManualContent('assets-history', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Transaction History" desc="View all past transactions including sends, receives, bridge transfers, and staking operations." />
+                <SectionHeader title={s.title || "Transaction History"} desc={s.desc || "View all past transactions including sends, receives, bridge transfers, and staking operations."} />
                 <p class="text-sm text-gray-400">The transaction history shows a chronological list of all on-chain activity associated with your wallet. Each entry displays the transaction type, amount, counterparty, timestamp, and confirmation status.</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -731,12 +641,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
+        ); }
 
         // ─── Bridge ───
-        case 'bridge-overview': return (
+        case 'bridge-overview': { const s = getManualContent('bridge-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Cross-Chain Bridge Overview" desc="Transfer tokens between Vision Chain and Ethereum securely using the Vision Bridge." />
+                <SectionHeader title={s.title || "Cross-Chain Bridge Overview"} desc={s.desc || "Transfer tokens between Vision Chain and Ethereum securely using the Vision Bridge."} />
                 <BridgeDiagram />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -751,14 +661,14 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Warning><>Bridge transactions are cross-chain and may take several minutes. Do not close the app while a bridge transfer is in progress.</></Warning>
+                <Warning label={L('warning')}><>Bridge transactions are cross-chain and may take several minutes. Do not close the app while a bridge transfer is in progress.</></Warning>
             </div>
-        );
-        case 'bridge-forward': return (
+        ); }
+        case 'bridge-forward': { const s = getManualContent('bridge-forward', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Vision to Ethereum" desc="Bridge VCN tokens from Vision Chain to Ethereum Sepolia." />
-                <Prerequisites items={['VCN balance on Vision Chain', 'Connected to Vision Chain network']} />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Vision to Ethereum"} desc={s.desc || "Bridge VCN tokens from Vision Chain to Ethereum Sepolia."} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['VCN balance on Vision Chain', 'Connected to Vision Chain network']} />
+                <StepList steps={s.steps || [
                     { title: 'Open Bridge', desc: 'Navigate to Bridge from the sidebar menu or say "Bridge" in the AI Chat.' },
                     { title: 'Select Direction', desc: 'Choose "Vision Chain -> Ethereum" as the bridge direction.' },
                     { title: 'Enter Amount', desc: 'Specify the amount of VCN to bridge. Minimum and maximum limits are shown.' },
@@ -766,12 +676,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Wait for Confirmation', desc: 'The bridge processes in stages: lock on Vision Chain, validate via TSS, mint on Ethereum.' },
                 ]} />
             </div>
-        );
-        case 'bridge-reverse': return (
+        ); }
+        case 'bridge-reverse': { const s = getManualContent('bridge-reverse', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Ethereum to Vision" desc="Bridge tokens from Ethereum back to Vision Chain." />
-                <Prerequisites items={['VCN balance on Ethereum Sepolia', 'ETH for gas fees on Ethereum']} />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Ethereum to Vision"} desc={s.desc || "Bridge tokens from Ethereum back to Vision Chain."} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['VCN balance on Ethereum Sepolia', 'ETH for gas fees on Ethereum']} />
+                <StepList steps={s.steps || [
                     { title: 'Open Bridge', desc: 'Navigate to Bridge and select "Ethereum -> Vision Chain".' },
                     { title: 'Enter Amount', desc: 'Specify the amount to bridge back to Vision Chain.' },
                     { title: 'Approve Token', desc: 'Approve the bridge contract to spend your tokens (first time only).' },
@@ -779,19 +689,19 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Wait for Completion', desc: 'Tokens are burned on Ethereum and unlocked on Vision Chain after TSS validation.' },
                 ]} />
             </div>
-        );
-        case 'bridge-monitor': return (
+        ); }
+        case 'bridge-monitor': { const s = getManualContent('bridge-monitor', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Bridge Transaction Monitoring" desc="Track the status of your bridge transfers in real-time." />
+                <SectionHeader title={s.title || "Bridge Transaction Monitoring"} desc={s.desc || "Track the status of your bridge transfers in real-time."} />
                 <p class="text-sm text-gray-400">All bridge transactions are tracked with a multi-stage progress indicator. You can view the status of each stage: submission, confirmation, TSS validation, and completion.</p>
-                <Note><>Bridge transactions are processed automatically. If a bridge transfer appears stuck for more than 30 minutes, contact support with your transaction hash.</></Note>
+                <Note label={L('note')}><>Bridge transactions are processed automatically. If a bridge transfer appears stuck for more than 30 minutes, contact support with your transaction hash.</></Note>
             </div>
-        );
+        ); }
 
         // ─── Staking ───
-        case 'staking-overview': return (
+        case 'staking-overview': { const s = getManualContent('staking-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Staking Overview" desc="Stake VCN tokens as a Bridge Validator to earn rewards from bridge fees and subsidy pools. All staking transactions are gasless." />
+                <SectionHeader title={s.title || "Staking Overview"} desc={s.desc || "Stake VCN tokens as a Bridge Validator to earn rewards from bridge fees and subsidy pools. All staking transactions are gasless."} />
                 <StakingDiagram />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -838,12 +748,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'staking-how': return (
+        ); }
+        case 'staking-how': { const s = getManualContent('staking-how', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="How to Stake VCN" desc="Detailed step-by-step guide to staking VCN as a Bridge Validator." />
-                <Prerequisites items={['Minimum 100 VCN in your wallet (plus 1 VCN service fee)', 'Wallet password set up (used to sign the EIP-712 Permit)', 'Logged in to Vision Chain wallet']} />
-                <StepList steps={[
+                <SectionHeader title={s.title || "How to Stake VCN"} desc={s.desc || "Detailed step-by-step guide to staking VCN as a Bridge Validator."} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['Minimum 100 VCN in your wallet (plus 1 VCN service fee)', 'Wallet password set up (used to sign the EIP-712 Permit)', 'Logged in to Vision Chain wallet']} />
+                <StepList steps={s.steps || [
                     { title: 'Open the Staking Page', desc: 'From the sidebar menu, tap "Earn" to navigate to the Validator Staking page. The page displays network stats, your balance, and the staking form.' },
                     { title: 'Check the "Stake" Tab', desc: 'The staking form has three tabs: Stake, Unstake, and Withdraw. Make sure you are on the "Stake" tab (highlighted in amber). If not, tap it to switch.' },
                     { title: 'Enter Stake Amount', desc: 'Type the amount of VCN you wish to stake in the input field. The minimum is 100 VCN (displayed as placeholder text "Min: 100 VCN"). You can tap the "MAX" button to stake your entire available balance.' },
@@ -853,38 +763,38 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Transaction Processing', desc: 'After signing, the button changes to "Staking..." while the Paymaster submits the transaction on-chain. The Paymaster pays the gas fee, you pay only the 1 VCN service fee via the permit.' },
                     { title: 'Confirmation', desc: 'On success, a green success indicator appears with the transaction hash. Your "Your Staked Amount" updates, your VCN Balance decreases, and you are now an Active Validator. Rewards begin accumulating immediately.' },
                 ]} />
-                <Warning><>The minimum stake is 100 VCN. If you try to stake less, an error message appears: "Minimum stake is 100 VCN". Each staking transaction charges a 1 VCN service fee to the Paymaster.</></Warning>
-                <Tip><>After staking, your status changes to "Active Validator" and you begin earning rewards proportional to your stake. The rewards come from bridge transaction fees (1% of each bridge transfer) and the subsidy pool.</></Tip>
+                <Warning label={L('warning')}><>The minimum stake is 100 VCN. If you try to stake less, an error message appears: "Minimum stake is 100 VCN". Each staking transaction charges a 1 VCN service fee to the Paymaster.</></Warning>
+                <Tip label={L('tip')}><>After staking, your status changes to "Active Validator" and you begin earning rewards proportional to your stake. The rewards come from bridge transaction fees (1% of each bridge transfer) and the subsidy pool.</></Tip>
             </div>
-        );
-        case 'staking-rewards': return (
+        ); }
+        case 'staking-rewards': { const s = getManualContent('staking-rewards', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Rewards, Unstaking & Withdrawal" desc="Comprehensive guide to claiming rewards, requesting unstake, and withdrawing your tokens." />
+                <SectionHeader title={s.title || "Rewards, Unstaking & Withdrawal"} desc={s.desc || "Comprehensive guide to claiming rewards, requesting unstake, and withdrawing your tokens."} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Claiming Rewards</h3>
                 <p class="text-sm text-gray-400 mb-3">Rewards accumulate continuously as long as you are an Active Validator. They are visible in the "Pending Rewards" row of your balance panel.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Check Pending Rewards', desc: 'Look at the "Pending Rewards" line in the amber balance panel. It shows the exact VCN amount with up to 4 decimal places, along with the current APY percentage.' },
                     { title: 'Tap "Claim"', desc: 'The green "Claim" button appears next to your pending rewards. Tap it to claim. The button is disabled (grayed out) if you have no rewards to claim.' },
                     { title: 'Transaction Processing', desc: 'The claim transaction is submitted via the Paymaster (gasless). The button shows a spinner while processing.' },
                     { title: 'Rewards Added to Balance', desc: 'On success, your VCN wallet balance increases by the claimed amount. The pending rewards counter resets to 0 and begins accumulating again immediately.' },
                 ]} />
-                <Tip><>Claiming rewards is gasless and has no fee. You can claim as often as you want, but since each claim is a transaction, it is practical to let rewards accumulate before claiming.</></Tip>
+                <Tip label={L('tip')}><>Claiming rewards is gasless and has no fee. You can claim as often as you want, but since each claim is a transaction, it is practical to let rewards accumulate before claiming.</></Tip>
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Requesting Unstake</h3>
                 <p class="text-sm text-gray-400 mb-3">Unstaking is a two-step process: first you request unstake (which starts a 7-day cooldown), then you withdraw after the cooldown period.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Switch to "Unstake" Tab', desc: 'In the staking form, tap the "Unstake" tab. The label shows your maximum unstakeable amount (e.g., "Unstake Amount (Max: 1,000 VCN)").' },
                     { title: 'Enter Unstake Amount', desc: 'Type the amount to unstake. You can tap "MAX" to unstake everything. Important: if you partially unstake, the remaining amount must be either 0 or at least 100 VCN (the minimum stake). Otherwise you will see an error: "Remaining stake would be below minimum 100 VCN."' },
                     { title: 'Tap "Request Unstake"', desc: 'Tap the amber button. The transaction is submitted via Paymaster (gasless).' },
                     { title: 'Cooldown Begins', desc: 'On success, a new "Pending Unstake" row appears in your balance panel showing the amount and a countdown timer (e.g., "7d 0h remaining"). Your staked amount decreases accordingly.' },
                 ]} />
-                <Warning><>During the 7-day cooldown period, your unstaking tokens do NOT earn rewards. You cannot cancel an unstake request. Make sure you are ready to wait before proceeding.</></Warning>
-                <Note><>If you unstake your entire balance, you will no longer be an Active Validator and will stop earning rewards. You can re-stake at any time with the minimum 100 VCN.</></Note>
+                <Warning label={L('warning')}><>During the 7-day cooldown period, your unstaking tokens do NOT earn rewards. You cannot cancel an unstake request. Make sure you are ready to wait before proceeding.</></Warning>
+                <Note label={L('note')}><>If you unstake your entire balance, you will no longer be an Active Validator and will stop earning rewards. You can re-stake at any time with the minimum 100 VCN.</></Note>
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Withdrawing After Cooldown</h3>
                 <p class="text-sm text-gray-400 mb-3">After the 7-day cooldown period is complete, a third "Withdraw" tab appears in the staking form.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Wait for Cooldown', desc: 'Monitor the countdown timer in the "Pending Unstake" row. When it changes to "Ready to withdraw", the 7-day period is complete.' },
                     { title: 'Switch to "Withdraw" Tab', desc: 'A green "Withdraw" tab appears automatically in the form tabs when your cooldown is complete. Tap it.' },
                     { title: 'Tap "Withdraw"', desc: 'Tap the green "WITHDRAW" button. The Paymaster handles the gasless withdrawal.' },
@@ -894,12 +804,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Validator Table</h3>
                 <p class="text-sm text-gray-400">At the bottom of the page, a table shows the top 5 active validators with their shortened addresses and staked amounts. This gives you a sense of the network's validator distribution.</p>
             </div>
-        );
+        ); }
 
         // ─── Agent ───
-        case 'agent-overview': return (
+        case 'agent-overview': { const s = getManualContent('agent-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="What is Agent Hosting?" desc="AI Agent Hosting lets you deploy autonomous AI-powered bots on Vision Chain that execute actions on your behalf -- from automated transfers to social media content generation." />
+                <SectionHeader title={s.title || "What is Agent Hosting?"} desc={s.desc || "AI Agent Hosting lets you deploy autonomous AI-powered bots on Vision Chain that execute actions on your behalf -- from automated transfers to social media content generation."} />
                 <p class="text-sm text-gray-400">Each agent gets its own dedicated wallet address, API key, and VCN balance. Agents are powered by the ZYNK AI Router (DeepSeek model) and execute at intervals you configure. You earn Reward Points (RP) for creating agents.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -929,30 +839,30 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'agent-create': return (
+        ); }
+        case 'agent-create': { const s = getManualContent('agent-create', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Creating an Agent" desc="Step-by-step guide through the 4-step agent creation wizard." />
+                <SectionHeader title={s.title || "Creating an Agent"} desc={s.desc || "Step-by-step guide through the 4-step agent creation wizard."} />
                 <FlowDiagram title="Agent Creation Wizard" steps={[
                     { label: 'Name', sub: 'Register agent', color: '#22d3ee' },
                     { label: 'Action', sub: 'Select type', color: '#a78bfa' },
                     { label: 'Configure', sub: 'Set parameters', color: '#f59e0b' },
                     { label: 'Deploy', sub: 'Schedule & go', color: '#10b981' },
                 ]} />
-                <Prerequisites items={['Logged in to Vision Chain wallet', 'No existing agent (one agent per account initially)']} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['Logged in to Vision Chain wallet', 'No existing agent (one agent per account initially)']} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Step 1: Name Your Agent</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Open Agent Hosting', desc: 'From the sidebar menu, tap "Agent" to open the Agent Hosting page.' },
                     { title: 'Click "Create Your First Agent"', desc: 'If you have no agents, the Overview tab shows an empty state with a prominent "Create Your First Agent" button. Click it.' },
                     { title: 'Enter Agent Name', desc: 'Type a unique name for your agent (e.g., "Balance Watcher", "Auto Staker"). This name is displayed on your dashboard and in logs.' },
                     { title: 'Click "Register & Continue"', desc: 'The system registers your agent via the Agent Gateway API. On success, your agent receives a dedicated wallet address and 100 VCN initial balance, and you move to Step 2.' },
                 ]} />
-                <Tip><>You earn Reward Points (RP) for creating your first agent. The amount is configured by administrators.</></Tip>
+                <Tip label={L('tip')}><>You earn Reward Points (RP) for creating your first agent. The amount is configured by administrators.</></Tip>
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 2: Select Action</h3>
                 <p class="text-sm text-gray-400 mb-3">A grid of action cards appears, organized by category. Each card shows the action name, description, cost tier badge (green/amber/red), and VCN cost per execution. Select one action:</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Browse Actions', desc: 'Cards are organized into "On-chain" (blue border) and "Growth" (purple border) categories. Each shows a cost badge: Read-only (green, 0.05 VCN), Medium (amber, 0.1 VCN), or Write (red, 0.5 VCN).' },
                     { title: 'Tap an Action Card', desc: 'Click any action to select it. The selected card highlights with a cyan border. A detailed description of what the agent will do appears.' },
                     { title: 'Click "Configure Action"', desc: 'Proceed to the action-specific settings screen.' },
@@ -960,25 +870,25 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 3: Configure Action Settings</h3>
                 <p class="text-sm text-gray-400 mb-3">Each action has its own set of configuration fields. For example, "Auto Transfer" has: Recipient Address, Amount per Transfer, Daily Limit, Transfer Condition, and Minimum Balance to Keep. Fill in each field according to your requirements.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Fill Settings Fields', desc: 'Each field has a label, description, and helper text. Numeric fields show min/max ranges and units. Select fields offer dropdown options. Toggle fields are on/off switches.' },
                     { title: 'Review System Prompt', desc: 'A pre-filled system prompt appears at the bottom based on your selected action. You can edit this to customize the agent behavior further.' },
                     { title: 'Click "Set Schedule"', desc: 'Move to the final step to choose execution frequency.' },
                 ]} />
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 4: Schedule & Deploy</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Choose Execution Interval', desc: 'Select from 4 options: Every 5 min, Every 30 min, Every hour, or Once daily. Each shows estimated monthly VCN cost.' },
                     { title: 'Set Max VCN Per Action', desc: 'Set the maximum VCN the agent can spend in a single execution (safety limit). Default is 5 VCN.' },
                     { title: 'Review Monthly Cost Estimate', desc: 'A summary shows your estimated monthly VCN cost based on interval and action cost tier.' },
                     { title: 'Click "Deploy Agent"', desc: 'The system saves your configuration and activates the agent. It immediately begins executing at your chosen interval.' },
                 ]} />
-                <Warning><>Agents spend real VCN from their dedicated wallet. Start with conservative settings (longer intervals, lower limits) and monitor the execution logs before increasing frequency or budgets.</></Warning>
+                <Warning label={L('warning')}><>Agents spend real VCN from their dedicated wallet. Start with conservative settings (longer intervals, lower limits) and monitor the execution logs before increasing frequency or budgets.</></Warning>
             </div>
-        );
-        case 'agent-actions': return (
+        ); }
+        case 'agent-actions': { const s = getManualContent('agent-actions', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Available Action Types" desc="Complete reference of all 12 agent actions with their costs, settings, and use cases." />
+                <SectionHeader title={s.title || "Available Action Types"} desc={s.desc || "Complete reference of all 12 agent actions with their costs, settings, and use cases."} />
 
                 <h3 class="text-lg font-bold text-cyan-400 mb-3">On-chain Actions (7)</h3>
                 <div class="space-y-3">
@@ -1020,10 +930,10 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'agent-manage': return (
+        ); }
+        case 'agent-manage': { const s = getManualContent('agent-manage', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Managing Your Agent" desc="Detailed guide to the agent Overview dashboard -- monitoring status, toggling, and deleting agents." />
+                <SectionHeader title={s.title || "Managing Your Agent"} desc={s.desc || "Detailed guide to the agent Overview dashboard -- monitoring status, toggling, and deleting agents."} />
                 <p class="text-sm text-gray-400 mb-3">The Overview tab shows each registered agent as a card with the following information:</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -1043,17 +953,17 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Agent Controls</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Pause / Resume', desc: 'Tap the Play/Pause button on the agent card. When paused, the agent stops executing but retains its configuration and balance. Resume to start executing again at the configured interval.' },
                     { title: 'Delete Agent', desc: 'Tap the trash icon. A confirmation dialog appears: "Are you sure? This will permanently delete the agent and cannot be undone." Tap "Delete" to confirm. The agent is removed, its API key is invalidated, and your local storage is cleared.' },
                     { title: 'Top Up Balance', desc: 'Transfer VCN to the agent wallet address shown on the card. The agent needs VCN to pay for executions. If balance reaches zero, the agent status changes to "insufficient_balance".' },
                 ]} />
-                <Warning><>Deleting an agent is permanent and cannot be undone. Any remaining VCN in the agent wallet should be transferred out before deletion. The API key becomes immediately invalid.</></Warning>
+                <Warning label={L('warning')}><>Deleting an agent is permanent and cannot be undone. Any remaining VCN in the agent wallet should be transferred out before deletion. The API key becomes immediately invalid.</></Warning>
             </div>
-        );
-        case 'agent-logs': return (
+        ); }
+        case 'agent-logs': { const s = getManualContent('agent-logs', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Execution Logs & Monitoring" desc="Understand your agent's activity through detailed execution logs." />
+                <SectionHeader title={s.title || "Execution Logs & Monitoring"} desc={s.desc || "Understand your agent's activity through detailed execution logs."} />
                 <p class="text-sm text-gray-400 mb-3">Switch to the "Logs" tab on the Agent page to view the execution history. Logs are loaded from the Agent Gateway API and show the last 50 executions.</p>
                 <h3 class="text-lg font-bold text-white mb-3">Log Entry Fields</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
@@ -1072,20 +982,20 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Monitoring Best Practices</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Check Logs After First Execution', desc: 'After deploying, wait for the first execution interval and check logs to confirm the agent is working correctly.' },
                     { title: 'Watch for Error Patterns', desc: 'If you see repeated errors (red X), the agent may have misconfigured settings or insufficient balance. Review the error message for details.' },
                     { title: 'Monitor VCN Burn Rate', desc: 'Compare "Total VCN Spent" against your budget expectations. Adjust interval frequency if spending is too high.' },
                     { title: 'Review Generated Content', desc: 'For Growth actions (Social Promotion, Content Creator), review the generated content in log results to ensure quality and accuracy before sharing.' },
                 ]} />
-                <Tip><>If your agent shows "insufficient_balance" status, it means the agent wallet ran out of VCN. Transfer more VCN to the agent wallet address and resume the agent.</></Tip>
+                <Tip label={L('tip')}><>If your agent shows "insufficient_balance" status, it means the agent wallet ran out of VCN. Transfer more VCN to the agent wallet address and resume the agent.</></Tip>
             </div>
-        );
+        ); }
 
         // ─── Insight ───
-        case 'insight-overview': return (
+        case 'insight-overview': { const s = getManualContent('insight-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Vision Insight Dashboard" desc="AI-curated market intelligence powered by Gemini AI, aggregating news from 10+ sources with real-time sentiment analysis." />
+                <SectionHeader title={s.title || "Vision Insight Dashboard"} desc={s.desc || "AI-curated market intelligence powered by Gemini AI, aggregating news from 10+ sources with real-time sentiment analysis."} />
                 <p class="text-sm text-gray-400">Vision Insight collects crypto news every 2 hours from sources like CoinDesk, CoinTelegraph, Bitcoin Magazine, Decrypt, The Block, and Korean outlets (Decenter, BlockMedia). Each article is analyzed by Gemini AI for sentiment, impact score, and category.</p>
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Dashboard Components</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
@@ -1105,13 +1015,13 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Tip><>Tap the "API" button in the top-right corner to toggle Agent Data Stream view, which shows the raw JSON data that AI agents can consume programmatically.</></Tip>
+                <Tip label={L('tip')}><>Tap the "API" button in the top-right corner to toggle Agent Data Stream view, which shows the raw JSON data that AI agents can consume programmatically.</></Tip>
             </div>
-        );
-        case 'insight-news': return (
+        ); }
+        case 'insight-news': { const s = getManualContent('insight-news', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Reading the News Feed" desc="Step-by-step guide to navigating and using the AI-curated news feed." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Reading the News Feed"} desc={s.desc || "Step-by-step guide to navigating and using the AI-curated news feed."} />
+                <StepList steps={s.steps || [
                     { title: 'Open Vision Insight', desc: 'From the sidebar menu, tap "Insight" to open the Vision Insight page. Data loads automatically from the server.' },
                     { title: 'Browse the AI Market Brief', desc: 'At the top, the AI Market Brief card (purple border) shows the Gemini-generated analysis. Read the trading bias (LONG/SHORT/NEUTRAL with confidence %) and the written analysis paragraph.' },
                     { title: 'Filter by Category', desc: 'Scroll the horizontal category tabs to filter articles. Each tab shows the number of articles in that category. Tap a category to filter; tap "All" to show everything.' },
@@ -1119,12 +1029,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Open Full Article', desc: 'Tap any article card to open the full article in a new browser tab. The link goes to the original source.' },
                     { title: 'Check Trending & Calendar', desc: 'Scroll down to see Trending Keywords (purple tags) and Macro Calendar (upcoming economic events with D-countdown and impact severity).' },
                 ]} />
-                <Note><>Articles are collected every 2 hours. If a category shows "No articles in this category yet", data collection is still in progress. The "Last updated" timestamp at the bottom shows when data was last refreshed.</></Note>
+                <Note label={L('note')}><>Articles are collected every 2 hours. If a category shows "No articles in this category yet", data collection is still in progress. The "Last updated" timestamp at the bottom shows when data was last refreshed.</></Note>
             </div>
-        );
-        case 'insight-signals': return (
+        ); }
+        case 'insight-signals': { const s = getManualContent('insight-signals', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="AI Market Brief & Trading Signals" desc="Understanding the Gemini AI-generated market analysis and trading signals." />
+                <SectionHeader title={s.title || "AI Market Brief & Trading Signals"} desc={s.desc || "Understanding the Gemini AI-generated market analysis and trading signals."} />
                 <p class="text-sm text-gray-400 mb-3">The AI Market Brief is the centerpiece of Vision Insight. It is generated by Gemini AI analyzing all collected articles and market data.</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -1140,16 +1050,16 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Warning><>The AI Market Brief and trading signals are for informational purposes only and do not constitute financial advice. Always do your own research before making investment decisions. Past AI analysis accuracy does not guarantee future results.</></Warning>
+                <Warning label={L('warning')}><>The AI Market Brief and trading signals are for informational purposes only and do not constitute financial advice. Always do your own research before making investment decisions. Past AI analysis accuracy does not guarantee future results.</></Warning>
             </div>
-        );
+        ); }
 
         // ─── Quant ───
-        case 'cex-connect': return (
+        case 'cex-connect': { const s = getManualContent('cex-connect', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Connecting Your Exchange" desc="Link your centralized exchange account to Vision Chain using API credentials. Vision Chain supports 15 exchanges across Korea, Japan, USA, and global markets." />
+                <SectionHeader title={s.title || "Connecting Your Exchange"} desc={s.desc || "Link your centralized exchange account to Vision Chain using API credentials. Vision Chain supports 15 exchanges across Korea, Japan, USA, and global markets."} />
 
-                <Prerequisites items={[
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || [
                     'An active, verified account on a supported exchange (identity verification completed)',
                     'API Key and Secret Key generated from the exchange (read-only / balance inquiry permission)',
                     'Passphrase (required only for Bitget, OKX, KuCoin, and Crypto.com)',
@@ -1158,7 +1068,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 ]} />
 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Step-by-Step Connection Guide</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Navigate to Quant', desc: 'Open the sidebar menu and tap "Quant". If you have no exchanges connected yet, you will see the empty state with quick-connect cards for Upbit and Binance.' },
                     { title: 'Open the "Add Exchange" Modal', desc: 'Tap the "+" button in the header (or one of the quick-connect exchange cards). A modal will appear showing all 15 supported exchanges arranged in a 3-column grid.' },
                     { title: 'Select Your Exchange', desc: 'Tap on the exchange you want to connect. The selected exchange will be highlighted with a cyan border. Exchanges are sorted by region and popularity.' },
@@ -1185,14 +1095,14 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelist Setup</h3>
                 <p class="text-sm text-gray-400 mb-3">Most exchanges require (or strongly recommend) restricting API access to specific IP addresses. Vision Chain provides a static server IP for this purpose.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'View the Server IP', desc: 'Tap the "?" help icon on the Quant page. The IP Setup Guide modal will display the static server IP address prominently at the top.' },
                     { title: 'Copy the IP Address', desc: 'Tap the "Copy" button next to the IP address. The IP will be copied to your clipboard.' },
                     { title: 'Add to Exchange API Settings', desc: 'Go to your exchange\'s API management page. Find the IP whitelist or IP restriction section for your API key. Paste the copied IP address and save.' },
                     { title: 'Verify Connection', desc: 'Return to Vision Chain and connect your exchange. If the IP is correctly whitelisted, the verification test will succeed immediately.' },
                 ]} />
 
-                <Warning><>Only use read-only API keys. Never enable trading, withdrawal, or transfer permissions. Vision Chain only reads balance and ticker data. Never executes trades or withdrawals on your behalf. Your funds remain fully under your control at all times.</></Warning>
+                <Warning label={L('warning')}><>Only use read-only API keys. Never enable trading, withdrawal, or transfer permissions. Vision Chain only reads balance and ticker data. Never executes trades or withdrawals on your behalf. Your funds remain fully under your control at all times.</></Warning>
 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Troubleshooting</h3>
                 <div class="space-y-3">
@@ -1209,10 +1119,10 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'cex-exchanges': return (
+        ); }
+        case 'cex-exchanges': { const s = getManualContent('cex-exchanges', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Supported Exchanges" desc="Vision Chain supports 15 centralized exchanges across Korea, Japan, USA, and global markets. Each exchange uses read-only API access for portfolio tracking." />
+                <SectionHeader title={s.title || "Supported Exchanges"} desc={s.desc || "Vision Chain supports 15 centralized exchanges across Korea, Japan, USA, and global markets. Each exchange uses read-only API access for portfolio tracking."} />
 
                 {/* Full Exchange Compatibility Table */}
                 <h3 class="text-lg font-bold text-white mb-3">Exchange Compatibility Matrix</h3>
@@ -1335,12 +1245,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Tip><>You can connect multiple exchanges simultaneously. Assets with the same symbol from different exchanges are aggregated into a single row with source exchange badges. The toggle switch at the top lets you view values in either KRW or USD.</></Tip>
+                <Tip label={L('tip')}><>You can connect multiple exchanges simultaneously. Assets with the same symbol from different exchanges are aggregated into a single row with source exchange badges. The toggle switch at the top lets you view values in either KRW or USD.</></Tip>
             </div>
-        );
-        case 'cex-portfolio': return (
+        ); }
+        case 'cex-portfolio': { const s = getManualContent('cex-portfolio', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Portfolio Overview" desc="A unified view of all your crypto holdings across connected exchanges, with real-time valuation, charts, and P&L tracking." />
+                <SectionHeader title={s.title || "Portfolio Overview"} desc={s.desc || "A unified view of all your crypto holdings across connected exchanges, with real-time valuation, charts, and P&L tracking."} />
 
                 <p class="text-sm text-gray-400 mb-3">After connecting at least one exchange, you will see the Portfolio dashboard as the default view. The page is organized into three main sections: Summary Cards, Asset Allocation Chart, and Asset List.</p>
 
@@ -1365,7 +1275,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Syncing Portfolio Data</h3>
                 <p class="text-sm text-gray-400 mb-3">Portfolio data is fetched from each exchange via their official REST APIs through our Cloud Functions server. Here is how the sync process works:</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Manual Sync', desc: 'Tap the "Sync" button (refresh icon) at the top-right of the page. The system calls each connected exchange\'s API in parallel to fetch latest balances and ticker data. A loading spinner shows while syncing.' },
                     { title: 'Data Processing', desc: 'For each exchange, the server fetches: (1) Account balances for all coins, (2) Current ticker prices for all held assets, (3) Average buy prices where available. Values are then converted to KRW using the multi-currency conversion engine.' },
                     { title: 'Snapshot Storage', desc: 'Each sync creates a portfolio snapshot saved to Firestore with a timestamp. This allows historical tracking and P&L comparisons over time.' },
@@ -1387,16 +1297,16 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
 
-                <Tip><>Sync your portfolio regularly, especially before and after major trades. Portfolio snapshots are compared to calculate P&L, so more frequent syncs give more accurate performance tracking. Exchange rate data is cached for 5 minutes to minimize external API calls.</></Tip>
+                <Tip label={L('tip')}><>Sync your portfolio regularly, especially before and after major trades. Portfolio snapshots are compared to calculate P&L, so more frequent syncs give more accurate performance tracking. Exchange rate data is cached for 5 minutes to minimize external API calls.</></Tip>
             </div>
-        );
-        case 'cex-quant': return (
+        ); }
+        case 'cex-quant': { const s = getManualContent('cex-quant', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Quant Engine - Strategy Settings" desc="Configure and deploy automated trading strategies on your connected exchanges. The Quant Engine provides 6 research-backed strategy templates with full parameter control." />
-                <Note><>Quant Engine is currently in BETA. Connect at least one exchange via the Quant page to access Quant features. Access it by switching to the "Quant" tab.</></Note>
+                <SectionHeader title={s.title || "Quant Engine - Strategy Settings"} desc={s.desc || "Configure and deploy automated trading strategies on your connected exchanges. The Quant Engine provides 6 research-backed strategy templates with full parameter control."} />
+                <Note label={L('note')}><>Quant Engine is currently in BETA. Connect at least one exchange via the Quant page to access Quant features. Access it by switching to the "Quant" tab.</></Note>
 
                 <h3 class="text-lg font-bold text-white mt-4 mb-3">How to Access</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Open Quant', desc: 'Navigate to Quant from the sidebar. You must have at least one exchange connected.' },
                     { title: 'Switch to Quant Tab', desc: 'At the top of the page, tap the "Quant" tab (with the BETA badge). The tab navigation shows "Portfolio" and "Quant" side by side.' },
                     { title: 'Browse Strategy Templates', desc: 'The Quant Engine displays 6 pre-built strategy template cards. Each card shows the strategy name, category, risk level, recommended assets, and 30-day average return.' },
@@ -1532,7 +1442,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 {/* Agent Deployment */}
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Deploying a Quant Agent</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Select a Strategy', desc: 'Tap on any strategy card to view its full details including entry/exit rules, risk parameters, recommended assets, and historical performance.' },
                     { title: 'Choose Target Assets', desc: 'Select which trading pairs to apply the strategy to (e.g., KRW-BTC, KRW-ETH). You can select multiple assets. The recommended assets for each strategy are pre-highlighted.' },
                     { title: 'Tune Parameters', desc: 'Adjust the strategy parameters using the slider controls. Each parameter shows its current value, min/max range, and step size. Default values are optimized for general use.' },
@@ -1540,12 +1450,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Monitor Active Agents', desc: 'View all running agents in the Quant dashboard. Each agent shows: current status (active/paused), cumulative P&L, number of signals generated, and last signal time.' },
                 ]} />
 
-                <Warning><>Quant strategies involve market risk. Past performance and 30-day average returns shown on strategy cards do not guarantee future results. The Volatility Target Overlay (Module 6) is applied by default to protect against extreme drawdowns. Always start with conservative parameter settings and small position sizes.</></Warning>
+                <Warning label={L('warning')}><>Quant strategies involve market risk. Past performance and 30-day average returns shown on strategy cards do not guarantee future results. The Volatility Target Overlay (Module 6) is applied by default to protect against extreme drawdowns. Always start with conservative parameter settings and small position sizes.</></Warning>
             </div>
-        );
-        case 'cex-security': return (
+        ); }
+        case 'cex-security': { const s = getManualContent('cex-security', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Security & IP Whitelist" desc="How your exchange API credentials are protected, the data flow architecture, and best practices for secure API usage." />
+                <SectionHeader title={s.title || "Security & IP Whitelist"} desc={s.desc || "How your exchange API credentials are protected, the data flow architecture, and best practices for secure API usage."} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Data Flow Architecture</h3>
                 <p class="text-sm text-gray-400 mb-3">Understanding how your API credentials are handled at each stage:</p>
@@ -1608,12 +1518,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
+        ); }
 
         // ─── Disk ───
-        case 'disk-overview': return (
+        case 'disk-overview': { const s = getManualContent('disk-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Vision Disk - Encrypted Cloud Storage" desc="Store, share, and manage files with end-to-end encryption powered by your wallet private key and EIP-2612 gasless payments." />
+                <SectionHeader title={s.title || "Vision Disk - Encrypted Cloud Storage"} desc={s.desc || "Store, share, and manage files with end-to-end encryption powered by your wallet private key and EIP-2612 gasless payments."} />
                 <p class="text-sm text-gray-400">Vision Disk encrypts files locally in your browser using AES-GCM with a key derived from your wallet private key. Encrypted data is stored on Vision Cloud, and file metadata is anchored on-chain. Only you can decrypt your files.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -1630,34 +1540,34 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Note><>Your wallet must be unlocked (password entered) to upload or download files, since encryption/decryption requires your private key.</></Note>
+                <Note label={L('note')}><>Your wallet must be unlocked (password entered) to upload or download files, since encryption/decryption requires your private key.</></Note>
             </div>
-        );
-        case 'disk-upload': return (
+        ); }
+        case 'disk-upload': { const s = getManualContent('disk-upload', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Uploading & Downloading Files" desc="Step-by-step guide to uploading encrypted files and downloading them on any device." />
-                <Prerequisites items={['Active Disk subscription (or free tier)', 'Wallet unlocked with password', 'Sufficient storage quota remaining']} />
+                <SectionHeader title={s.title || "Uploading & Downloading Files"} desc={s.desc || "Step-by-step guide to uploading encrypted files and downloading them on any device."} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['Active Disk subscription (or free tier)', 'Wallet unlocked with password', 'Sufficient storage quota remaining']} />
                 <h3 class="text-lg font-bold text-white mb-3">Uploading Files</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Open Vision Disk', desc: 'From the sidebar menu, tap "Disk". Your file browser loads showing current folder contents.' },
                     { title: 'Drag & Drop or Click Upload', desc: 'Either drag files onto the upload zone (dashed border area) or click the upload area and select files from the file picker. Multiple files can be uploaded at once.' },
                     { title: 'Encryption & Upload Progress', desc: 'Each file is encrypted locally with AES-GCM, then uploaded to Vision Cloud. A progress bar shows the upload status for each file.' },
                     { title: 'Verify Upload', desc: 'Once complete, the file appears in your current folder with its name, size, type icon, and upload timestamp.' },
                 ]} />
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Downloading Files</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Locate the File', desc: 'Navigate to the folder containing the file you want to download.' },
                     { title: 'Click the Download Button', desc: 'Right-click (or long-press on mobile) and select "Download" from the context menu. Or click the download icon.' },
                     { title: 'Decryption & Download', desc: 'The encrypted file is fetched from Vision Cloud, decrypted locally using your private key, and saved to your device as the original file.' },
                 ]} />
-                <Tip><>You earn +3 RP for each file upload and +1 RP for each download. Uploads trigger gasless VCN transactions if your subscription includes on-chain metadata anchoring.</></Tip>
+                <Tip label={L('tip')}><>You earn +3 RP for each file upload and +1 RP for each download. Uploads trigger gasless VCN transactions if your subscription includes on-chain metadata anchoring.</></Tip>
             </div>
-        );
-        case 'disk-folders': return (
+        ); }
+        case 'disk-folders': { const s = getManualContent('disk-folders', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Folder & File Management" desc="Complete guide to organizing files with folders, batch operations, and context menus." />
+                <SectionHeader title={s.title || "Folder & File Management"} desc={s.desc || "Complete guide to organizing files with folders, batch operations, and context menus."} />
                 <h3 class="text-lg font-bold text-white mb-3">Create Folders</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Click "New Folder"', desc: 'Tap the "New Folder" button in the toolbar. A dialog asks for the folder name.' },
                     { title: 'Enter Folder Name', desc: 'Type a name and click "Create". The folder appears in your current directory.' },
                     { title: 'Navigate Into Folder', desc: 'Click on a folder to open it. Breadcrumbs at the top show your current path (e.g., "Home / Documents / Projects").' },
@@ -1680,19 +1590,19 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Batch Operations</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Select Multiple Files', desc: 'Click the checkbox on each file/folder you want to select. A selection bar appears at the top showing count.' },
                     { title: 'Batch Move', desc: 'Click "Move" to move all selected items to a target folder.' },
                     { title: 'Batch Delete', desc: 'Click "Delete" to permanently remove all selected files. A confirmation dialog appears.' },
                     { title: 'Clear Selection', desc: 'Click "Clear" or tap outside to deselect all items.' },
                 ]} />
             </div>
-        );
-        case 'disk-share': return (
+        ); }
+        case 'disk-share': { const s = getManualContent('disk-share', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Sharing & Publishing Files" desc="Share files with specific users or make them publicly accessible. Encrypted files can be shared with passwords automatically delivered to recipients." />
+                <SectionHeader title={s.title || "Sharing & Publishing Files"} desc={s.desc || "Share files with specific users or make them publicly accessible. Encrypted files can be shared with passwords automatically delivered to recipients."} />
                 <h3 class="text-lg font-bold text-white mb-3">Publishing a File (Public Link)</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Right-Click the File', desc: 'Open the context menu on the file you want to share.' },
                     { title: 'Select "Publish"', desc: 'The file is marked as public. A globe icon appears next to the filename, and a public URL is generated.' },
                     { title: 'Copy the Public Link', desc: 'The URL is shown in a green info bar. Copy it and share with anyone -- they can download the file without a Vision Chain account.' },
@@ -1701,7 +1611,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 <p class="text-sm text-gray-400 mt-4">Published files are indicated by a green globe icon and "Public" badge. The public link format is: <code class="text-cyan-400 text-xs">https://api.visionchain.co/disk/public/[fileId]</code></p>
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Sharing with Specific Users</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Open Share Modal', desc: 'Right-click a file and select "Share", or click the share icon. The share modal opens showing your contacts.' },
                     { title: 'Search for Recipient', desc: 'Type a name or email to filter contacts. The list shows matching users registered on Vision Chain.' },
                     { title: 'Confirm Sharing', desc: 'Select a contact. A confirmation screen appears showing the file name, recipient name, and email. For encrypted files, a notice warns that the encryption password will be shared with the recipient.' },
@@ -1725,17 +1635,17 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Viewing Shared Files</h3>
                 <p class="text-sm text-gray-400 mb-3">Files shared with you appear in the "Shared" tab of Vision Disk.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Open Shared Tab', desc: 'In Vision Disk, switch to the "Shared" tab to see files others have shared with you.' },
                     { title: 'View File Details', desc: 'Each shared file shows the sender\'s name, share date, and file type. Click the eye icon to preview.' },
                     { title: 'Auto-Decryption', desc: 'If the shared file is encrypted and the sender included the password, it automatically decrypts when you open it.' },
                 ]} />
-                <Warning><>Published files are accessible to anyone with the link. Only publish files you intend to share publicly. For private sharing, use the contact-based sharing method instead.</></Warning>
+                <Warning label={L('warning')}><>Published files are accessible to anyone with the link. Only publish files you intend to share publicly. For private sharing, use the contact-based sharing method instead.</></Warning>
             </div>
-        );
-        case 'disk-encryption': return (
+        ); }
+        case 'disk-encryption': { const s = getManualContent('disk-encryption', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Encryption & Passkey (Biometric)" desc="Vision Disk uses AES-GCM encryption to protect your files. Passkey integration allows you to unlock encrypted files with fingerprint or Face ID instead of typing passwords." />
+                <SectionHeader title={s.title || "Encryption & Passkey (Biometric)"} desc={s.desc || "Vision Disk uses AES-GCM encryption to protect your files. Passkey integration allows you to unlock encrypted files with fingerprint or Face ID instead of typing passwords."} />
 
                 <h3 class="text-lg font-bold text-white mb-3">How Encryption Works</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
@@ -1754,7 +1664,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Passkey (Biometric Authentication)</h3>
                 <p class="text-sm text-gray-400 mb-3">On devices with fingerprint or Face ID, you can save your encryption password with biometric authentication for quick unlock.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Enter Password', desc: 'The first time you access an encrypted file, you enter your encryption password manually in the password modal.' },
                     { title: 'Save with Biometrics', desc: 'After entering the password, a prompt asks: "Save this password with biometrics (fingerprint/Face ID) for quick unlock next time?" Tap "OK" to register.' },
                     { title: 'Biometric Registration', desc: 'Your device prompts for fingerprint or Face ID. Once verified, the password is securely stored on your device using WebAuthn.' },
@@ -1764,13 +1674,13 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Devices Without Biometrics</h3>
                 <p class="text-sm text-gray-400">Older smartphones without fingerprint or Face ID sensors will not see the biometric option. On these devices, you must enter the encryption password manually each time you access encrypted files. The "Unlock with Biometrics" button only appears on devices that support WebAuthn platform authentication.</p>
 
-                <Tip><>Your passkey is stored locally on your device only. If you switch devices, you will need to enter the password manually once and register a new passkey on the new device.</></Tip>
-                <Warning><>If you forget your encryption password and don't have a passkey saved, your encrypted files cannot be recovered. Vision Chain does not have access to your password.</></Warning>
+                <Tip label={L('tip')}><>Your passkey is stored locally on your device only. If you switch devices, you will need to enter the password manually once and register a new passkey on the new device.</></Tip>
+                <Warning label={L('warning')}><>If you forget your encryption password and don't have a passkey saved, your encrypted files cannot be recovered. Vision Chain does not have access to your password.</></Warning>
             </div>
-        );
-        case 'disk-ai-memory': return (
+        ); }
+        case 'disk-ai-memory': { const s = getManualContent('disk-ai-memory', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="AI Memory & Indexing" desc="Vision Disk serves as a persistent memory layer for AI. Every uploaded file is enriched with structured metadata, enabling AI models to search, retrieve, and reason over your personal data." />
+                <SectionHeader title={s.title || "AI Memory & Indexing"} desc={s.desc || "Vision Disk serves as a persistent memory layer for AI. Every uploaded file is enriched with structured metadata, enabling AI models to search, retrieve, and reason over your personal data."} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Why Disk as AI Memory?</h3>
                 <p class="text-sm text-gray-400 mb-3">Traditional cloud storage stores files as opaque blobs. Vision Disk goes further by treating every file as a structured knowledge unit that AI can understand, index, and retrieve. This enables your chatbot to find documents, answer questions from your files, and share them intelligently.</p>
@@ -1818,7 +1728,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Indexing Pipeline</h3>
                 <p class="text-sm text-gray-400 mb-3">When a file is uploaded, it enters an indexing pipeline that prepares it for AI retrieval:</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Upload & Metadata Extraction', desc: 'File is uploaded and basic metadata is extracted: size, type, MIME type. Language is auto-detected from filename and content.' },
                     { title: 'Source Type Classification', desc: 'The file is classified based on MIME type: documents (PDF, DOCX), images (JPG, PNG), audio (MP3, WAV), video (MP4), code files, data files (CSV, JSON), or chat logs.' },
                     { title: 'Text Extraction', desc: 'For documents, text is extracted and stored at parsedTextUri. For audio/video, a transcript is generated at transcriptUri. Images may get OCR text extraction.' },
@@ -1843,13 +1753,13 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
 
-                <Tip><>Files with sourceType "document", "code", or "data" are automatically marked as memory-eligible. Image and video files become eligible only if text extraction (OCR/transcript) is successful.</></Tip>
-                <Note><>The indexing pipeline runs asynchronously after upload. You can check a file's indexing status in its metadata. Most files are indexed within seconds.</></Note>
+                <Tip label={L('tip')}><>Files with sourceType "document", "code", or "data" are automatically marked as memory-eligible. Image and video files become eligible only if text extraction (OCR/transcript) is successful.</></Tip>
+                <Note label={L('note')}><>The indexing pipeline runs asynchronously after upload. You can check a file's indexing status in its metadata. Most files are indexed within seconds.</></Note>
             </div>
-        );
-        case 'disk-chatbot': return (
+        ); }
+        case 'disk-chatbot': { const s = getManualContent('disk-chatbot', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="AI Chat File Sharing" desc="Use the AI chatbot to search your Disk files and share them with other users through natural language commands." />
+                <SectionHeader title={s.title || "AI Chat File Sharing"} desc={s.desc || "Use the AI chatbot to search your Disk files and share them with other users through natural language commands."} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Searching Files via Chat</h3>
                 <p class="text-sm text-gray-400 mb-3">You can ask the AI chatbot to find files in your Vision Disk using natural language:</p>
@@ -1871,21 +1781,21 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Sharing Files via Chat</h3>
                 <p class="text-sm text-gray-400 mb-3">After finding a file, you can share it with another user through the chatbot:</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Request File Sharing', desc: 'Say something like "Share the proposal document with jihyun@email.com" or "Send the contract file to Park Jihyun".' },
                     { title: 'File Search', desc: 'The chatbot searches your Disk for matching files and presents a numbered list if multiple matches are found.' },
                     { title: 'Select File', desc: 'Choose the correct file by number or confirm the single match.' },
                     { title: 'Recipient Confirmation', desc: 'The chatbot confirms the recipient and file, then shows a contact list if the name is ambiguous.' },
                     { title: 'Share Executed', desc: 'The file is shared with the recipient. They receive an in-app notification and email. For encrypted files, the password is included automatically.' },
                 ]} />
-                <Tip><>The chatbot understands both Korean and English commands. You can mix languages freely, e.g., "Documents 폴더의 계약서 파일을 jihyun에게 공유해줘".</></Tip>
+                <Tip label={L('tip')}><>The chatbot understands both Korean and English commands. You can mix languages freely, e.g., "Documents 폴더의 계약서 파일을 jihyun에게 공유해줘".</></Tip>
             </div>
-        );
-        case 'disk-plans': return (
+        ); }
+        case 'disk-plans': { const s = getManualContent('disk-plans', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Storage Subscription Plans" desc="Choose a storage plan paid with VCN tokens via gasless EIP-2612 Permit signatures." />
+                <SectionHeader title={s.title || "Storage Subscription Plans"} desc={s.desc || "Choose a storage plan paid with VCN tokens via gasless EIP-2612 Permit signatures."} />
                 <p class="text-sm text-gray-400 mb-3">Vision Disk subscriptions are managed through on-chain VCN payments. The payment flow uses EIP-2612 Permit: you sign an off-chain message authorizing the transfer, and the Paymaster executes the transaction on-chain.</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'View Plans', desc: 'On the Disk page, if you have no subscription, a "Subscribe" section shows available plans.' },
                     { title: 'Select a Plan', desc: 'Browse the available storage tiers. Each shows storage capacity, price in VCN, and features included.' },
                     { title: 'Sign Permit', desc: 'Click "Subscribe". Your wallet prompts you to enter your password to sign an EIP-2612 Permit for the VCN payment amount.' },
@@ -1894,14 +1804,14 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 ]} />
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Cancel Subscription</h3>
                 <p class="text-sm text-gray-400 mb-3">You can cancel your subscription at any time. Your files remain accessible until the subscription period ends. After expiration, files are retained but you cannot upload new files until you renew.</p>
-                <Tip><>Storage plan payments are gasless -- the Paymaster covers all on-chain transaction fees. You only pay the VCN subscription price.</></Tip>
+                <Tip label={L('tip')}><>Storage plan payments are gasless -- the Paymaster covers all on-chain transaction fees. You only pay the VCN subscription price.</></Tip>
             </div>
-        );
+        ); }
 
         // ─── Nodes ───
-        case 'nodes-overview': return (
+        case 'nodes-overview': { const s = getManualContent('nodes-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Vision Node Overview" desc="Run a Vision Node to support the network, validate transactions, and earn VCN + RP rewards." />
+                <SectionHeader title={s.title || "Vision Node Overview"} desc={s.desc || "Run a Vision Node to support the network, validate transactions, and earn VCN + RP rewards."} />
                 <p class="text-sm text-gray-400">Vision Chain is a 5-node Proof-of-Authority (PoA) network. You can participate by running a full Validator Node, an Enterprise Node, or a lightweight Mobile Node directly in your browser.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -1932,12 +1842,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Tip><>The Mobile Node earns you passive RP just by keeping the page open. It is the lowest barrier way to contribute to the network and earn rewards.</></Tip>
+                <Tip label={L('tip')}><>The Mobile Node earns you passive RP just by keeping the page open. It is the lowest barrier way to contribute to the network and earn rewards.</></Tip>
             </div>
-        );
-        case 'nodes-purchase': return (
+        ); }
+        case 'nodes-purchase': { const s = getManualContent('nodes-purchase', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Purchasing a Node" desc="Step-by-step guide to purchasing Validator or Enterprise node tiers." />
+                <SectionHeader title={s.title || "Purchasing a Node"} desc={s.desc || "Step-by-step guide to purchasing Validator or Enterprise node tiers."} />
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-4 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Tier</div><div>Price</div><div>Hardware</div><div>Benefits</div></div>
                     {[
@@ -1952,43 +1862,43 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Contact Vision Chain Team', desc: 'Node purchases require identity verification and hardware review. Contact the team via support@visionchain.co or through the community channels.' },
                     { title: 'Hardware Setup', desc: 'Prepare your dedicated server according to the minimum specifications for your chosen tier.' },
                     { title: 'Payment & Registration', desc: 'Complete payment via approved methods. Your node address is registered in the validator set by the network administrators.' },
                     { title: 'Node Configuration', desc: 'Receive your genesis.json, static-nodes.json, and node key. Configure your Geth node with IBFT 2.0 consensus settings.' },
                     { title: 'Go Live', desc: 'Start your node and verify it syncs with the network. Monitor peer connections and block production through the node dashboard.' },
                 ]} />
-                <Note><>Mobile Nodes are free and require no purchase. Simply open the Nodes page in your browser to start earning RP passively.</></Note>
+                <Note label={L('note')}><>Mobile Nodes are free and require no purchase. Simply open the Nodes page in your browser to start earning RP passively.</></Note>
             </div>
-        );
-        case 'nodes-install': return (
+        ); }
+        case 'nodes-install': { const s = getManualContent('nodes-install', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Installation Guide" desc="Install the Vision Node desktop application or run via CLI on your server." />
+                <SectionHeader title={s.title || "Installation Guide"} desc={s.desc || "Install the Vision Node desktop application or run via CLI on your server."} />
                 <h3 class="text-lg font-bold text-white mb-3">macOS / Linux (CLI)</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Run Install Script', desc: 'Open Terminal and run the following command:' },
                 ]} />
                 <code class="text-xs text-cyan-400 bg-black/30 rounded-lg px-4 py-3 block font-mono break-all border border-white/5">curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash</code>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Verify Installation', desc: 'The script installs Geth, configures the Vision Chain genesis block, and starts the node service. Check status with: systemctl status vision-node (Linux) or the process list (macOS).' },
                     { title: 'Access Dashboard', desc: 'Open http://localhost:9090 in your browser to view the node dashboard with status, peers, blocks, and storage metrics.' },
                 ]} />
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Desktop App</h3>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Download', desc: 'Visit the Vision Node downloads page. Select your platform: macOS (.dmg) or Windows (.exe).' },
                     { title: 'Install', desc: 'macOS: Open the .dmg and drag to Applications. Windows: Run the .exe installer and follow prompts.' },
                     { title: 'Launch', desc: 'Open "Vision Node" from your Applications. The app starts the node and opens the dashboard automatically.' },
                     { title: 'Monitor', desc: 'The desktop app shows node status, peer connections, block height, storage usage, and VCN rewards in a visual dashboard.' },
                 ]} />
-                <Tip><>After installation, the node dashboard is accessible at http://localhost:9090. RPC endpoint runs on port 8545. WebSocket on port 8546.</></Tip>
+                <Tip label={L('tip')}><>After installation, the node dashboard is accessible at http://localhost:9090. RPC endpoint runs on port 8545. WebSocket on port 8546.</></Tip>
             </div>
-        );
+        ); }
 
         // ─── Mint ───
-        case 'mint-overview': return (
+        case 'mint-overview': { const s = getManualContent('mint-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Mint Studio" desc="Create and deploy custom ERC-20 tokens on Vision Chain and other supported networks with a no-code wizard." />
+                <SectionHeader title={s.title || "Mint Studio"} desc={s.desc || "Create and deploy custom ERC-20 tokens on Vision Chain and other supported networks with a no-code wizard."} />
                 <p class="text-sm text-gray-400">Mint Studio provides a guided interface for deploying tokens without writing any Solidity code. You configure the token parameters, and the system deploys a verified smart contract on your behalf.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -2004,12 +1914,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'mint-create': return (
+        ); }
+        case 'mint-create': { const s = getManualContent('mint-create', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Creating a Token" desc="Step-by-step guide through the Mint Studio token creation wizard." />
-                <Prerequisites items={['VCN balance for deployment fees', 'Wallet unlocked with password', 'Token name and symbol decided']} />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Creating a Token"} desc={s.desc || "Step-by-step guide through the Mint Studio token creation wizard."} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['VCN balance for deployment fees', 'Wallet unlocked with password', 'Token name and symbol decided']} />
+                <StepList steps={s.steps || [
                     { title: 'Open Mint Studio', desc: 'From the sidebar menu, tap "Mint" to open the Mint Studio page.' },
                     { title: 'Enter Token Name', desc: 'Type your token name (e.g., "My Community Token"). This is the full display name shown on explorers and wallets.' },
                     { title: 'Enter Token Symbol', desc: 'Enter a 3-5 character ticker symbol (e.g., "MCT"). Must be unique and is displayed next to balances.' },
@@ -2019,15 +1929,15 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     { title: 'Review & Deploy', desc: 'Review all settings on the confirmation screen. Click "Deploy" and enter your wallet password to sign the deployment transaction.' },
                     { title: 'Verify Deployment', desc: 'After deployment, the contract address is displayed. You can view it on the block explorer. The token is automatically added to your wallet.' },
                 ]} />
-                <Note><>Token deployment costs are paid in VCN on Vision Chain. For multi-chain deployment, you need native gas tokens on each target chain. Each network deployment is independent.</></Note>
+                <Note label={L('note')}><>Token deployment costs are paid in VCN on Vision Chain. For multi-chain deployment, you need native gas tokens on each target chain. Each network deployment is independent.</></Note>
             </div>
-        );
+        ); }
 
         // ─── Social ───
-        case 'contacts-manage': return (
+        case 'contacts-manage': { const s = getManualContent('contacts-manage', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Contacts Management" desc="Save, edit, and organize frequently used wallet addresses with phonetic search and VNS lookup." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Contacts Management"} desc={s.desc || "Save, edit, and organize frequently used wallet addresses with phonetic search and VNS lookup."} />
+                <StepList steps={s.steps || [
                     { title: 'Open Contacts', desc: 'From the sidebar menu, tap "Contacts" to view your address book.' },
                     { title: 'Add New Contact', desc: 'Tap "Add Contact". Fill in: Name (required), Wallet Address (0x...), Email (optional), Phone (optional), and Notes.' },
                     { title: 'Phone Sync', desc: 'Tap "Sync Phone" to import contacts from your device. The system uses phonetic matching to find friends who may already be on Vision Chain.' },
@@ -2038,17 +1948,17 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 ]} />
                 <h3 class="text-lg font-bold text-white mt-6 mb-3">Phonetic Search</h3>
                 <p class="text-sm text-gray-400">The contact search supports cross-language phonetic matching. For example, searching for a Korean name will match the English phonetic equivalent and vice versa. This is especially useful for voice-input scenarios where names may be transcribed differently.</p>
-                <Tip><>Saved contacts appear automatically in the send flow, making transfers faster and reducing address errors. Star your most-used contacts for quick access.</></Tip>
+                <Tip label={L('tip')}><>Saved contacts appear automatically in the send flow, making transfers faster and reducing address errors. Star your most-used contacts for quick access.</></Tip>
             </div>
-        );
-        case 'referral-program': return (
+        ); }
+        case 'referral-program': { const s = getManualContent('referral-program', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Referral Program & Marketing" desc="Complete guide to the referral system -- links, levels, direct/indirect rewards, daily rounds, and the Referral Rush leaderboard." />
+                <SectionHeader title={s.title || "Referral Program & Marketing"} desc={s.desc || "Complete guide to the referral system -- links, levels, direct/indirect rewards, daily rounds, and the Referral Rush leaderboard."} />
 
                 <h3 class="text-lg font-bold text-white mb-3">Your Referral Link & Code</h3>
                 <p class="text-sm text-gray-400 mb-3">Each user receives a unique referral code at signup. Your referral link is:</p>
                 <code class="text-xs text-cyan-400 bg-black/30 rounded-lg px-4 py-3 block font-mono break-all border border-white/5">https://visionchain.co/signup?ref=YOUR_CODE</code>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Find Your Link', desc: 'Open "Referral" from the sidebar. Your unique referral link and code are displayed at the top of the page.' },
                     { title: 'Copy Link', desc: 'Tap the copy icon next to the URL to copy it to clipboard.' },
                     { title: 'Share via Native Share', desc: 'Tap "Share Link" to use your device native share menu (SMS, WhatsApp, Telegram, Email, etc.).' },
@@ -2113,20 +2023,20 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">Referral Rush (Daily Rounds)</h3>
                 <p class="text-sm text-gray-400 mb-3">Vision Chain runs a "Referral Rush" competition with 24-hour daily rounds. Each round has a reward pool of 1,000 VCN distributed based on contribution rate:</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Rounds Start Daily at 00:00 UTC', desc: 'A new round begins automatically every day. The round number increments from the epoch date (Feb 9, 2026).' },
                     { title: 'Invite During the Round', desc: 'Each referral you bring during a round counts toward your contribution rate for that round.' },
                     { title: 'Contribution Rate = Your Invites / Total Invites', desc: 'Your share of the reward pool is proportional to your contribution. e.g., 10 invites out of 50 total = 20% = 200 VCN.' },
                     { title: 'Check Leaderboard', desc: 'The leaderboard shows all participants ranked by invite count, with estimated rewards.' },
                     { title: 'Claim After Round Ends', desc: 'Once a round completes (24 hours), rewards are finalized and can be claimed.' },
                 ]} />
-                <Tip><>Each referral also earns you +10 RP instantly and contributes to your Level. Every 10th level milestone (Level 10, 20, 30...) earns a bonus +100 RP.</></Tip>
-                <Warning><>Referral link integrity is tracked via security measures. Fraudulent or self-referral activity may be detected and result in rewards being revoked.</></Warning>
+                <Tip label={L('tip')}><>Each referral also earns you +10 RP instantly and contributes to your Level. Every 10th level milestone (Level 10, 20, 30...) earns a bonus +100 RP.</></Tip>
+                <Warning label={L('warning')}><>Referral link integrity is tracked via security measures. Fraudulent or self-referral activity may be detected and result in rewards being revoked.</></Warning>
             </div>
-        );
-        case 'quest-campaign': return (
+        ); }
+        case 'quest-campaign': { const s = getManualContent('quest-campaign', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Reward Points (RP) System" desc="Complete guide to earning, tracking, and spending Reward Points across all Vision Chain activities." />
+                <SectionHeader title={s.title || "Reward Points (RP) System"} desc={s.desc || "Complete guide to earning, tracking, and spending Reward Points across all Vision Chain activities."} />
                 <p class="text-sm text-gray-400 mb-3">Reward Points (RP) are earned by performing various actions within the Vision Chain ecosystem. RP values are admin-configurable and may change. The current default values are shown below.</p>
 
                 <h3 class="text-lg font-bold text-amber-400 mb-3">User Action RP Rewards</h3>
@@ -2196,45 +2106,45 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
                 <h3 class="text-lg font-bold text-white mt-8 mb-3">RP History</h3>
                 <p class="text-sm text-gray-400 mb-3">Below the RP summary, a detailed activity log shows your recent 20 RP events with:</p>
-                <StepList steps={[
+                <StepList steps={s.steps || [
                     { title: 'Event Icon', desc: 'Amber icon for referral RP, purple icon for level-up bonuses.' },
                     { title: 'Event Type', desc: 'Shows "Referral Bonus" or "Level-up Bonus" with the source (e.g., referred user email or "Reached LVL 10").' },
                     { title: 'RP Amount', desc: 'The RP earned for this event (e.g., +10 RP, +100 RP).' },
                     { title: 'Date', desc: 'When the RP was earned.' },
                 ]} />
-                <Note><>RP amounts are configured by administrators and may change. The values shown in this guide reflect current defaults. Check the Referral page for the most up-to-date values.</></Note>
+                <Note label={L('note')}><>RP amounts are configured by administrators and may change. The values shown in this guide reflect current defaults. Check the Referral page for the most up-to-date values.</></Note>
             </div>
-        );
+        ); }
 
         // ─── Settings ───
-        case 'settings-profile': return (
+        case 'settings-profile': { const s = getManualContent('settings-profile', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Profile Management" desc="Update your display name, email, and profile picture." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Profile Management"} desc={s.desc || "Update your display name, email, and profile picture."} />
+                <StepList steps={s.steps || [
                     { title: 'Open Settings', desc: 'Navigate to "Settings" from the sidebar menu.' },
                     { title: 'Edit Profile', desc: 'Tap your profile section to update display name and profile picture.' },
                     { title: 'Change Password', desc: 'Tap "Change Password" to update your login password. You will need your current password.' },
                     { title: 'Save Changes', desc: 'All changes are saved automatically when you navigate away.' },
                 ]} />
             </div>
-        );
-        case 'settings-2fa': return (
+        ); }
+        case 'settings-2fa': { const s = getManualContent('settings-2fa', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="2FA Setup (Two-Factor Authentication)" desc="Add an extra layer of security with TOTP-based two-factor authentication." />
-                <Prerequisites items={['An authenticator app (Google Authenticator, Authy, etc.)']} />
-                <StepList steps={[
+                <SectionHeader title={s.title || "2FA Setup (Two-Factor Authentication)"} desc={s.desc || "Add an extra layer of security with TOTP-based two-factor authentication."} />
+                <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['An authenticator app (Google Authenticator, Authy, etc.)']} />
+                <StepList steps={s.steps || [
                     { title: 'Open Security Settings', desc: 'Navigate to Settings > Security > Two-Factor Authentication.' },
                     { title: 'Scan QR Code', desc: 'Open your authenticator app and scan the displayed QR code.' },
                     { title: 'Enter Verification Code', desc: 'Type the 6-digit code from your authenticator to verify setup.' },
                     { title: 'Save Backup Codes', desc: 'Store the backup recovery codes securely in case you lose your authenticator device.' },
                 ]} />
-                <Warning><>Once enabled, 2FA is required for login and large transactions. If you lose access to your authenticator, use backup codes to recover. Store backup codes securely offline.</></Warning>
-                <Note><>Transactions above a certain threshold will automatically require 2FA verification for additional security.</></Note>
+                <Warning label={L('warning')}><>Once enabled, 2FA is required for login and large transactions. If you lose access to your authenticator, use backup codes to recover. Store backup codes securely offline.</></Warning>
+                <Note label={L('note')}><>Transactions above a certain threshold will automatically require 2FA verification for additional security.</></Note>
             </div>
-        );
-        case 'settings-backup': return (
+        ); }
+        case 'settings-backup': { const s = getManualContent('settings-backup', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Wallet Backup & Restore" desc="Backup your wallet using seed phrase or cloud sync, and restore on a new device." />
+                <SectionHeader title={s.title || "Wallet Backup & Restore"} desc={s.desc || "Backup your wallet using seed phrase or cloud sync, and restore on a new device."} />
                 <div class="space-y-4">
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                         <h4 class="text-sm font-bold text-white mb-2">Seed Phrase Backup</h4>
@@ -2249,23 +2159,23 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         <p class="text-xs text-gray-400">To restore your wallet on a new device, enter your 12-word seed phrase or log in with Cloud Sync enabled. Your balances and transaction history will be recovered automatically.</p>
                     </div>
                 </div>
-                <Warning><>Never share your seed phrase. Vision Chain support will never ask for it. Anyone with your seed phrase can access your funds.</></Warning>
+                <Warning label={L('warning')}><>Never share your seed phrase. Vision Chain support will never ask for it. Anyone with your seed phrase can access your funds.</></Warning>
             </div>
-        );
-        case 'settings-language': return (
+        ); }
+        case 'settings-language': { const s = getManualContent('settings-language', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Language Settings" desc="Switch the app language between Korean and English." />
-                <StepList steps={[
+                <SectionHeader title={s.title || "Language Settings"} desc={s.desc || "Switch the app language between Korean and English."} />
+                <StepList steps={s.steps || [
                     { title: 'Open Settings', desc: 'Navigate to "Settings" from the sidebar menu.' },
                     { title: 'Select Language', desc: 'Tap "Language" and choose between Korean or English.' },
                     { title: 'Auto-Apply', desc: 'The interface updates immediately. AI Chat will also respond in your selected language.' },
                 ]} />
-                <Tip><>The AI Chat supports both Korean and English regardless of your language setting. You can type in either language and the AI will respond accordingly.</></Tip>
+                <Tip label={L('tip')}><>The AI Chat supports both Korean and English regardless of your language setting. You can type in either language and the AI will respond accordingly.</></Tip>
             </div>
-        );
-        case 'settings-notifications': return (
+        ); }
+        case 'settings-notifications': { const s = getManualContent('settings-notifications', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Notification Settings" desc="Configure in-app and email notification preferences." />
+                <SectionHeader title={s.title || "Notification Settings"} desc={s.desc || "Configure in-app and email notification preferences."} />
                 <p class="text-sm text-gray-400">Manage which notifications you receive and how they are delivered. In-app notifications show as badges on the bell icon. Email notifications can be enabled for important events like large transactions and security alerts.</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -2281,12 +2191,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
+        ); }
 
         // ─── FAQ ───
-        case 'faq-login': return (
+        case 'faq-login': { const s = getManualContent('faq-login', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Login Issues" desc="Troubleshooting common login problems." />
+                <SectionHeader title={s.title || "Login Issues"} desc={s.desc || "Troubleshooting common login problems."} />
                 <div class="space-y-3">
                     {[
                         { q: 'Forgot password?', a: 'Use the "Reset Password" link on the login page. A reset email will be sent to your registered email address.' },
@@ -2301,10 +2211,10 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'faq-tx': return (
+        ); }
+        case 'faq-tx': { const s = getManualContent('faq-tx', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Transaction Failures" desc="Common transaction issues and how to resolve them." />
+                <SectionHeader title={s.title || "Transaction Failures"} desc={s.desc || "Common transaction issues and how to resolve them."} />
                 <div class="space-y-3">
                     {[
                         { q: 'Insufficient balance', a: 'Ensure you have enough tokens for the transfer amount. VCN transactions are gasless, but ETH may be needed for other chains.' },
@@ -2319,10 +2229,10 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'faq-bridge': return (
+        ); }
+        case 'faq-bridge': { const s = getManualContent('faq-bridge', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Bridge Issues" desc="Troubleshooting cross-chain bridge problems." />
+                <SectionHeader title={s.title || "Bridge Issues"} desc={s.desc || "Troubleshooting cross-chain bridge problems."} />
                 <div class="space-y-3">
                     {[
                         { q: 'Bridge transfer stuck?', a: 'Bridge transfers typically complete within 2-5 minutes. If stuck for over 30 minutes, contact support with your transaction hash.' },
@@ -2336,10 +2246,10 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
-        case 'faq-contact': return (
+        ); }
+        case 'faq-contact': { const s = getManualContent('faq-contact', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Contact Support" desc="Get help from the Vision Chain support team." />
+                <SectionHeader title={s.title || "Contact Support"} desc={s.desc || "Get help from the Vision Chain support team."} />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'AI Chat', d: 'Ask Vision AI for help directly in the wallet chat. It can resolve most common issues instantly.' },
@@ -2354,12 +2264,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     ))}
                 </div>
             </div>
-        );
+        ); }
 
         // ─── Feedback & Reports ───
-        case 'feedback-overview': return (
+        case 'feedback-overview': { const s = getManualContent('feedback-overview', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Feedback System" desc="Vision AI now features an intelligent feedback system that channels your voice directly into product improvement. Report bugs, suggest features, or submit business proposals through natural conversation." />
+                <SectionHeader title={s.title || "Feedback System"} desc={s.desc || "Vision AI now features an intelligent feedback system that channels your voice directly into product improvement. Report bugs, suggest features, or submit business proposals through natural conversation."} />
                 <FeedbackDiagram />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
@@ -2376,7 +2286,7 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 </div>
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">How It Works</h3>
-                    <StepList steps={[
+                    <StepList steps={s.steps || [
                         { title: 'Auto-Detection', desc: 'AI automatically detects bug reports, feature requests, and business proposals from your conversation.' },
                         { title: 'Structuring', desc: 'Detected content is organized by category, severity, and related features.' },
                         { title: 'Grouping', desc: 'Similar requests from multiple users are clustered to identify patterns and demand.' },
@@ -2384,12 +2294,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         { title: 'Team Review', desc: 'The operations team reviews classified items and takes appropriate action.' },
                     ]} />
                 </div>
-                <Tip><>No special form or command is needed. Simply talk to the chatbot as you normally would, and the AI will automatically detect and process your feedback.</></Tip>
+                <Tip label={L('tip')}><>No special form or command is needed. Simply talk to the chatbot as you normally would, and the AI will automatically detect and process your feedback.</></Tip>
             </div>
-        );
-        case 'feedback-bugs': return (
+        ); }
+        case 'feedback-bugs': { const s = getManualContent('feedback-bugs', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Bug Reports" desc="Report issues you encounter while using Vision Chain. The AI automatically classifies the problem, assesses severity, and routes it to the development team." />
+                <SectionHeader title={s.title || "Bug Reports"} desc={s.desc || "Report issues you encounter while using Vision Chain. The AI automatically classifies the problem, assesses severity, and routes it to the development team."} />
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
@@ -2426,12 +2336,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         ))}
                     </div>
                 </div>
-                <Note><>Bug reports are reviewed within 0-48 hours depending on severity. Critical issues are escalated immediately to the development team.</></Note>
+                <Note label={L('note')}><>Bug reports are reviewed within 0-48 hours depending on severity. Critical issues are escalated immediately to the development team.</></Note>
             </div>
-        );
-        case 'feedback-features': return (
+        ); }
+        case 'feedback-features': { const s = getManualContent('feedback-features', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Feature Suggestions" desc="Share your ideas for new features or improvements. Similar requests from multiple users are automatically grouped, and the most requested features are reviewed first." />
+                <SectionHeader title={s.title || "Feature Suggestions"} desc={s.desc || "Share your ideas for new features or improvements. Similar requests from multiple users are automatically grouped, and the most requested features are reviewed first."} />
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
@@ -2454,19 +2364,19 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 </div>
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">Processing Pipeline</h3>
-                    <StepList steps={[
+                    <StepList steps={s.steps || [
                         { title: 'AI Structures Your Request', desc: 'The AI normalizes and categorizes your suggestion with relevant tags and feature associations.' },
                         { title: 'Automatic Grouping', desc: 'Similar requests from different users are clustered together to measure demand.' },
                         { title: 'Priority Scoring', desc: 'Each request receives a priority score based on frequency, business impact, and urgency.' },
                         { title: 'Roadmap Review', desc: 'The operations team reviews high-priority items weekly and determines roadmap inclusion.' },
                     ]} />
                 </div>
-                <Tip><>The more specific your suggestion, the faster it can be evaluated. Include details about what problem it would solve and how you envision it working.</></Tip>
+                <Tip label={L('tip')}><>The more specific your suggestion, the faster it can be evaluated. Include details about what problem it would solve and how you envision it working.</></Tip>
             </div>
-        );
-        case 'feedback-business': return (
+        ); }
+        case 'feedback-business': { const s = getManualContent('feedback-business', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Business Proposals" desc="Submit partnership, listing, collaboration, or marketing proposals directly through the chatbot." />
+                <SectionHeader title={s.title || "Business Proposals"} desc={s.desc || "Submit partnership, listing, collaboration, or marketing proposals directly through the chatbot."} />
                 <div>
                     <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
@@ -2497,12 +2407,12 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
-                <Tip><>Include your contact information (email or messaging handle) in your proposal for a direct follow-up from the relevant team.</></Tip>
+                <Tip label={L('tip')}><>Include your contact information (email or messaging handle) in your proposal for a direct follow-up from the relevant team.</></Tip>
             </div>
-        );
-        case 'feedback-tips': return (
+        ); }
+        case 'feedback-tips': { const s = getManualContent('feedback-tips', locale); return (
             <div class="space-y-6">
-                <SectionHeader title="Tips for Effective Feedback" desc="Get the most out of the feedback system by following these best practices." />
+                <SectionHeader title={s.title || "Tips for Effective Feedback"} desc={s.desc || "Get the most out of the feedback system by following these best practices."} />
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Be Specific', d: '"Send button loading forever after click" is better than "it doesn\'t work"' },
@@ -2534,16 +2444,16 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                     </div>
                 </div>
             </div>
-        );
+        ); }
 
         // ─── Default fallback ───
         default: {
-            const allChildren = sections.flatMap(s => s.children);
-            const child = allChildren.find(c => c.id === id);
-            const parent = sections.find(s => s.children.some(c => c.id === id));
+            const allChildren = sectionDefs.flatMap(s => s.childIds);
+            const childId = allChildren.find(cid => cid === id);
+            const parent = sectionDefs.find(s => s.childIds.some(cid => cid === id));
             return (
                 <div class="space-y-6">
-                    <SectionHeader title={child?.title || id} desc={`This section is part of "${parent?.title || 'Unknown'}". Content is being prepared.`} />
+                    <SectionHeader title={childId || id} desc={`This section is part of "${parent?.sectionKey || 'Unknown'}". Content is being prepared.`} />
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-8 text-center">
                         <div class="text-gray-500 text-sm">This guide section is coming soon.</div>
                         <div class="text-gray-600 text-xs mt-2">Check back for updates or contact support for assistance.</div>
@@ -2556,6 +2466,9 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
 
 // ─── Main Component ───
 export default function UserManual(): JSX.Element {
+    const { t, locale } = useI18n();
+    const currentLocale = () => locale();
+    const sections = createMemo(() => buildSections(t));
     const [active, setActive] = createSignal('gs-overview');
     const [query, setQuery] = createSignal('');
     const [mobileOpen, setMobileOpen] = createSignal(false);
@@ -2569,15 +2482,15 @@ export default function UserManual(): JSX.Element {
         setActive(id);
         setMobileOpen(false);
         // Auto-expand parent section
-        const parent = sections.find(s => s.children.some(c => c.id === id));
+        const parent = sections().find(s => s.children.some(c => c.id === id));
         if (parent) setExpanded(prev => ({ ...prev, [parent.id]: true }));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const filteredSections = createMemo(() => {
         const q = query().toLowerCase();
-        if (!q) return sections;
-        return sections.map(s => ({
+        if (!q) return sections();
+        return sections().map(s => ({
             ...s,
             children: s.children.filter(c => c.title.toLowerCase().includes(q) || s.title.toLowerCase().includes(q))
         })).filter(s => s.children.length > 0);
@@ -2585,11 +2498,11 @@ export default function UserManual(): JSX.Element {
 
     // Current section title
     const currentTitle = createMemo(() => {
-        for (const s of sections) {
+        for (const s of sections()) {
             const child = s.children.find(c => c.id === active());
             if (child) return `${s.title} / ${child.title}`;
         }
-        return 'User Manual';
+        return t('userManual.pageTitle');
     });
 
     // ─── Sidebar ───
@@ -2599,10 +2512,10 @@ export default function UserManual(): JSX.Element {
             <div class="px-5 py-6 border-b border-white/[0.06]">
                 <A href="/" class="flex items-center gap-2 text-white hover:text-cyan-400 transition-colors mb-4">
                     <I d="arrow" c="w-4 h-4 inline-block" />
-                    <span class="text-xs font-bold uppercase tracking-widest">Back to Home</span>
+                    <span class="text-xs font-bold uppercase tracking-widest">{t('common.backToHome') || 'Back to Home'}</span>
                 </A>
-                <h1 class="text-xl font-black text-white tracking-tight">User Manual</h1>
-                <p class="text-[11px] text-gray-500 mt-1">Vision Chain Wallet Guide</p>
+                <h1 class="text-xl font-black text-white tracking-tight">{t('userManual.pageTitle')}</h1>
+                <p class="text-[11px] text-gray-500 mt-1">{t('userManual.pageSubtitle')}</p>
             </div>
 
             {/* Search */}
@@ -2611,7 +2524,7 @@ export default function UserManual(): JSX.Element {
                     <I d="search" c="w-3.5 h-3.5 inline-block text-gray-500 flex-shrink-0" />
                     <input
                         type="text"
-                        placeholder="Search..."
+                        placeholder={t('userManual.search')}
                         value={query()}
                         onInput={(e) => setQuery(e.currentTarget.value)}
                         class="bg-transparent text-sm text-white placeholder:text-gray-600 outline-none w-full"
@@ -2693,14 +2606,14 @@ export default function UserManual(): JSX.Element {
                     </div>
 
                     {/* Content */}
-                    {getContent(active(), navigate)}
+                    {getContent(active(), navigate, currentLocale())}
 
                     {/* Footer nav */}
                     <div class="mt-16 pt-8 border-t border-white/[0.06] flex items-center justify-between">
                         <A href="/" class="text-xs text-gray-500 hover:text-white transition-colors">
-                            <I d="arrow" c="w-3 h-3 inline-block mr-1" /> Back to Home
+                            <I d="arrow" c="w-3 h-3 inline-block mr-1" /> {t('common.backToHome') || 'Back to Home'}
                         </A>
-                        <span class="text-[10px] text-gray-700">Vision Chain User Manual v1.0</span>
+                        <span class="text-[10px] text-gray-700">{t('userManual.labels.versionLabel') || 'Vision Chain User Manual v1.0'}</span>
                     </div>
                 </div>
             </div>

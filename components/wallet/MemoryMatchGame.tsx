@@ -12,8 +12,10 @@ interface MemoryCard {
 interface MemoryMatchProps {
     onComplete: (result: { vcn: number; rp: number; time: number; attempts: number; grade: string }) => void;
     onBack: () => void;
-    todayBest?: number; // Today's best time from leaderboard
-    todayBestBy?: string; // Who holds today's best
+    todayBest?: number;
+    todayBestBy?: string;
+    playsRemaining?: () => number;
+    onInviteFriend?: () => void;
 }
 
 // ─── Coin Data (12 coins, 10 pairs randomly selected per game) ──────────────
@@ -533,15 +535,25 @@ export const MemoryMatchGame = (props: MemoryMatchProps) => {
                     </div>
 
                     {/* Actions */}
-                    <div class="flex items-center gap-3 w-full max-w-xs">
-                        <button onClick={() => { initGame(); GameAudio.startBGM('memory'); }}
-                            class="flex-1 px-4 py-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl text-sm font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all">
-                            Play Again
-                        </button>
-                        <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                            class="flex-1 px-4 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors">
-                            Back
-                        </button>
+                    <div class="flex flex-col items-center gap-3 w-full max-w-xs">
+                        <Show when={props.playsRemaining && props.playsRemaining() <= 0 && props.onInviteFriend}>
+                            <button onClick={() => props.onInviteFriend!()}
+                                class="w-full px-4 py-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
+                                Invite Friend for Bonus Plays
+                            </button>
+                        </Show>
+                        <div class="flex items-center gap-3 w-full">
+                            <button onClick={() => { initGame(); GameAudio.startBGM('memory'); }}
+                                disabled={props.playsRemaining ? props.playsRemaining() <= 0 : false}
+                                class={`flex-1 px-4 py-3 border rounded-xl text-sm font-bold transition-all ${props.playsRemaining && props.playsRemaining() <= 0 ? 'bg-gray-800/50 border-gray-700/30 text-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/30'}`}>
+                                {props.playsRemaining && props.playsRemaining() <= 0 ? 'No Plays Left' : 'Play Again'}
+                            </button>
+                            <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                class="flex-1 px-4 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400 transition-colors">
+                                Back
+                            </button>
+                        </div>
                     </div>
                 </div>
             </Show>

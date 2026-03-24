@@ -5,6 +5,8 @@ import { GameAudio } from '../../services/game/GameAudio';
 interface FlappyVCNProps {
     onComplete: (result: { vcn: number; rp: number; score: number; grade: string }) => void;
     onBack: () => void;
+    playsRemaining?: () => number;
+    onInviteFriend?: () => void;
 }
 
 const GRAVITY = 0.4;
@@ -340,17 +342,27 @@ export const FlappyVCNGame = (props: FlappyVCNProps) => {
                             </div>
                         </div>
 
-                        <div class="flex gap-3 justify-center">
-                            <button onClick={() => { setPhase('ready'); setScore(0); setResult(null); }}
-                                class="px-6 py-3 bg-gradient-to-r from-amber-500/20 to-green-500/20 border border-amber-500/30 rounded-xl text-sm font-bold text-amber-400 hover:bg-amber-500/30 transition-all"
-                                style="touch-action: manipulation;">
-                                Play Again
-                            </button>
-                            <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                style="touch-action: manipulation;">
-                                Back
-                            </button>
+                        <div class="flex flex-col items-center gap-3">
+                            <Show when={props.playsRemaining && props.playsRemaining() <= 0 && props.onInviteFriend}>
+                                <button onClick={() => props.onInviteFriend!()}
+                                    class="px-6 py-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                    <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
+                                    Invite Friend for Bonus Plays
+                                </button>
+                            </Show>
+                            <div class="flex gap-3 justify-center">
+                                <button onClick={() => { setPhase('ready'); setScore(0); setResult(null); }}
+                                    disabled={props.playsRemaining ? props.playsRemaining() <= 0 : false}
+                                    class={`px-6 py-3 border rounded-xl text-sm font-bold transition-all ${props.playsRemaining && props.playsRemaining() <= 0 ? 'bg-gray-800/50 border-gray-700/30 text-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500/20 to-green-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/30'}`}
+                                    style="touch-action: manipulation;">
+                                    {props.playsRemaining && props.playsRemaining() <= 0 ? 'No Plays Left' : 'Play Again'}
+                                </button>
+                                <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                    class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                    style="touch-action: manipulation;">
+                                    Back
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

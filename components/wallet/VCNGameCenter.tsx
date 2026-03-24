@@ -1780,6 +1780,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'memory'}>
                     <MemoryMatchGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={memoryRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1810,6 +1812,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'falling'}>
                     <FallingCoinsGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={fallingRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1840,6 +1844,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'predict'}>
                     <PricePredictGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={predictRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1871,6 +1877,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'tower'}>
                     <TowerClimbGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={towerRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1899,6 +1907,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'mine'}>
                     <MineSweeperGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={mineRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1927,6 +1937,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'flappy'}>
                     <FlappyVCNGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={flappyRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1955,6 +1967,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'slots'}>
                     <CryptoSlotsGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={slotsRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {
@@ -1982,6 +1996,8 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                 <Show when={activeGame() === 'crash'}>
                     <CrashGame
                         onBack={() => setActiveGame(null)}
+                        playsRemaining={crashRemaining}
+                        onInviteFriend={handleInviteFriend}
                         onComplete={(result) => {
                             const prev = dailyData();
                             const record: GamePlayRecord = {

@@ -5,6 +5,8 @@ import { GameAudio } from '../../services/game/GameAudio';
 interface CrashGameProps {
     onComplete: (result: { vcn: number; rp: number; multiplier: number; cashedOut: boolean }) => void;
     onBack: () => void;
+    playsRemaining?: () => number;
+    onInviteFriend?: () => void;
 }
 
 const BASE_VCN = 1.0;
@@ -324,17 +326,27 @@ export const CrashGame = (props: CrashGameProps) => {
                                 <div class="text-4xl font-black text-red-400 mb-2">CRASHED!</div>
                                 <div class="text-sm text-gray-400">at x{crashPoint().toFixed(2)}</div>
                                 <div class="text-sm text-gray-600 mt-2">All rewards lost!</div>
-                                <div class="mt-6 flex gap-3">
-                                    <button onClick={() => { setPhase('ready'); setMultiplier(1.0); }}
-                                        class="px-6 py-3 bg-gradient-to-r from-red-500/20 to-amber-500/20 border border-red-500/30 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/30 transition-all"
-                                        style="touch-action: manipulation;">
-                                        Play Again
-                                    </button>
-                                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                        class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                        style="touch-action: manipulation;">
-                                        Back
-                                    </button>
+                                <div class="mt-6 flex flex-col items-center gap-3">
+                                    <Show when={props.playsRemaining && props.playsRemaining() <= 0 && props.onInviteFriend}>
+                                        <button onClick={() => props.onInviteFriend!()}
+                                            class="px-6 py-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
+                                            Invite Friend for Bonus Plays
+                                        </button>
+                                    </Show>
+                                    <div class="flex gap-3">
+                                        <button onClick={() => { setPhase('ready'); setMultiplier(1.0); }}
+                                            disabled={props.playsRemaining ? props.playsRemaining() <= 0 : false}
+                                            class={`px-6 py-3 border rounded-xl text-sm font-bold transition-all ${props.playsRemaining && props.playsRemaining() <= 0 ? 'bg-gray-800/50 border-gray-700/30 text-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-red-500/20 to-amber-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30'}`}
+                                            style="touch-action: manipulation;">
+                                            {props.playsRemaining && props.playsRemaining() <= 0 ? 'No Plays Left' : 'Play Again'}
+                                        </button>
+                                        <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                            class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                            style="touch-action: manipulation;">
+                                            Back
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -365,17 +377,27 @@ export const CrashGame = (props: CrashGameProps) => {
                                         <span class="text-xs text-purple-400/60 font-bold">RP</span>
                                     </div>
                                 </div>
-                                <div class="flex gap-3">
-                                    <button onClick={() => { setPhase('ready'); setMultiplier(1.0); setCashedOutAt(0); }}
-                                        class="px-6 py-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl text-sm font-bold text-green-400 hover:bg-green-500/30 transition-all"
-                                        style="touch-action: manipulation;">
-                                        Play Again
-                                    </button>
-                                    <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
-                                        class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
-                                        style="touch-action: manipulation;">
-                                        Back
-                                    </button>
+                                <div class="flex flex-col items-center gap-3">
+                                    <Show when={props.playsRemaining && props.playsRemaining() <= 0 && props.onInviteFriend}>
+                                        <button onClick={() => props.onInviteFriend!()}
+                                            class="px-6 py-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
+                                            Invite Friend for Bonus Plays
+                                        </button>
+                                    </Show>
+                                    <div class="flex gap-3">
+                                        <button onClick={() => { setPhase('ready'); setMultiplier(1.0); setCashedOutAt(0); }}
+                                            disabled={props.playsRemaining ? props.playsRemaining() <= 0 : false}
+                                            class={`px-6 py-3 border rounded-xl text-sm font-bold transition-all ${props.playsRemaining && props.playsRemaining() <= 0 ? 'bg-gray-800/50 border-gray-700/30 text-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'}`}
+                                            style="touch-action: manipulation;">
+                                            {props.playsRemaining && props.playsRemaining() <= 0 ? 'No Plays Left' : 'Play Again'}
+                                        </button>
+                                        <button onClick={() => { GameAudio.stopBGM(); props.onBack(); }}
+                                            class="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-sm font-bold text-gray-400"
+                                            style="touch-action: manipulation;">
+                                            Back
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
