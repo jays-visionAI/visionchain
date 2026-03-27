@@ -703,8 +703,8 @@ const db = admin.firestore();
 //
 // ============================================================================
 
-const RPC_URL = "http://46.224.221.201:8545"; // Node-1 (active sealer after EIP upgrade; node-2:8546 stuck at block 301753)
-const RPC_FALLBACK = "https://rpc.visionchain.co"; // nginx -> node-1 (public RPC fallback)
+const RPC_URL = "https://rpc.visionchain.co"; // HTTPS proxy -> node-1 (reliable from Cloud Functions; direct IP:8545 causes 504 timeouts)
+const RPC_FALLBACK = "http://46.224.221.201:8545"; // Direct node-1 IP (fallback, not accessible from Cloud Functions)
 
 // Block period in seconds - used to derive safe timeout values
 const BLOCK_PERIOD_SECONDS = 5;
