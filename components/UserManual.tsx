@@ -352,7 +352,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 <SectionHeader title={s.title || "Interface Overview"} desc={s.desc || "Learn how to navigate the Vision Chain wallet across desktop and mobile."} />
                 <LayoutDiagram />
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Mobile Navigation</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Mobile Navigation"}</h3>
                     <div class="space-y-2">
                         {[
                             { label: 'Hamburger Menu', desc: 'Tap the menu icon at top-left to open the sidebar with all features' },
@@ -368,11 +368,11 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     </div>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Desktop Navigation</h3>
-                    <p class="text-sm text-gray-400">On desktop, a full sidebar is always visible on the left with all feature categories. The chat input area is fixed at the bottom of the main content area with an expanded Agent Desk panel above it.</p>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_2 || "Desktop Navigation"}</h3>
+                    <p class="text-sm text-gray-400">{s.body || "On desktop, a full sidebar is always visible on the left with all feature categories. The chat input area is fixed at the bottom of the main content area with an expanded Agent Desk panel above it."}</p>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Sidebar Menu Items</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_3 || "Sidebar Menu Items"}</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                         {[
                             { n: 'Chat', d: 'AI-powered assistant for all operations' },
@@ -416,7 +416,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Tip label={L('tip')}><>The AI Chat is the default landing screen after login. You can access all wallet features through natural language commands without navigating menus.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "The AI Chat is the default landing screen after login. You can access all wallet features through natural language commands without navigating menus."}</></Tip>
             </div>
         ); }
         case 'chat-quick': { const s = getManualContent('chat-quick', locale); return (
@@ -435,7 +435,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Note label={L('note')}><>Quick Actions are configurable by administrators. The buttons shown may vary based on active campaigns and promotions.</></Note>
+                <Note label={L('note')}><>{s.note || "Quick Actions are configurable by administrators. The buttons shown may vary based on active campaigns and promotions."}</></Note>
             </div>
         ); }
         case 'chat-voice': { const s = getManualContent('chat-voice', locale); return (
@@ -446,7 +446,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Speak Clearly', desc: 'Speak your command in Korean or English. The AI will automatically detect the language.' },
                     { title: 'Review & Send', desc: 'The transcribed text appears in the input field. Review and tap send, or edit before sending.' },
                 ]} />
-                <Tip label={L('tip')}><>Voice input supports phonetic matching for contact names. You can say "Send 100 VCN to Sangkyun" and the AI will find the closest matching contact even with Korean pronunciation variations.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "Voice input supports phonetic matching for contact names. You can say \"Send 100 VCN to Sangkyun\" and the AI will find the closest matching contact even with Korean pronunciation variations."}</></Tip>
             </div>
         ); }
         case 'chat-intent': { const s = getManualContent('chat-intent', locale); return (
@@ -487,7 +487,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'chat-agent-desk': { const s = getManualContent('chat-agent-desk', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Agent Desk"} desc={s.desc || "Monitor background AI agents and batch operations from the Agent Desk panel above the chat input."} />
-                <p class="text-sm text-gray-400">The Agent Desk shows all currently active AI agents, pending transactions, and background tasks. Each agent chip displays its status, progress, and allows you to view details or dismiss completed tasks.</p>
+                <p class="text-sm text-gray-400">{s.body || "The Agent Desk shows all currently active AI agents, pending transactions, and background tasks. Each agent chip displays its status, progress, and allows you to view details or dismiss completed tasks."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { s: 'Running', d: 'Agent is actively executing actions', c: 'text-emerald-400 bg-emerald-500/10' },
@@ -506,8 +506,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'chat-tips': { const s = getManualContent('chat-tips', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Daily Tips"} desc={s.desc || "The 'Did You Know?' card on the welcome screen shows daily tips and insights about Vision Chain features."} />
-                <p class="text-sm text-gray-400">A rotating tip card appears at the top of the welcome screen. Navigate through tips using the arrow buttons. Tap "GO" to jump to the relevant feature mentioned in the tip.</p>
-                <Tip label={L('tip')}><>Daily tips are updated regularly by administrators. They cover new features, best practices, and ecosystem news.</></Tip>
+                <p class="text-sm text-gray-400">{s.body || "A rotating tip card appears at the top of the welcome screen. Navigate through tips using the arrow buttons. Tap \"GO\" to jump to the relevant feature mentioned in the tip."}</p>
+                <Tip label={L('tip')}><>{s.tip || "Daily tips are updated regularly by administrators. They cover new features, best practices, and ecosystem news."}</></Tip>
             </div>
         ); }
 
@@ -531,14 +531,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Review & Confirm', desc: 'Review the transaction details including recipient, amount, and estimated gas.' },
                     { title: 'Enter Wallet Password', desc: 'Enter your wallet password to sign and submit the transaction.' },
                 ]} />
-                <Warning label={L('warning')}><>Always double-check the recipient address before confirming. Blockchain transactions are irreversible and cannot be refunded.</></Warning>
-                <Tip label={L('tip')}><>You can also say "Send 100 VCN to John" in the AI Chat. The AI will find the matching contact and pre-fill the transaction details for you.</></Tip>
+                <Warning label={L('warning')}><>{s.warning || "Always double-check the recipient address before confirming. Blockchain transactions are irreversible and cannot be refunded."}</></Warning>
+                <Tip label={L('tip')}><>{s.tip || "You can also say \"Send 100 VCN to John\" in the AI Chat. The AI will find the matching contact and pre-fill the transaction details for you."}</></Tip>
             </div>
         ); }
         case 'send-contact': { const s = getManualContent('send-contact', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Contact-based Transfer"} desc={s.desc || "Send tokens to saved contacts by name instead of entering wallet addresses manually."} />
-                <p class="text-sm text-gray-400">When you start a send flow, your saved contacts appear for quick selection. You can search by name, and the AI Chat also supports phonetic name matching for voice commands.</p>
+                <p class="text-sm text-gray-400">{s.body || "When you start a send flow, your saved contacts appear for quick selection. You can search by name, and the AI Chat also supports phonetic name matching for voice commands."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Open Send Flow', desc: 'Start a send transaction using any method (button, chat, or quick action).' },
                     { title: 'Search Contact', desc: 'Type a name in the recipient field to filter your contacts.' },
@@ -550,8 +550,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'send-scheduled': { const s = getManualContent('send-scheduled', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Scheduled Transfer (TimeLock)"} desc={s.desc || "Schedule transfers for future execution using the TimeLock Agent."} />
-                <p class="text-sm text-gray-400">The TimeLock Agent allows you to schedule token transfers that execute automatically after a specified delay. This is useful for recurring payments, vesting schedules, or delayed transactions.</p>
-                <Note label={L('note')}><>Scheduled transfers require sufficient balance at the time of execution, not at the time of scheduling.</></Note>
+                <p class="text-sm text-gray-400">{s.body || "The TimeLock Agent allows you to schedule token transfers that execute automatically after a specified delay. This is useful for recurring payments, vesting schedules, or delayed transactions."}</p>
+                <Note label={L('note')}><>{s.note || "Scheduled transfers require sufficient balance at the time of execution, not at the time of scheduling."}</></Note>
             </div>
         ); }
         case 'send-batch': { const s = getManualContent('send-batch', locale); return (
@@ -573,7 +573,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Copy Address', desc: 'Tap the copy button to copy your wallet address to the clipboard.' },
                     { title: 'Share QR Code', desc: 'Show the QR code to the sender. They can scan it with any compatible wallet.' },
                 ]} />
-                <Tip label={L('tip')}><>Your wallet address is the same across all supported networks on Vision Chain. For receiving on other chains (Ethereum, Polygon), use the same address.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "Your wallet address is the same across all supported networks on Vision Chain. For receiving on other chains (Ethereum, Polygon), use the same address."}</></Tip>
             </div>
         ); }
 
@@ -581,7 +581,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'assets-dashboard': { const s = getManualContent('assets-dashboard', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Portfolio Dashboard"} desc={s.desc || "View your complete portfolio at a glance, including total value, token breakdown, and recent activity."} />
-                <p class="text-sm text-gray-400">The Portfolio Dashboard is your central hub for monitoring all on-chain assets. It displays your total portfolio value in USD, individual token balances, and a visual breakdown of your holdings.</p>
+                <p class="text-sm text-gray-400">{s.body || "The Portfolio Dashboard is your central hub for monitoring all on-chain assets. It displays your total portfolio value in USD, individual token balances, and a visual breakdown of your holdings."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Total Value', d: 'Combined USD value of all tokens across all chains' },
@@ -600,7 +600,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'assets-tokens': { const s = getManualContent('assets-tokens', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Token List & Balances"} desc={s.desc || "Detailed view of all tokens in your wallet with real-time pricing."} />
-                <p class="text-sm text-gray-400">Your wallet automatically detects and displays all ERC-20 tokens held in your address. The primary tokens are VCN (Vision Chain native token) and ETH (for gas on Ethereum-compatible chains).</p>
+                <p class="text-sm text-gray-400">{s.body || "Your wallet automatically detects and displays all ERC-20 tokens held in your address. The primary tokens are VCN (Vision Chain native token) and ETH (for gas on Ethereum-compatible chains)."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Token</div><div>Description</div><div>Usage</div></div>
                     {[
@@ -620,14 +620,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'assets-multichain': { const s = getManualContent('assets-multichain', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Multi-Chain Balances"} desc={s.desc || "View and manage assets across Vision Chain, Ethereum Sepolia, Polygon, and Base networks."} />
-                <p class="text-sm text-gray-400">Vision Chain Wallet supports multiple blockchain networks. Your wallet address works across all supported chains, and you can switch between them to view balances on each network.</p>
-                <Tip label={L('tip')}><>Use the Cross-Chain Bridge to move tokens between Vision Chain and Ethereum. Your wallet address remains the same across all networks.</></Tip>
+                <p class="text-sm text-gray-400">{s.body || "Vision Chain Wallet supports multiple blockchain networks. Your wallet address works across all supported chains, and you can switch between them to view balances on each network."}</p>
+                <Tip label={L('tip')}><>{s.tip || "Use the Cross-Chain Bridge to move tokens between Vision Chain and Ethereum. Your wallet address remains the same across all networks."}</></Tip>
             </div>
         ); }
         case 'assets-history': { const s = getManualContent('assets-history', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Transaction History"} desc={s.desc || "View all past transactions including sends, receives, bridge transfers, and staking operations."} />
-                <p class="text-sm text-gray-400">The transaction history shows a chronological list of all on-chain activity associated with your wallet. Each entry displays the transaction type, amount, counterparty, timestamp, and confirmation status.</p>
+                <p class="text-sm text-gray-400">{s.body || "The transaction history shows a chronological list of all on-chain activity associated with your wallet. Each entry displays the transaction type, amount, counterparty, timestamp, and confirmation status."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { s: 'Confirmed', d: 'Transaction finalized on-chain', c: 'text-emerald-400 bg-emerald-500/10' },
@@ -661,7 +661,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Warning label={L('warning')}><>Bridge transactions are cross-chain and may take several minutes. Do not close the app while a bridge transfer is in progress.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Bridge transactions are cross-chain and may take several minutes. Do not close the app while a bridge transfer is in progress."}</></Warning>
             </div>
         ); }
         case 'bridge-forward': { const s = getManualContent('bridge-forward', locale); return (
@@ -693,8 +693,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'bridge-monitor': { const s = getManualContent('bridge-monitor', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Bridge Transaction Monitoring"} desc={s.desc || "Track the status of your bridge transfers in real-time."} />
-                <p class="text-sm text-gray-400">All bridge transactions are tracked with a multi-stage progress indicator. You can view the status of each stage: submission, confirmation, TSS validation, and completion.</p>
-                <Note label={L('note')}><>Bridge transactions are processed automatically. If a bridge transfer appears stuck for more than 30 minutes, contact support with your transaction hash.</></Note>
+                <p class="text-sm text-gray-400">{s.body || "All bridge transactions are tracked with a multi-stage progress indicator. You can view the status of each stage: submission, confirmation, TSS validation, and completion."}</p>
+                <Note label={L('note')}><>{s.note || "Bridge transactions are processed automatically. If a bridge transfer appears stuck for more than 30 minutes, contact support with your transaction hash."}</></Note>
             </div>
         ); }
 
@@ -716,8 +716,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Dashboard Stats</h3>
-                <p class="text-sm text-gray-400 mb-3">When you open the Staking page, a stats bar at the top shows the following network-wide information:</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Dashboard Stats"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "When you open the Staking page, a stats bar at the top shows the following network-wide information:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Total Staked', d: 'The total amount of VCN staked across all validators network-wide' },
@@ -732,8 +732,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Your Staking Balance Panel</h3>
-                <p class="text-sm text-gray-400 mb-3">Below the stats bar, your personal staking information is displayed in an amber-highlighted panel:</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_2 || "Your Staking Balance Panel"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Below the stats bar, your personal staking information is displayed in an amber-highlighted panel:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Your VCN Balance', d: 'Available VCN in your wallet that can be staked' },
@@ -763,37 +763,37 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Transaction Processing', desc: 'After signing, the button changes to "Staking..." while the Paymaster submits the transaction on-chain. The Paymaster pays the gas fee, you pay only the 1 VCN service fee via the permit.' },
                     { title: 'Confirmation', desc: 'On success, a green success indicator appears with the transaction hash. Your "Your Staked Amount" updates, your VCN Balance decreases, and you are now an Active Validator. Rewards begin accumulating immediately.' },
                 ]} />
-                <Warning label={L('warning')}><>The minimum stake is 100 VCN. If you try to stake less, an error message appears: "Minimum stake is 100 VCN". Each staking transaction charges a 1 VCN service fee to the Paymaster.</></Warning>
-                <Tip label={L('tip')}><>After staking, your status changes to "Active Validator" and you begin earning rewards proportional to your stake. The rewards come from bridge transaction fees (1% of each bridge transfer) and the subsidy pool.</></Tip>
+                <Warning label={L('warning')}><>{s.warning || "The minimum stake is 100 VCN. If you try to stake less, an error message appears: \"Minimum stake is 100 VCN\". Each staking transaction charges a 1 VCN service fee to the Paymaster."}</></Warning>
+                <Tip label={L('tip')}><>{s.tip || "After staking, your status changes to \"Active Validator\" and you begin earning rewards proportional to your stake. The rewards come from bridge transaction fees (1% of each bridge transfer) and the subsidy pool."}</></Tip>
             </div>
         ); }
         case 'staking-rewards': { const s = getManualContent('staking-rewards', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Rewards, Unstaking & Withdrawal"} desc={s.desc || "Comprehensive guide to claiming rewards, requesting unstake, and withdrawing your tokens."} />
 
-                <h3 class="text-lg font-bold text-white mb-3">Claiming Rewards</h3>
-                <p class="text-sm text-gray-400 mb-3">Rewards accumulate continuously as long as you are an Active Validator. They are visible in the "Pending Rewards" row of your balance panel.</p>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Claiming Rewards"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Rewards accumulate continuously as long as you are an Active Validator. They are visible in the \"Pending Rewards\" row of your balance panel."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Check Pending Rewards', desc: 'Look at the "Pending Rewards" line in the amber balance panel. It shows the exact VCN amount with up to 4 decimal places, along with the current APY percentage.' },
                     { title: 'Tap "Claim"', desc: 'The green "Claim" button appears next to your pending rewards. Tap it to claim. The button is disabled (grayed out) if you have no rewards to claim.' },
                     { title: 'Transaction Processing', desc: 'The claim transaction is submitted via the Paymaster (gasless). The button shows a spinner while processing.' },
                     { title: 'Rewards Added to Balance', desc: 'On success, your VCN wallet balance increases by the claimed amount. The pending rewards counter resets to 0 and begins accumulating again immediately.' },
                 ]} />
-                <Tip label={L('tip')}><>Claiming rewards is gasless and has no fee. You can claim as often as you want, but since each claim is a transaction, it is practical to let rewards accumulate before claiming.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "Claiming rewards is gasless and has no fee. You can claim as often as you want, but since each claim is a transaction, it is practical to let rewards accumulate before claiming."}</></Tip>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Requesting Unstake</h3>
-                <p class="text-sm text-gray-400 mb-3">Unstaking is a two-step process: first you request unstake (which starts a 7-day cooldown), then you withdraw after the cooldown period.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Requesting Unstake"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Unstaking is a two-step process: first you request unstake (which starts a 7-day cooldown), then you withdraw after the cooldown period."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Switch to "Unstake" Tab', desc: 'In the staking form, tap the "Unstake" tab. The label shows your maximum unstakeable amount (e.g., "Unstake Amount (Max: 1,000 VCN)").' },
                     { title: 'Enter Unstake Amount', desc: 'Type the amount to unstake. You can tap "MAX" to unstake everything. Important: if you partially unstake, the remaining amount must be either 0 or at least 100 VCN (the minimum stake). Otherwise you will see an error: "Remaining stake would be below minimum 100 VCN."' },
                     { title: 'Tap "Request Unstake"', desc: 'Tap the amber button. The transaction is submitted via Paymaster (gasless).' },
                     { title: 'Cooldown Begins', desc: 'On success, a new "Pending Unstake" row appears in your balance panel showing the amount and a countdown timer (e.g., "7d 0h remaining"). Your staked amount decreases accordingly.' },
                 ]} />
-                <Warning label={L('warning')}><>During the 7-day cooldown period, your unstaking tokens do NOT earn rewards. You cannot cancel an unstake request. Make sure you are ready to wait before proceeding.</></Warning>
-                <Note label={L('note')}><>If you unstake your entire balance, you will no longer be an Active Validator and will stop earning rewards. You can re-stake at any time with the minimum 100 VCN.</></Note>
+                <Warning label={L('warning')}><>{s.warning || "During the 7-day cooldown period, your unstaking tokens do NOT earn rewards. You cannot cancel an unstake request. Make sure you are ready to wait before proceeding."}</></Warning>
+                <Note label={L('note')}><>{s.note || "If you unstake your entire balance, you will no longer be an Active Validator and will stop earning rewards. You can re-stake at any time with the minimum 100 VCN."}</></Note>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Withdrawing After Cooldown</h3>
-                <p class="text-sm text-gray-400 mb-3">After the 7-day cooldown period is complete, a third "Withdraw" tab appears in the staking form.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Withdrawing After Cooldown"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "After the 7-day cooldown period is complete, a third \"Withdraw\" tab appears in the staking form."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Wait for Cooldown', desc: 'Monitor the countdown timer in the "Pending Unstake" row. When it changes to "Ready to withdraw", the 7-day period is complete.' },
                     { title: 'Switch to "Withdraw" Tab', desc: 'A green "Withdraw" tab appears automatically in the form tabs when your cooldown is complete. Tap it.' },
@@ -801,8 +801,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Tokens Returned', desc: 'Your VCN balance increases by the withdrawn amount. The "Pending Unstake" row disappears. The process is complete.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Validator Table</h3>
-                <p class="text-sm text-gray-400">At the bottom of the page, a table shows the top 5 active validators with their shortened addresses and staked amounts. This gives you a sense of the network's validator distribution.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "Validator Table"}</h3>
+                <p class="text-sm text-gray-400">{s.body || "At the bottom of the page, a table shows the top 5 active validators with their shortened addresses and staked amounts. This gives you a sense of the network's validator distribution."}</p>
             </div>
         ); }
 
@@ -810,7 +810,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'agent-overview': { const s = getManualContent('agent-overview', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "What is Agent Hosting?"} desc={s.desc || "AI Agent Hosting lets you deploy autonomous AI-powered bots on Vision Chain that execute actions on your behalf -- from automated transfers to social media content generation."} />
-                <p class="text-sm text-gray-400">Each agent gets its own dedicated wallet address, API key, and VCN balance. Agents are powered by the ZYNK AI Router (DeepSeek model) and execute at intervals you configure. You earn Reward Points (RP) for creating agents.</p>
+                <p class="text-sm text-gray-400">{s.body || "Each agent gets its own dedicated wallet address, API key, and VCN balance. Agents are powered by the ZYNK AI Router (DeepSeek model) and execute at intervals you configure. You earn Reward Points (RP) for creating agents."}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: '7 On-chain Actions', d: 'Balance Monitor, Auto Transfer, Auto Stake, Conditional Unstake, Network Monitor, Staking Dashboard, and Leaderboard Tracker' },
@@ -824,8 +824,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Agent Dashboard Tabs</h3>
-                <p class="text-sm text-gray-400 mb-3">The Agent page has three tabs at the top:</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Agent Dashboard Tabs"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "The Agent page has three tabs at the top:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Overview', d: 'Shows your registered agents with status badges (Active/Paused/Setup), VCN balance, execution count, and action buttons' },
@@ -851,46 +851,46 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 ]} />
                 <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['Logged in to Vision Chain wallet', 'No existing agent (one agent per account initially)']} />
 
-                <h3 class="text-lg font-bold text-white mb-3">Step 1: Name Your Agent</h3>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Step 1: Name Your Agent"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Open Agent Hosting', desc: 'From the sidebar menu, tap "Agent" to open the Agent Hosting page.' },
                     { title: 'Click "Create Your First Agent"', desc: 'If you have no agents, the Overview tab shows an empty state with a prominent "Create Your First Agent" button. Click it.' },
                     { title: 'Enter Agent Name', desc: 'Type a unique name for your agent (e.g., "Balance Watcher", "Auto Staker"). This name is displayed on your dashboard and in logs.' },
                     { title: 'Click "Register & Continue"', desc: 'The system registers your agent via the Agent Gateway API. On success, your agent receives a dedicated wallet address and 100 VCN initial balance, and you move to Step 2.' },
                 ]} />
-                <Tip label={L('tip')}><>You earn Reward Points (RP) for creating your first agent. The amount is configured by administrators.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "You earn Reward Points (RP) for creating your first agent. The amount is configured by administrators."}</></Tip>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 2: Select Action</h3>
-                <p class="text-sm text-gray-400 mb-3">A grid of action cards appears, organized by category. Each card shows the action name, description, cost tier badge (green/amber/red), and VCN cost per execution. Select one action:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Step 2: Select Action"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "A grid of action cards appears, organized by category. Each card shows the action name, description, cost tier badge (green/amber/red), and VCN cost per execution. Select one action:"}</p>
                 <StepList steps={s.steps || [
                     { title: 'Browse Actions', desc: 'Cards are organized into "On-chain" (blue border) and "Growth" (purple border) categories. Each shows a cost badge: Read-only (green, 0.05 VCN), Medium (amber, 0.1 VCN), or Write (red, 0.5 VCN).' },
                     { title: 'Tap an Action Card', desc: 'Click any action to select it. The selected card highlights with a cyan border. A detailed description of what the agent will do appears.' },
                     { title: 'Click "Configure Action"', desc: 'Proceed to the action-specific settings screen.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 3: Configure Action Settings</h3>
-                <p class="text-sm text-gray-400 mb-3">Each action has its own set of configuration fields. For example, "Auto Transfer" has: Recipient Address, Amount per Transfer, Daily Limit, Transfer Condition, and Minimum Balance to Keep. Fill in each field according to your requirements.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Step 3: Configure Action Settings"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Each action has its own set of configuration fields. For example, \"Auto Transfer\" has: Recipient Address, Amount per Transfer, Daily Limit, Transfer Condition, and Minimum Balance to Keep. Fill in each field according to your requirements."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Fill Settings Fields', desc: 'Each field has a label, description, and helper text. Numeric fields show min/max ranges and units. Select fields offer dropdown options. Toggle fields are on/off switches.' },
                     { title: 'Review System Prompt', desc: 'A pre-filled system prompt appears at the bottom based on your selected action. You can edit this to customize the agent behavior further.' },
                     { title: 'Click "Set Schedule"', desc: 'Move to the final step to choose execution frequency.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 4: Schedule & Deploy</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "Step 4: Schedule & Deploy"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Choose Execution Interval', desc: 'Select from 4 options: Every 5 min, Every 30 min, Every hour, or Once daily. Each shows estimated monthly VCN cost.' },
                     { title: 'Set Max VCN Per Action', desc: 'Set the maximum VCN the agent can spend in a single execution (safety limit). Default is 5 VCN.' },
                     { title: 'Review Monthly Cost Estimate', desc: 'A summary shows your estimated monthly VCN cost based on interval and action cost tier.' },
                     { title: 'Click "Deploy Agent"', desc: 'The system saves your configuration and activates the agent. It immediately begins executing at your chosen interval.' },
                 ]} />
-                <Warning label={L('warning')}><>Agents spend real VCN from their dedicated wallet. Start with conservative settings (longer intervals, lower limits) and monitor the execution logs before increasing frequency or budgets.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Agents spend real VCN from their dedicated wallet. Start with conservative settings (longer intervals, lower limits) and monitor the execution logs before increasing frequency or budgets."}</></Warning>
             </div>
         ); }
         case 'agent-actions': { const s = getManualContent('agent-actions', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Available Action Types"} desc={s.desc || "Complete reference of all 12 agent actions with their costs, settings, and use cases."} />
 
-                <h3 class="text-lg font-bold text-cyan-400 mb-3">On-chain Actions (7)</h3>
+                <h3 class="text-lg font-bold text-cyan-400 mb-3">{s.h3_1 || "On-chain Actions (7)"}</h3>
                 <div class="space-y-3">
                     {[
                         { n: 'Balance Monitor', cost: '0.05 VCN (Read)', d: 'Watches your agent wallet balance and alerts when it drops below a threshold. Settings: Alert Threshold (VCN amount), Alert Method (Log or Webhook).' },
@@ -911,7 +911,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-purple-400 mt-8 mb-3">Growth Actions (5)</h3>
+                <h3 class="text-lg font-bold text-purple-400 mt-8 mb-3">{s.h3_2 || "Growth Actions (5)"}</h3>
                 <div class="space-y-3">
                     {[
                         { n: 'Referral Outreach', cost: '0.1 VCN (Medium)', d: 'Generates and distributes referral link content for selected channels. Settings: Target Channels (Twitter, Telegram, Discord, Email), Custom Message template, Max Outreach per Day.' },
@@ -934,7 +934,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'agent-manage': { const s = getManualContent('agent-manage', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Managing Your Agent"} desc={s.desc || "Detailed guide to the agent Overview dashboard -- monitoring status, toggling, and deleting agents."} />
-                <p class="text-sm text-gray-400 mb-3">The Overview tab shows each registered agent as a card with the following information:</p>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "The Overview tab shows each registered agent as a card with the following information:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Agent Name', d: 'Your agent name with a status badge (Active = green pulse, Paused = amber, Setup = gray)' },
@@ -952,20 +952,20 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Agent Controls</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Agent Controls"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Pause / Resume', desc: 'Tap the Play/Pause button on the agent card. When paused, the agent stops executing but retains its configuration and balance. Resume to start executing again at the configured interval.' },
                     { title: 'Delete Agent', desc: 'Tap the trash icon. A confirmation dialog appears: "Are you sure? This will permanently delete the agent and cannot be undone." Tap "Delete" to confirm. The agent is removed, its API key is invalidated, and your local storage is cleared.' },
                     { title: 'Top Up Balance', desc: 'Transfer VCN to the agent wallet address shown on the card. The agent needs VCN to pay for executions. If balance reaches zero, the agent status changes to "insufficient_balance".' },
                 ]} />
-                <Warning label={L('warning')}><>Deleting an agent is permanent and cannot be undone. Any remaining VCN in the agent wallet should be transferred out before deletion. The API key becomes immediately invalid.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Deleting an agent is permanent and cannot be undone. Any remaining VCN in the agent wallet should be transferred out before deletion. The API key becomes immediately invalid."}</></Warning>
             </div>
         ); }
         case 'agent-logs': { const s = getManualContent('agent-logs', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Execution Logs & Monitoring"} desc={s.desc || "Understand your agent's activity through detailed execution logs."} />
-                <p class="text-sm text-gray-400 mb-3">Switch to the "Logs" tab on the Agent page to view the execution history. Logs are loaded from the Agent Gateway API and show the last 50 executions.</p>
-                <h3 class="text-lg font-bold text-white mb-3">Log Entry Fields</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Switch to the \"Logs\" tab on the Agent page to view the execution history. Logs are loaded from the Agent Gateway API and show the last 50 executions."}</p>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Log Entry Fields"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Timestamp', d: 'Date and time of execution in your local timezone' },
@@ -981,14 +981,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Monitoring Best Practices</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_2 || "Monitoring Best Practices"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Check Logs After First Execution', desc: 'After deploying, wait for the first execution interval and check logs to confirm the agent is working correctly.' },
                     { title: 'Watch for Error Patterns', desc: 'If you see repeated errors (red X), the agent may have misconfigured settings or insufficient balance. Review the error message for details.' },
                     { title: 'Monitor VCN Burn Rate', desc: 'Compare "Total VCN Spent" against your budget expectations. Adjust interval frequency if spending is too high.' },
                     { title: 'Review Generated Content', desc: 'For Growth actions (Social Promotion, Content Creator), review the generated content in log results to ensure quality and accuracy before sharing.' },
                 ]} />
-                <Tip label={L('tip')}><>If your agent shows "insufficient_balance" status, it means the agent wallet ran out of VCN. Transfer more VCN to the agent wallet address and resume the agent.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "If your agent shows \"insufficient_balance\" status, it means the agent wallet ran out of VCN. Transfer more VCN to the agent wallet address and resume the agent."}</></Tip>
             </div>
         ); }
 
@@ -996,8 +996,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'insight-overview': { const s = getManualContent('insight-overview', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Vision Insight Dashboard"} desc={s.desc || "AI-curated market intelligence powered by Gemini AI, aggregating news from 10+ sources with real-time sentiment analysis."} />
-                <p class="text-sm text-gray-400">Vision Insight collects crypto news every 2 hours from sources like CoinDesk, CoinTelegraph, Bitcoin Magazine, Decrypt, The Block, and Korean outlets (Decenter, BlockMedia). Each article is analyzed by Gemini AI for sentiment, impact score, and category.</p>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Dashboard Components</h3>
+                <p class="text-sm text-gray-400">{s.body || "Vision Insight collects crypto news every 2 hours from sources like CoinDesk, CoinTelegraph, Bitcoin Magazine, Decrypt, The Block, and Korean outlets (Decenter, BlockMedia). Each article is analyzed by Gemini AI for sentiment, impact score, and category."}</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Dashboard Components"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Agent Sentiment Index (ASI)', d: 'A 0-100 gauge showing overall market sentiment. Colors range from red (bearish, 0-25) through amber (neutral, 45-60) to green (bullish, 75-100). Updated with each data refresh.' },
@@ -1015,7 +1015,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Tip label={L('tip')}><>Tap the "API" button in the top-right corner to toggle Agent Data Stream view, which shows the raw JSON data that AI agents can consume programmatically.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "Tap the \"API\" button in the top-right corner to toggle Agent Data Stream view, which shows the raw JSON data that AI agents can consume programmatically."}</></Tip>
             </div>
         ); }
         case 'insight-news': { const s = getManualContent('insight-news', locale); return (
@@ -1029,13 +1029,13 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Open Full Article', desc: 'Tap any article card to open the full article in a new browser tab. The link goes to the original source.' },
                     { title: 'Check Trending & Calendar', desc: 'Scroll down to see Trending Keywords (purple tags) and Macro Calendar (upcoming economic events with D-countdown and impact severity).' },
                 ]} />
-                <Note label={L('note')}><>Articles are collected every 2 hours. If a category shows "No articles in this category yet", data collection is still in progress. The "Last updated" timestamp at the bottom shows when data was last refreshed.</></Note>
+                <Note label={L('note')}><>{s.note || "Articles are collected every 2 hours. If a category shows \"No articles in this category yet\", data collection is still in progress. The \"Last updated\" timestamp at the bottom shows when data was last refreshed."}</></Note>
             </div>
         ); }
         case 'insight-signals': { const s = getManualContent('insight-signals', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "AI Market Brief & Trading Signals"} desc={s.desc || "Understanding the Gemini AI-generated market analysis and trading signals."} />
-                <p class="text-sm text-gray-400 mb-3">The AI Market Brief is the centerpiece of Vision Insight. It is generated by Gemini AI analyzing all collected articles and market data.</p>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "The AI Market Brief is the centerpiece of Vision Insight. It is generated by Gemini AI analyzing all collected articles and market data."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Trading Bias', d: 'LONG (green, bullish), SHORT (red, bearish), or NEUTRAL (amber). Shown with confidence percentage.' },
@@ -1050,7 +1050,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Warning label={L('warning')}><>The AI Market Brief and trading signals are for informational purposes only and do not constitute financial advice. Always do your own research before making investment decisions. Past AI analysis accuracy does not guarantee future results.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "The AI Market Brief and trading signals are for informational purposes only and do not constitute financial advice. Always do your own research before making investment decisions. Past AI analysis accuracy does not guarantee future results."}</></Warning>
             </div>
         ); }
 
@@ -1067,7 +1067,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     'PC or desktop browser recommended for initial API key setup on most exchanges',
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Step-by-Step Connection Guide</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Step-by-Step Connection Guide"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Navigate to Quant', desc: 'Open the sidebar menu and tap "Quant". If you have no exchanges connected yet, you will see the empty state with quick-connect cards for Upbit and Binance.' },
                     { title: 'Open the "Add Exchange" Modal', desc: 'Tap the "+" button in the header (or one of the quick-connect exchange cards). A modal will appear showing all 15 supported exchanges arranged in a 3-column grid.' },
@@ -1079,7 +1079,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Click "Connect"', desc: 'The system sends a test API call to verify your credentials. If successful, your exchange will appear in the connected exchanges list and portfolio data will sync automatically within a few seconds.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">API Authentication Types</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_2 || "API Authentication Types"}</h3>
                 <div class="space-y-3">
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                         <h4 class="text-sm font-bold text-white mb-2">2-Field Authentication (API Key + Secret)</h4>
@@ -1093,8 +1093,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     </div>
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelist Setup</h3>
-                <p class="text-sm text-gray-400 mb-3">Most exchanges require (or strongly recommend) restricting API access to specific IP addresses. Vision Chain provides a static server IP for this purpose.</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_3 || "IP Whitelist Setup"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Most exchanges require (or strongly recommend) restricting API access to specific IP addresses. Vision Chain provides a static server IP for this purpose."}</p>
                 <StepList steps={s.steps || [
                     { title: 'View the Server IP', desc: 'Tap the "?" help icon on the Quant page. The IP Setup Guide modal will display the static server IP address prominently at the top.' },
                     { title: 'Copy the IP Address', desc: 'Tap the "Copy" button next to the IP address. The IP will be copied to your clipboard.' },
@@ -1102,9 +1102,9 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Verify Connection', desc: 'Return to Vision Chain and connect your exchange. If the IP is correctly whitelisted, the verification test will succeed immediately.' },
                 ]} />
 
-                <Warning label={L('warning')}><>Only use read-only API keys. Never enable trading, withdrawal, or transfer permissions. Vision Chain only reads balance and ticker data. Never executes trades or withdrawals on your behalf. Your funds remain fully under your control at all times.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Only use read-only API keys. Never enable trading, withdrawal, or transfer permissions. Vision Chain only reads balance and ticker data. Never executes trades or withdrawals on your behalf. Your funds remain fully under your control at all times."}</></Warning>
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Troubleshooting</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_4 || "Troubleshooting"}</h3>
                 <div class="space-y-3">
                     {[
                         { q: 'Connection fails with "Invalid API Key"', a: 'Double-check that you copied the full API Key and Secret Key without trailing spaces. Some exchanges display keys in multiple lines -- make sure you copy the complete string.' },
@@ -1125,7 +1125,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 <SectionHeader title={s.title || "Supported Exchanges"} desc={s.desc || "Vision Chain supports 15 centralized exchanges across Korea, Japan, USA, and global markets. Each exchange uses read-only API access for portfolio tracking."} />
 
                 {/* Full Exchange Compatibility Table */}
-                <h3 class="text-lg font-bold text-white mb-3">Exchange Compatibility Matrix</h3>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Exchange Compatibility Matrix"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-12 gap-2 px-5 py-3 border-b border-white/[0.06] text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                         <div class="col-span-3">Exchange</div>
@@ -1162,7 +1162,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 </div>
 
                 {/* Regional Breakdown */}
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Exchange Details by Region</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Exchange Details by Region"}</h3>
 
                 {/* Korean Exchanges */}
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5 space-y-4">
@@ -1229,7 +1229,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 </div>
 
                 {/* Multi-Currency Conversion */}
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Multi-Currency Conversion Engine</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Multi-Currency Conversion Engine"}</h3>
                 <p class="text-sm text-gray-400 mb-4">All portfolio values are automatically converted to KRW and USD using real-time exchange rates fetched from CoinGecko. The conversion pipeline works as follows:</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -1245,16 +1245,16 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Tip label={L('tip')}><>You can connect multiple exchanges simultaneously. Assets with the same symbol from different exchanges are aggregated into a single row with source exchange badges. The toggle switch at the top lets you view values in either KRW or USD.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "You can connect multiple exchanges simultaneously. Assets with the same symbol from different exchanges are aggregated into a single row with source exchange badges. The toggle switch at the top lets you view values in either KRW or USD."}</></Tip>
             </div>
         ); }
         case 'cex-portfolio': { const s = getManualContent('cex-portfolio', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Portfolio Overview"} desc={s.desc || "A unified view of all your crypto holdings across connected exchanges, with real-time valuation, charts, and P&L tracking."} />
 
-                <p class="text-sm text-gray-400 mb-3">After connecting at least one exchange, you will see the Portfolio dashboard as the default view. The page is organized into three main sections: Summary Cards, Asset Allocation Chart, and Asset List.</p>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "After connecting at least one exchange, you will see the Portfolio dashboard as the default view. The page is organized into three main sections: Summary Cards, Asset Allocation Chart, and Asset List."}</p>
 
-                <h3 class="text-lg font-bold text-white mt-4 mb-3">Dashboard Layout</h3>
+                <h3 class="text-lg font-bold text-white mt-4 mb-3">{s.h3_1 || "Dashboard Layout"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Tab Navigation', d: 'At the top of the page, two tabs are available: "Portfolio" (default, showing your assets) and "Quant" (BETA, for strategy trading). The Portfolio tab is active by default.' },
@@ -1273,8 +1273,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Syncing Portfolio Data</h3>
-                <p class="text-sm text-gray-400 mb-3">Portfolio data is fetched from each exchange via their official REST APIs through our Cloud Functions server. Here is how the sync process works:</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_2 || "Syncing Portfolio Data"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Portfolio data is fetched from each exchange via their official REST APIs through our Cloud Functions server. Here is how the sync process works:"}</p>
                 <StepList steps={s.steps || [
                     { title: 'Manual Sync', desc: 'Tap the "Sync" button (refresh icon) at the top-right of the page. The system calls each connected exchange\'s API in parallel to fetch latest balances and ticker data. A loading spinner shows while syncing.' },
                     { title: 'Data Processing', desc: 'For each exchange, the server fetches: (1) Account balances for all coins, (2) Current ticker prices for all held assets, (3) Average buy prices where available. Values are then converted to KRW using the multi-currency conversion engine.' },
@@ -1282,7 +1282,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Last Synced Timestamp', desc: 'The "Last synced" text at the bottom of the page shows the exact time of the most recent successful sync. This helps you know how fresh the data is.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Managing Connected Exchanges</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_3 || "Managing Connected Exchanges"}</h3>
                 <div class="space-y-3">
                     {[
                         { n: 'Adding More Exchanges', d: 'You can connect up to 15 different exchanges (and multiple accounts on the same exchange). Each connection is independent with its own API credentials.' },
@@ -1297,22 +1297,22 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <Tip label={L('tip')}><>Sync your portfolio regularly, especially before and after major trades. Portfolio snapshots are compared to calculate P&L, so more frequent syncs give more accurate performance tracking. Exchange rate data is cached for 5 minutes to minimize external API calls.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "Sync your portfolio regularly, especially before and after major trades. Portfolio snapshots are compared to calculate P&L, so more frequent syncs give more accurate performance tracking. Exchange rate data is cached for 5 minutes to minimize external API calls."}</></Tip>
             </div>
         ); }
         case 'cex-quant': { const s = getManualContent('cex-quant', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Quant Engine - Strategy Settings"} desc={s.desc || "Configure and deploy automated trading strategies on your connected exchanges. The Quant Engine provides 6 research-backed strategy templates with full parameter control."} />
-                <Note label={L('note')}><>Quant Engine is currently in BETA. Connect at least one exchange via the Quant page to access Quant features. Access it by switching to the "Quant" tab.</></Note>
+                <Note label={L('note')}><>{s.note || "Quant Engine is currently in BETA. Connect at least one exchange via the Quant page to access Quant features. Access it by switching to the \"Quant\" tab."}</></Note>
 
-                <h3 class="text-lg font-bold text-white mt-4 mb-3">How to Access</h3>
+                <h3 class="text-lg font-bold text-white mt-4 mb-3">{s.h3_1 || "How to Access"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Open Quant', desc: 'Navigate to Quant from the sidebar. You must have at least one exchange connected.' },
                     { title: 'Switch to Quant Tab', desc: 'At the top of the page, tap the "Quant" tab (with the BETA badge). The tab navigation shows "Portfolio" and "Quant" side by side.' },
                     { title: 'Browse Strategy Templates', desc: 'The Quant Engine displays 6 pre-built strategy template cards. Each card shows the strategy name, category, risk level, recommended assets, and 30-day average return.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Available Strategy Templates (6 Modules)</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Available Strategy Templates (6 Modules)"}</h3>
                 <p class="text-sm text-gray-400 mb-4">Each strategy is designed for explainability, controllability, and risk engine compatibility. Below are the details for all 6 built-in strategies:</p>
 
                 {/* Strategy 1 */}
@@ -1424,8 +1424,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 </div>
 
                 {/* Parameter Configuration */}
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Configuring Strategy Parameters</h3>
-                <p class="text-sm text-gray-400 mb-3">Each strategy has tunable parameters organized into 4 groups. You can adjust these when deploying or editing a strategy agent:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Configuring Strategy Parameters"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Each strategy has tunable parameters organized into 4 groups. You can adjust these when deploying or editing a strategy agent:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Entry Parameters', d: 'Control when a trade is opened: EMA periods, RSI thresholds, Bollinger lengths, Donchian periods. Higher values = fewer but more reliable signals.' },
@@ -1441,7 +1441,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 </div>
 
                 {/* Agent Deployment */}
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Deploying a Quant Agent</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "Deploying a Quant Agent"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Select a Strategy', desc: 'Tap on any strategy card to view its full details including entry/exit rules, risk parameters, recommended assets, and historical performance.' },
                     { title: 'Choose Target Assets', desc: 'Select which trading pairs to apply the strategy to (e.g., KRW-BTC, KRW-ETH). You can select multiple assets. The recommended assets for each strategy are pre-highlighted.' },
@@ -1450,15 +1450,15 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Monitor Active Agents', desc: 'View all running agents in the Quant dashboard. Each agent shows: current status (active/paused), cumulative P&L, number of signals generated, and last signal time.' },
                 ]} />
 
-                <Warning label={L('warning')}><>Quant strategies involve market risk. Past performance and 30-day average returns shown on strategy cards do not guarantee future results. The Volatility Target Overlay (Module 6) is applied by default to protect against extreme drawdowns. Always start with conservative parameter settings and small position sizes.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Quant strategies involve market risk. Past performance and 30-day average returns shown on strategy cards do not guarantee future results. The Volatility Target Overlay (Module 6) is applied by default to protect against extreme drawdowns. Always start with conservative parameter settings and small position sizes."}</></Warning>
             </div>
         ); }
         case 'cex-security': { const s = getManualContent('cex-security', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Security & IP Whitelist"} desc={s.desc || "How your exchange API credentials are protected, the data flow architecture, and best practices for secure API usage."} />
 
-                <h3 class="text-lg font-bold text-white mb-3">Data Flow Architecture</h3>
-                <p class="text-sm text-gray-400 mb-3">Understanding how your API credentials are handled at each stage:</p>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Data Flow Architecture"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Understanding how your API credentials are handled at each stage:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Step 1: Registration', d: 'When you enter API credentials, they are sent over HTTPS to our Cloud Function endpoint. The Secret Key and Passphrase are immediately encrypted using AES-256 before storage.' },
@@ -1473,14 +1473,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">IP Whitelisting Explained</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_2 || "IP Whitelisting Explained"}</h3>
                 <div class="bg-[#0a0a12] border border-cyan-500/10 rounded-xl p-5 space-y-3">
                     <p class="text-xs text-gray-400 leading-relaxed">IP whitelisting is the most important security measure for API key protection. When you restrict your API key to our server's static IP address, only our server can make API calls using your credentials. Even if someone obtains your API Key and Secret Key, they cannot use them from any other IP address.</p>
                     <p class="text-xs text-gray-400 leading-relaxed">Vision Chain operates from a single static IP address for all exchange API calls. This address is displayed in the "IP Setup Guide" modal (tap the "?" icon on the Quant page). The IP is permanent and does not change.</p>
                     <p class="text-xs text-gray-400 leading-relaxed">Some exchanges (like Upbit) require IP whitelisting as mandatory. Others (like Binance) strongly recommend it but allow unrestricted access. We recommend always enabling IP restriction regardless of whether the exchange requires it.</p>
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Frequently Asked Questions</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_3 || "Frequently Asked Questions"}</h3>
                 <div class="space-y-3">
                     {[
                         { q: 'How are my API keys stored?', a: 'API credentials are encrypted using AES-256 and stored in Firebase Firestore. The Secret Key is never displayed in full after initial entry -- it is partially masked with asterisks. The encryption key is managed by Google Cloud KMS and is not accessible to application code.' },
@@ -1499,7 +1499,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Security Best Practices Checklist</h3>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_4 || "Security Best Practices Checklist"}</h3>
                 <div class="bg-[#0a0a12] border border-green-500/10 rounded-xl p-5">
                     {[
                         'Always use read-only API keys -- never enable trading or withdrawal permissions',
@@ -1524,7 +1524,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'disk-overview': { const s = getManualContent('disk-overview', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Vision Disk - Encrypted Cloud Storage"} desc={s.desc || "Store, share, and manage files with end-to-end encryption powered by your wallet private key and EIP-2612 gasless payments."} />
-                <p class="text-sm text-gray-400">Vision Disk encrypts files locally in your browser using AES-GCM with a key derived from your wallet private key. Encrypted data is stored on Vision Cloud, and file metadata is anchored on-chain. Only you can decrypt your files.</p>
+                <p class="text-sm text-gray-400">{s.body || "Vision Disk encrypts files locally in your browser using AES-GCM with a key derived from your wallet private key. Encrypted data is stored on Vision Cloud, and file metadata is anchored on-chain. Only you can decrypt your files."}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'AES-GCM Encryption', d: 'Files are encrypted client-side before upload using AES-256-GCM. The encryption key is derived from your passphrase, so only you can decrypt.' },
@@ -1540,40 +1540,40 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Note label={L('note')}><>Your wallet must be unlocked (password entered) to upload or download files, since encryption/decryption requires your private key.</></Note>
+                <Note label={L('note')}><>{s.note || "Your wallet must be unlocked (password entered) to upload or download files, since encryption/decryption requires your private key."}</></Note>
             </div>
         ); }
         case 'disk-upload': { const s = getManualContent('disk-upload', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Uploading & Downloading Files"} desc={s.desc || "Step-by-step guide to uploading encrypted files and downloading them on any device."} />
                 <Prerequisites label={L('prerequisites')} items={s.prerequisites || ['Active Disk subscription (or free tier)', 'Wallet unlocked with password', 'Sufficient storage quota remaining']} />
-                <h3 class="text-lg font-bold text-white mb-3">Uploading Files</h3>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Uploading Files"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Open Vision Disk', desc: 'From the sidebar menu, tap "Disk". Your file browser loads showing current folder contents.' },
                     { title: 'Drag & Drop or Click Upload', desc: 'Either drag files onto the upload zone (dashed border area) or click the upload area and select files from the file picker. Multiple files can be uploaded at once.' },
                     { title: 'Encryption & Upload Progress', desc: 'Each file is encrypted locally with AES-GCM, then uploaded to Vision Cloud. A progress bar shows the upload status for each file.' },
                     { title: 'Verify Upload', desc: 'Once complete, the file appears in your current folder with its name, size, type icon, and upload timestamp.' },
                 ]} />
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Downloading Files</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Downloading Files"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Locate the File', desc: 'Navigate to the folder containing the file you want to download.' },
                     { title: 'Click the Download Button', desc: 'Right-click (or long-press on mobile) and select "Download" from the context menu. Or click the download icon.' },
                     { title: 'Decryption & Download', desc: 'The encrypted file is fetched from Vision Cloud, decrypted locally using your private key, and saved to your device as the original file.' },
                 ]} />
-                <Tip label={L('tip')}><>You earn +3 RP for each file upload and +1 RP for each download. Uploads trigger gasless VCN transactions if your subscription includes on-chain metadata anchoring.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "You earn +3 RP for each file upload and +1 RP for each download. Uploads trigger gasless VCN transactions if your subscription includes on-chain metadata anchoring."}</></Tip>
             </div>
         ); }
         case 'disk-folders': { const s = getManualContent('disk-folders', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Folder & File Management"} desc={s.desc || "Complete guide to organizing files with folders, batch operations, and context menus."} />
-                <h3 class="text-lg font-bold text-white mb-3">Create Folders</h3>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Create Folders"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Click "New Folder"', desc: 'Tap the "New Folder" button in the toolbar. A dialog asks for the folder name.' },
                     { title: 'Enter Folder Name', desc: 'Type a name and click "Create". The folder appears in your current directory.' },
                     { title: 'Navigate Into Folder', desc: 'Click on a folder to open it. Breadcrumbs at the top show your current path (e.g., "Home / Documents / Projects").' },
                 ]} />
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">File Context Menu</h3>
-                <p class="text-sm text-gray-400 mb-3">Right-click any file or folder (long-press on mobile) to open the context menu with these options:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "File Context Menu"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Right-click any file or folder (long-press on mobile) to open the context menu with these options:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Download', d: 'Decrypt and save the file to your device' },
@@ -1589,7 +1589,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Batch Operations</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Batch Operations"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Select Multiple Files', desc: 'Click the checkbox on each file/folder you want to select. A selection bar appears at the top showing count.' },
                     { title: 'Batch Move', desc: 'Click "Move" to move all selected items to a target folder.' },
@@ -1601,7 +1601,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'disk-share': { const s = getManualContent('disk-share', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Sharing & Publishing Files"} desc={s.desc || "Share files with specific users or make them publicly accessible. Encrypted files can be shared with passwords automatically delivered to recipients."} />
-                <h3 class="text-lg font-bold text-white mb-3">Publishing a File (Public Link)</h3>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Publishing a File (Public Link)"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Right-Click the File', desc: 'Open the context menu on the file you want to share.' },
                     { title: 'Select "Publish"', desc: 'The file is marked as public. A globe icon appears next to the filename, and a public URL is generated.' },
@@ -1610,7 +1610,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                 ]} />
                 <p class="text-sm text-gray-400 mt-4">Published files are indicated by a green globe icon and "Public" badge. The public link format is: <code class="text-cyan-400 text-xs">https://api.visionchain.co/disk/public/[fileId]</code></p>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Sharing with Specific Users</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Sharing with Specific Users"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Open Share Modal', desc: 'Right-click a file and select "Share", or click the share icon. The share modal opens showing your contacts.' },
                     { title: 'Search for Recipient', desc: 'Type a name or email to filter contacts. The list shows matching users registered on Vision Chain.' },
@@ -1618,8 +1618,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Share Executed', desc: 'Click "Share" to confirm. A success screen shows "sharing complete" with auto-close after 2 seconds. The recipient receives an email and in-app notification.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Encrypted File Sharing</h3>
-                <p class="text-sm text-gray-400 mb-3">When sharing an encrypted file, the encryption password is automatically included with the share. The recipient can open the file without needing to know the password separately.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Encrypted File Sharing"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "When sharing an encrypted file, the encryption password is automatically included with the share. The recipient can open the file without needing to know the password separately."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Password Auto-Delivery', d: 'The encryption password is securely stored in the share record and delivered to the recipient automatically' },
@@ -1633,21 +1633,21 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Viewing Shared Files</h3>
-                <p class="text-sm text-gray-400 mb-3">Files shared with you appear in the "Shared" tab of Vision Disk.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "Viewing Shared Files"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Files shared with you appear in the \"Shared\" tab of Vision Disk."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Open Shared Tab', desc: 'In Vision Disk, switch to the "Shared" tab to see files others have shared with you.' },
                     { title: 'View File Details', desc: 'Each shared file shows the sender\'s name, share date, and file type. Click the eye icon to preview.' },
                     { title: 'Auto-Decryption', desc: 'If the shared file is encrypted and the sender included the password, it automatically decrypts when you open it.' },
                 ]} />
-                <Warning label={L('warning')}><>Published files are accessible to anyone with the link. Only publish files you intend to share publicly. For private sharing, use the contact-based sharing method instead.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Published files are accessible to anyone with the link. Only publish files you intend to share publicly. For private sharing, use the contact-based sharing method instead."}</></Warning>
             </div>
         ); }
         case 'disk-encryption': { const s = getManualContent('disk-encryption', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Encryption & Passkey (Biometric)"} desc={s.desc || "Vision Disk uses AES-GCM encryption to protect your files. Passkey integration allows you to unlock encrypted files with fingerprint or Face ID instead of typing passwords."} />
 
-                <h3 class="text-lg font-bold text-white mb-3">How Encryption Works</h3>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "How Encryption Works"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Algorithm', d: 'AES-256-GCM (Advanced Encryption Standard, Galois/Counter Mode)' },
@@ -1662,8 +1662,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Passkey (Biometric Authentication)</h3>
-                <p class="text-sm text-gray-400 mb-3">On devices with fingerprint or Face ID, you can save your encryption password with biometric authentication for quick unlock.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Passkey (Biometric Authentication)"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "On devices with fingerprint or Face ID, you can save your encryption password with biometric authentication for quick unlock."}</p>
                 <StepList steps={s.steps || [
                     { title: 'Enter Password', desc: 'The first time you access an encrypted file, you enter your encryption password manually in the password modal.' },
                     { title: 'Save with Biometrics', desc: 'After entering the password, a prompt asks: "Save this password with biometrics (fingerprint/Face ID) for quick unlock next time?" Tap "OK" to register.' },
@@ -1671,19 +1671,19 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Quick Unlock', desc: 'Next time the password modal appears, an "Unlock with Biometrics" button is shown at the top. Tap it and verify with fingerprint/Face ID to instantly unlock.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Devices Without Biometrics</h3>
-                <p class="text-sm text-gray-400">Older smartphones without fingerprint or Face ID sensors will not see the biometric option. On these devices, you must enter the encryption password manually each time you access encrypted files. The "Unlock with Biometrics" button only appears on devices that support WebAuthn platform authentication.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Devices Without Biometrics"}</h3>
+                <p class="text-sm text-gray-400">{s.body || "Older smartphones without fingerprint or Face ID sensors will not see the biometric option. On these devices, you must enter the encryption password manually each time you access encrypted files. The \"Unlock with Biometrics\" button only appears on devices that support WebAuthn platform authentication."}</p>
 
-                <Tip label={L('tip')}><>Your passkey is stored locally on your device only. If you switch devices, you will need to enter the password manually once and register a new passkey on the new device.</></Tip>
-                <Warning label={L('warning')}><>If you forget your encryption password and don't have a passkey saved, your encrypted files cannot be recovered. Vision Chain does not have access to your password.</></Warning>
+                <Tip label={L('tip')}><>{s.tip || "Your passkey is stored locally on your device only. If you switch devices, you will need to enter the password manually once and register a new passkey on the new device."}</></Tip>
+                <Warning label={L('warning')}><>{s.warning || "If you forget your encryption password and don't have a passkey saved, your encrypted files cannot be recovered. Vision Chain does not have access to your password."}</></Warning>
             </div>
         ); }
         case 'disk-ai-memory': { const s = getManualContent('disk-ai-memory', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "AI Memory & Indexing"} desc={s.desc || "Vision Disk serves as a persistent memory layer for AI. Every uploaded file is enriched with structured metadata, enabling AI models to search, retrieve, and reason over your personal data."} />
 
-                <h3 class="text-lg font-bold text-white mb-3">Why Disk as AI Memory?</h3>
-                <p class="text-sm text-gray-400 mb-3">Traditional cloud storage stores files as opaque blobs. Vision Disk goes further by treating every file as a structured knowledge unit that AI can understand, index, and retrieve. This enables your chatbot to find documents, answer questions from your files, and share them intelligently.</p>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Why Disk as AI Memory?"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Traditional cloud storage stores files as opaque blobs. Vision Disk goes further by treating every file as a structured knowledge unit that AI can understand, index, and retrieve. This enables your chatbot to find documents, answer questions from your files, and share them intelligently."}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'Structured Metadata', d: 'Each file has language, source type, tags, abstract, and content hash -- not just a filename and size' },
@@ -1698,8 +1698,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">AI Storage Data Structure</h3>
-                <p class="text-sm text-gray-400 mb-3">Each file in Vision Disk carries the following AI-specific metadata fields that extend the standard file properties:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "AI Storage Data Structure"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Each file in Vision Disk carries the following AI-specific metadata fields that extend the standard file properties:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-[1fr_1fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
                         <div>Field</div><div>Type</div><div>Description</div>
@@ -1726,8 +1726,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Indexing Pipeline</h3>
-                <p class="text-sm text-gray-400 mb-3">When a file is uploaded, it enters an indexing pipeline that prepares it for AI retrieval:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Indexing Pipeline"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "When a file is uploaded, it enters an indexing pipeline that prepares it for AI retrieval:"}</p>
                 <StepList steps={s.steps || [
                     { title: 'Upload & Metadata Extraction', desc: 'File is uploaded and basic metadata is extracted: size, type, MIME type. Language is auto-detected from filename and content.' },
                     { title: 'Source Type Classification', desc: 'The file is classified based on MIME type: documents (PDF, DOCX), images (JPG, PNG), audio (MP3, WAV), video (MP4), code files, data files (CSV, JSON), or chat logs.' },
@@ -1738,7 +1738,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Memory Eligibility Check', desc: 'Files with extractable text content are marked as memory-eligible, making them available for AI retrieval and chatbot context.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">How AI Uses Your Files</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "How AI Uses Your Files"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Chatbot File Search', d: 'The AI chatbot searches files by name, tags, abstract, and folder to help you find and share documents' },
@@ -1753,16 +1753,16 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <Tip label={L('tip')}><>Files with sourceType "document", "code", or "data" are automatically marked as memory-eligible. Image and video files become eligible only if text extraction (OCR/transcript) is successful.</></Tip>
-                <Note label={L('note')}><>The indexing pipeline runs asynchronously after upload. You can check a file's indexing status in its metadata. Most files are indexed within seconds.</></Note>
+                <Tip label={L('tip')}><>{s.tip || "Files with sourceType \"document\", \"code\", or \"data\" are automatically marked as memory-eligible. Image and video files become eligible only if text extraction (OCR/transcript) is successful."}</></Tip>
+                <Note label={L('note')}><>{s.note || "The indexing pipeline runs asynchronously after upload. You can check a file's indexing status in its metadata. Most files are indexed within seconds."}</></Note>
             </div>
         ); }
         case 'disk-chatbot': { const s = getManualContent('disk-chatbot', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "AI Chat File Sharing"} desc={s.desc || "Use the AI chatbot to search your Disk files and share them with other users through natural language commands."} />
 
-                <h3 class="text-lg font-bold text-white mb-3">Searching Files via Chat</h3>
-                <p class="text-sm text-gray-400 mb-3">You can ask the AI chatbot to find files in your Vision Disk using natural language:</p>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Searching Files via Chat"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "You can ask the AI chatbot to find files in your Vision Disk using natural language:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
                         <div>Command Example</div><div>What Happens</div>
@@ -1779,8 +1779,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Sharing Files via Chat</h3>
-                <p class="text-sm text-gray-400 mb-3">After finding a file, you can share it with another user through the chatbot:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Sharing Files via Chat"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "After finding a file, you can share it with another user through the chatbot:"}</p>
                 <StepList steps={s.steps || [
                     { title: 'Request File Sharing', desc: 'Say something like "Share the proposal document with jihyun@email.com" or "Send the contract file to Park Jihyun".' },
                     { title: 'File Search', desc: 'The chatbot searches your Disk for matching files and presents a numbered list if multiple matches are found.' },
@@ -1788,13 +1788,13 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Recipient Confirmation', desc: 'The chatbot confirms the recipient and file, then shows a contact list if the name is ambiguous.' },
                     { title: 'Share Executed', desc: 'The file is shared with the recipient. They receive an in-app notification and email. For encrypted files, the password is included automatically.' },
                 ]} />
-                <Tip label={L('tip')}><>The chatbot understands both Korean and English commands. You can mix languages freely, e.g., "Documents 폴더의 계약서 파일을 jihyun에게 공유해줘".</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "The chatbot understands both Korean and English commands. You can mix languages freely, e.g., \"Documents 폴더의 계약서 파일을 jihyun에게 공유해줘\"."}</></Tip>
             </div>
         ); }
         case 'disk-plans': { const s = getManualContent('disk-plans', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Storage Subscription Plans"} desc={s.desc || "Choose a storage plan paid with VCN tokens via gasless EIP-2612 Permit signatures."} />
-                <p class="text-sm text-gray-400 mb-3">Vision Disk subscriptions are managed through on-chain VCN payments. The payment flow uses EIP-2612 Permit: you sign an off-chain message authorizing the transfer, and the Paymaster executes the transaction on-chain.</p>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Vision Disk subscriptions are managed through on-chain VCN payments. The payment flow uses EIP-2612 Permit: you sign an off-chain message authorizing the transfer, and the Paymaster executes the transaction on-chain."}</p>
                 <StepList steps={s.steps || [
                     { title: 'View Plans', desc: 'On the Disk page, if you have no subscription, a "Subscribe" section shows available plans.' },
                     { title: 'Select a Plan', desc: 'Browse the available storage tiers. Each shows storage capacity, price in VCN, and features included.' },
@@ -1802,9 +1802,9 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Payment Processing', desc: 'The signed permit is sent to the Paymaster API, which executes the VCN transfer on-chain. No gas fees required from you.' },
                     { title: 'Start Using Disk', desc: 'Once payment is confirmed, your subscription activates immediately and you can start uploading files.' },
                 ]} />
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Cancel Subscription</h3>
-                <p class="text-sm text-gray-400 mb-3">You can cancel your subscription at any time. Your files remain accessible until the subscription period ends. After expiration, files are retained but you cannot upload new files until you renew.</p>
-                <Tip label={L('tip')}><>Storage plan payments are gasless -- the Paymaster covers all on-chain transaction fees. You only pay the VCN subscription price.</></Tip>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Cancel Subscription"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "You can cancel your subscription at any time. Your files remain accessible until the subscription period ends. After expiration, files are retained but you cannot upload new files until you renew."}</p>
+                <Tip label={L('tip')}><>{s.tip || "Storage plan payments are gasless -- the Paymaster covers all on-chain transaction fees. You only pay the VCN subscription price."}</></Tip>
             </div>
         ); }
 
@@ -1812,7 +1812,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'nodes-overview': { const s = getManualContent('nodes-overview', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Vision Node Overview"} desc={s.desc || "Run a Vision Node to support the network, validate transactions, and earn VCN + RP rewards."} />
-                <p class="text-sm text-gray-400">Vision Chain is a 5-node Proof-of-Authority (PoA) network. You can participate by running a full Validator Node, an Enterprise Node, or a lightweight Mobile Node directly in your browser.</p>
+                <p class="text-sm text-gray-400">{s.body || "Vision Chain is a 5-node Proof-of-Authority (PoA) network. You can participate by running a full Validator Node, an Enterprise Node, or a lightweight Mobile Node directly in your browser."}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'Validator Node', d: 'Full Geth node participating in IBFT 2.0 consensus. Validates blocks, earns highest VCN rewards. Requires dedicated server hardware (4+ CPU, 8GB+ RAM, 200GB+ SSD).' },
@@ -1826,8 +1826,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Mobile Node Dashboard</h3>
-                <p class="text-sm text-gray-400 mb-3">The Mobile Node page (accessible from sidebar "Nodes") shows:</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Mobile Node Dashboard"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "The Mobile Node page (accessible from sidebar \"Nodes\") shows:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Node Status', d: 'Active (green pulse) or Offline. Shows uptime counter and last sync timestamp.' },
@@ -1842,7 +1842,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Tip label={L('tip')}><>The Mobile Node earns you passive RP just by keeping the page open. It is the lowest barrier way to contribute to the network and earn rewards.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "The Mobile Node earns you passive RP just by keeping the page open. It is the lowest barrier way to contribute to the network and earn rewards."}</></Tip>
             </div>
         ); }
         case 'nodes-purchase': { const s = getManualContent('nodes-purchase', locale); return (
@@ -1869,7 +1869,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Node Configuration', desc: 'Receive your genesis.json, static-nodes.json, and node key. Configure your Geth node with IBFT 2.0 consensus settings.' },
                     { title: 'Go Live', desc: 'Start your node and verify it syncs with the network. Monitor peer connections and block production through the node dashboard.' },
                 ]} />
-                <Note label={L('note')}><>Mobile Nodes are free and require no purchase. Simply open the Nodes page in your browser to start earning RP passively.</></Note>
+                <Note label={L('note')}><>{s.note || "Mobile Nodes are free and require no purchase. Simply open the Nodes page in your browser to start earning RP passively."}</></Note>
             </div>
         ); }
         case 'nodes-install': { const s = getManualContent('nodes-install', locale); return (
@@ -1884,14 +1884,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Verify Installation', desc: 'The script installs Geth, configures the Vision Chain genesis block, and starts the node service. Check status with: systemctl status vision-node (Linux) or the process list (macOS).' },
                     { title: 'Access Dashboard', desc: 'Open http://localhost:9090 in your browser to view the node dashboard with status, peers, blocks, and storage metrics.' },
                 ]} />
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Desktop App</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_1 || "Desktop App"}</h3>
                 <StepList steps={s.steps || [
                     { title: 'Download', desc: 'Visit the Vision Node downloads page. Select your platform: macOS (.dmg) or Windows (.exe).' },
                     { title: 'Install', desc: 'macOS: Open the .dmg and drag to Applications. Windows: Run the .exe installer and follow prompts.' },
                     { title: 'Launch', desc: 'Open "Vision Node" from your Applications. The app starts the node and opens the dashboard automatically.' },
                     { title: 'Monitor', desc: 'The desktop app shows node status, peer connections, block height, storage usage, and VCN rewards in a visual dashboard.' },
                 ]} />
-                <Tip label={L('tip')}><>After installation, the node dashboard is accessible at http://localhost:9090. RPC endpoint runs on port 8545. WebSocket on port 8546.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "After installation, the node dashboard is accessible at http://localhost:9090. RPC endpoint runs on port 8545. WebSocket on port 8546."}</></Tip>
             </div>
         ); }
 
@@ -1899,7 +1899,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
         case 'mint-overview': { const s = getManualContent('mint-overview', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Mint Studio"} desc={s.desc || "Create and deploy custom ERC-20 tokens on Vision Chain and other supported networks with a no-code wizard."} />
-                <p class="text-sm text-gray-400">Mint Studio provides a guided interface for deploying tokens without writing any Solidity code. You configure the token parameters, and the system deploys a verified smart contract on your behalf.</p>
+                <p class="text-sm text-gray-400">{s.body || "Mint Studio provides a guided interface for deploying tokens without writing any Solidity code. You configure the token parameters, and the system deploys a verified smart contract on your behalf."}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                         { t: 'No-Code Deployment', d: 'Fill in a form -- no Solidity or developer tools needed. The contract is deployed and verified automatically.' },
@@ -1929,7 +1929,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Review & Deploy', desc: 'Review all settings on the confirmation screen. Click "Deploy" and enter your wallet password to sign the deployment transaction.' },
                     { title: 'Verify Deployment', desc: 'After deployment, the contract address is displayed. You can view it on the block explorer. The token is automatically added to your wallet.' },
                 ]} />
-                <Note label={L('note')}><>Token deployment costs are paid in VCN on Vision Chain. For multi-chain deployment, you need native gas tokens on each target chain. Each network deployment is independent.</></Note>
+                <Note label={L('note')}><>{s.note || "Token deployment costs are paid in VCN on Vision Chain. For multi-chain deployment, you need native gas tokens on each target chain. Each network deployment is independent."}</></Note>
             </div>
         ); }
 
@@ -1946,17 +1946,17 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Delete a Contact', desc: 'In the edit modal, tap "Delete Contact". A confirmation dialog appears before permanent deletion.' },
                     { title: 'Use in Send Flow', desc: 'When sending VCN, your contacts appear in the recipient field. Tap a contact name to auto-fill their address -- no manual copy needed.' },
                 ]} />
-                <h3 class="text-lg font-bold text-white mt-6 mb-3">Phonetic Search</h3>
-                <p class="text-sm text-gray-400">The contact search supports cross-language phonetic matching. For example, searching for a Korean name will match the English phonetic equivalent and vice versa. This is especially useful for voice-input scenarios where names may be transcribed differently.</p>
-                <Tip label={L('tip')}><>Saved contacts appear automatically in the send flow, making transfers faster and reducing address errors. Star your most-used contacts for quick access.</></Tip>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">{s.h3_1 || "Phonetic Search"}</h3>
+                <p class="text-sm text-gray-400">{s.body || "The contact search supports cross-language phonetic matching. For example, searching for a Korean name will match the English phonetic equivalent and vice versa. This is especially useful for voice-input scenarios where names may be transcribed differently."}</p>
+                <Tip label={L('tip')}><>{s.tip || "Saved contacts appear automatically in the send flow, making transfers faster and reducing address errors. Star your most-used contacts for quick access."}</></Tip>
             </div>
         ); }
         case 'referral-program': { const s = getManualContent('referral-program', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Referral Program & Marketing"} desc={s.desc || "Complete guide to the referral system -- links, levels, direct/indirect rewards, daily rounds, and the Referral Rush leaderboard."} />
 
-                <h3 class="text-lg font-bold text-white mb-3">Your Referral Link & Code</h3>
-                <p class="text-sm text-gray-400 mb-3">Each user receives a unique referral code at signup. Your referral link is:</p>
+                <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Your Referral Link & Code"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Each user receives a unique referral code at signup. Your referral link is:"}</p>
                 <code class="text-xs text-cyan-400 bg-black/30 rounded-lg px-4 py-3 block font-mono break-all border border-white/5">https://visionchain.co/signup?ref=YOUR_CODE</code>
                 <StepList steps={s.steps || [
                     { title: 'Find Your Link', desc: 'Open "Referral" from the sidebar. Your unique referral link and code are displayed at the top of the page.' },
@@ -1965,8 +1965,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Copy Code Only', desc: 'Your short referral code (e.g., "ABC123") is also shown. Recipients can enter this code during signup instead of using the link.' },
                 ]} />
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Referral Level System</h3>
-                <p class="text-sm text-gray-400 mb-3">Your referral level is calculated using a triangular number formula: Level L requires L*(L-1)/2 total referrals. This means later levels require progressively more referrals, rewarding sustained effort.</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_2 || "Referral Level System"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Your referral level is calculated using a triangular number formula: Level L requires L*(L-1)/2 total referrals. This means later levels require progressively more referrals, rewarding sustained effort."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Level</div><div>Total Referrals Needed</div><div>New Referrals for This Level</div></div>
                     {[
@@ -1986,8 +1986,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Rank System</h3>
-                <p class="text-sm text-gray-400 mb-3">As your level increases, you unlock ranks with visual badges, icons, and gradient colors displayed on your Referral page. Ranks are configured by administrators and can include:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "Rank System"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "As your level increases, you unlock ranks with visual badges, icons, and gradient colors displayed on your Referral page. Ranks are configured by administrators and can include:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Novice', d: 'Starting rank. Gray badge.' },
@@ -2004,7 +2004,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Direct & Indirect Referral Activity</h3>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "Direct & Indirect Referral Activity"}</h3>
                 <p class="text-sm text-gray-400 mb-3">When someone signs up using your referral link, they become your <strong class="text-white">direct referral</strong>. Your Referral page shows a table of all your direct referrals with:</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
@@ -2021,8 +2021,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">Referral Rush (Daily Rounds)</h3>
-                <p class="text-sm text-gray-400 mb-3">Vision Chain runs a "Referral Rush" competition with 24-hour daily rounds. Each round has a reward pool of 1,000 VCN distributed based on contribution rate:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_5 || "Referral Rush (Daily Rounds)"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Vision Chain runs a \"Referral Rush\" competition with 24-hour daily rounds. Each round has a reward pool of 1,000 VCN distributed based on contribution rate:"}</p>
                 <StepList steps={s.steps || [
                     { title: 'Rounds Start Daily at 00:00 UTC', desc: 'A new round begins automatically every day. The round number increments from the epoch date (Feb 9, 2026).' },
                     { title: 'Invite During the Round', desc: 'Each referral you bring during a round counts toward your contribution rate for that round.' },
@@ -2030,16 +2030,16 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Check Leaderboard', desc: 'The leaderboard shows all participants ranked by invite count, with estimated rewards.' },
                     { title: 'Claim After Round Ends', desc: 'Once a round completes (24 hours), rewards are finalized and can be claimed.' },
                 ]} />
-                <Tip label={L('tip')}><>Each referral also earns you +10 RP instantly and contributes to your Level. Every 10th level milestone (Level 10, 20, 30...) earns a bonus +100 RP.</></Tip>
-                <Warning label={L('warning')}><>Referral link integrity is tracked via security measures. Fraudulent or self-referral activity may be detected and result in rewards being revoked.</></Warning>
+                <Tip label={L('tip')}><>{s.tip || "Each referral also earns you +10 RP instantly and contributes to your Level. Every 10th level milestone (Level 10, 20, 30...) earns a bonus +100 RP."}</></Tip>
+                <Warning label={L('warning')}><>{s.warning || "Referral link integrity is tracked via security measures. Fraudulent or self-referral activity may be detected and result in rewards being revoked."}</></Warning>
             </div>
         ); }
         case 'quest-campaign': { const s = getManualContent('quest-campaign', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Reward Points (RP) System"} desc={s.desc || "Complete guide to earning, tracking, and spending Reward Points across all Vision Chain activities."} />
-                <p class="text-sm text-gray-400 mb-3">Reward Points (RP) are earned by performing various actions within the Vision Chain ecosystem. RP values are admin-configurable and may change. The current default values are shown below.</p>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Reward Points (RP) are earned by performing various actions within the Vision Chain ecosystem. RP values are admin-configurable and may change. The current default values are shown below."}</p>
 
-                <h3 class="text-lg font-bold text-amber-400 mb-3">User Action RP Rewards</h3>
+                <h3 class="text-lg font-bold text-amber-400 mb-3">{s.h3_1 || "User Action RP Rewards"}</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Action</div><div>RP Amount</div><div>Details</div></div>
                     {[
@@ -2065,8 +2065,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-cyan-400 mt-8 mb-3">Agent API Action RP Rewards</h3>
-                <p class="text-sm text-gray-400 mb-3">When AI agents perform on-chain actions via the Agent API, both the agent owner and related parties earn RP:</p>
+                <h3 class="text-lg font-bold text-cyan-400 mt-8 mb-3">{s.h3_2 || "Agent API Action RP Rewards"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "When AI agents perform on-chain actions via the Agent API, both the agent owner and related parties earn RP:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { a: 'Agent Referral (Inviter)', rp: '+50 RP', d: 'Agent invites someone and they sign up' },
@@ -2089,8 +2089,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">RP Dashboard</h3>
-                <p class="text-sm text-gray-400 mb-3">Your RP summary is shown on the Referral page in three cards:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_3 || "RP Dashboard"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Your RP summary is shown on the Referral page in three cards:"}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Total Earned', d: 'Cumulative RP earned across all actions since account creation.' },
@@ -2104,15 +2104,15 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
 
-                <h3 class="text-lg font-bold text-white mt-8 mb-3">RP History</h3>
-                <p class="text-sm text-gray-400 mb-3">Below the RP summary, a detailed activity log shows your recent 20 RP events with:</p>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">{s.h3_4 || "RP History"}</h3>
+                <p class="text-sm text-gray-400 mb-3">{s.body2 || "Below the RP summary, a detailed activity log shows your recent 20 RP events with:"}</p>
                 <StepList steps={s.steps || [
                     { title: 'Event Icon', desc: 'Amber icon for referral RP, purple icon for level-up bonuses.' },
                     { title: 'Event Type', desc: 'Shows "Referral Bonus" or "Level-up Bonus" with the source (e.g., referred user email or "Reached LVL 10").' },
                     { title: 'RP Amount', desc: 'The RP earned for this event (e.g., +10 RP, +100 RP).' },
                     { title: 'Date', desc: 'When the RP was earned.' },
                 ]} />
-                <Note label={L('note')}><>RP amounts are configured by administrators and may change. The values shown in this guide reflect current defaults. Check the Referral page for the most up-to-date values.</></Note>
+                <Note label={L('note')}><>{s.note || "RP amounts are configured by administrators and may change. The values shown in this guide reflect current defaults. Check the Referral page for the most up-to-date values."}</></Note>
             </div>
         ); }
 
@@ -2138,8 +2138,8 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Enter Verification Code', desc: 'Type the 6-digit code from your authenticator to verify setup.' },
                     { title: 'Save Backup Codes', desc: 'Store the backup recovery codes securely in case you lose your authenticator device.' },
                 ]} />
-                <Warning label={L('warning')}><>Once enabled, 2FA is required for login and large transactions. If you lose access to your authenticator, use backup codes to recover. Store backup codes securely offline.</></Warning>
-                <Note label={L('note')}><>Transactions above a certain threshold will automatically require 2FA verification for additional security.</></Note>
+                <Warning label={L('warning')}><>{s.warning || "Once enabled, 2FA is required for login and large transactions. If you lose access to your authenticator, use backup codes to recover. Store backup codes securely offline."}</></Warning>
+                <Note label={L('note')}><>{s.note || "Transactions above a certain threshold will automatically require 2FA verification for additional security."}</></Note>
             </div>
         ); }
         case 'settings-backup': { const s = getManualContent('settings-backup', locale); return (
@@ -2159,7 +2159,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         <p class="text-xs text-gray-400">To restore your wallet on a new device, enter your 12-word seed phrase or log in with Cloud Sync enabled. Your balances and transaction history will be recovered automatically.</p>
                     </div>
                 </div>
-                <Warning label={L('warning')}><>Never share your seed phrase. Vision Chain support will never ask for it. Anyone with your seed phrase can access your funds.</></Warning>
+                <Warning label={L('warning')}><>{s.warning || "Never share your seed phrase. Vision Chain support will never ask for it. Anyone with your seed phrase can access your funds."}</></Warning>
             </div>
         ); }
         case 'settings-language': { const s = getManualContent('settings-language', locale); return (
@@ -2170,13 +2170,13 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     { title: 'Select Language', desc: 'Tap "Language" and choose between Korean or English.' },
                     { title: 'Auto-Apply', desc: 'The interface updates immediately. AI Chat will also respond in your selected language.' },
                 ]} />
-                <Tip label={L('tip')}><>The AI Chat supports both Korean and English regardless of your language setting. You can type in either language and the AI will respond accordingly.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "The AI Chat supports both Korean and English regardless of your language setting. You can type in either language and the AI will respond accordingly."}</></Tip>
             </div>
         ); }
         case 'settings-notifications': { const s = getManualContent('settings-notifications', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Notification Settings"} desc={s.desc || "Configure in-app and email notification preferences."} />
-                <p class="text-sm text-gray-400">Manage which notifications you receive and how they are delivered. In-app notifications show as badges on the bell icon. Email notifications can be enabled for important events like large transactions and security alerts.</p>
+                <p class="text-sm text-gray-400">{s.body || "Manage which notifications you receive and how they are delivered. In-app notifications show as badges on the bell icon. Email notifications can be enabled for important events like large transactions and security alerts."}</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
                         { n: 'Transaction Alerts', d: 'Notified when tokens are sent or received' },
@@ -2285,7 +2285,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">How It Works</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "How It Works"}</h3>
                     <StepList steps={s.steps || [
                         { title: 'Auto-Detection', desc: 'AI automatically detects bug reports, feature requests, and business proposals from your conversation.' },
                         { title: 'Structuring', desc: 'Detected content is organized by category, severity, and related features.' },
@@ -2294,14 +2294,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         { title: 'Team Review', desc: 'The operations team reviews classified items and takes appropriate action.' },
                     ]} />
                 </div>
-                <Tip label={L('tip')}><>No special form or command is needed. Simply talk to the chatbot as you normally would, and the AI will automatically detect and process your feedback.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "No special form or command is needed. Simply talk to the chatbot as you normally would, and the AI will automatically detect and process your feedback."}</></Tip>
             </div>
         ); }
         case 'feedback-bugs': { const s = getManualContent('feedback-bugs', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Bug Reports"} desc={s.desc || "Report issues you encounter while using Vision Chain. The AI automatically classifies the problem, assesses severity, and routes it to the development team."} />
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Example Conversations"}</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                         <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
                             <div>You Say</div><div>AI Detects</div>
@@ -2321,7 +2321,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     </div>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">What AI Collects</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_2 || "What AI Collects"}</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                         {[
                             { n: 'Context', d: 'Which feature and action triggered the issue' },
@@ -2336,14 +2336,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         ))}
                     </div>
                 </div>
-                <Note label={L('note')}><>Bug reports are reviewed within 0-48 hours depending on severity. Critical issues are escalated immediately to the development team.</></Note>
+                <Note label={L('note')}><>{s.note || "Bug reports are reviewed within 0-48 hours depending on severity. Critical issues are escalated immediately to the development team."}</></Note>
             </div>
         ); }
         case 'feedback-features': { const s = getManualContent('feedback-features', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Feature Suggestions"} desc={s.desc || "Share your ideas for new features or improvements. Similar requests from multiple users are automatically grouped, and the most requested features are reviewed first."} />
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Example Conversations"}</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                         <div class="grid grid-cols-[1.5fr_2fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500">
                             <div>You Say</div><div>AI Categorizes As</div>
@@ -2363,7 +2363,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     </div>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Processing Pipeline</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_2 || "Processing Pipeline"}</h3>
                     <StepList steps={s.steps || [
                         { title: 'AI Structures Your Request', desc: 'The AI normalizes and categorizes your suggestion with relevant tags and feature associations.' },
                         { title: 'Automatic Grouping', desc: 'Similar requests from different users are clustered together to measure demand.' },
@@ -2371,14 +2371,14 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         { title: 'Roadmap Review', desc: 'The operations team reviews high-priority items weekly and determines roadmap inclusion.' },
                     ]} />
                 </div>
-                <Tip label={L('tip')}><>The more specific your suggestion, the faster it can be evaluated. Include details about what problem it would solve and how you envision it working.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "The more specific your suggestion, the faster it can be evaluated. Include details about what problem it would solve and how you envision it working."}</></Tip>
             </div>
         ); }
         case 'feedback-business': { const s = getManualContent('feedback-business', locale); return (
             <div class="space-y-6">
                 <SectionHeader title={s.title || "Business Proposals"} desc={s.desc || "Submit partnership, listing, collaboration, or marketing proposals directly through the chatbot."} />
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Example Conversations</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "Example Conversations"}</h3>
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                         {[
                             { cmd: '"We\'d like to discuss listing VCN on our exchange"', act: 'Exchange listing inquiry, routed to business team' },
@@ -2407,7 +2407,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                         </div>
                     ))}
                 </div>
-                <Tip label={L('tip')}><>Include your contact information (email or messaging handle) in your proposal for a direct follow-up from the relevant team.</></Tip>
+                <Tip label={L('tip')}><>{s.tip || "Include your contact information (email or messaging handle) in your proposal for a direct follow-up from the relevant team."}</></Tip>
             </div>
         ); }
         case 'feedback-tips': { const s = getManualContent('feedback-tips', locale); return (
@@ -2428,7 +2428,7 @@ function getContent(id: string, onNavigate?: (id: string) => void, locale: strin
                     ))}
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">FAQ</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">{s.h3_1 || "FAQ"}</h3>
                     <div class="space-y-3">
                         {[
                             { q: 'Do I need a special command to submit feedback?', a: 'No. Simply talk to the chatbot naturally. The AI automatically detects and processes bug reports, feature requests, and proposals.' },

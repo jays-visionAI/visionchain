@@ -1330,8 +1330,10 @@ const Wallet = (): JSX.Element => {
                         setLastTxHash(result.scheduleId || 'scheduled');
                     } catch (schedErr: any) {
                         console.error("[Gateway] Scheduling failed:", schedErr);
+                        setFlowLoading(false);
+                        setFlowStep(2);
                         alert(`Scheduling failed: ${schedErr.message || 'Unknown error'}`);
-                        throw schedErr;
+                        return;
                     }
 
                 } else if (symbol === 'VCN_SEPOLIA') {
@@ -1389,8 +1391,10 @@ const Wallet = (): JSX.Element => {
                         if (result.txHash) setLastTxHash(result.txHash);
                     } catch (error: any) {
                         console.error('Sepolia VCN Transfer Failed:', error);
+                        setFlowLoading(false);
+                        setFlowStep(2);
                         alert(`Transfer failed: ${error.message || 'Unknown error'}`);
-                        throw error;
+                        return;
                     }
                 } else if (symbol === 'VCN') {
                     try {
@@ -1410,8 +1414,10 @@ const Wallet = (): JSX.Element => {
                         } else {
                             errorMsg = `Transfer failed: ${msg || 'Unknown error'}`;
                         }
+                        setFlowLoading(false);
+                        setFlowStep(2); // Return to review step so user can retry
                         alert(errorMsg);
-                        throw error;
+                        return; // Don't rethrow - error is already handled with alert
                     }
                 } else {
                     // Standard Send for ETH/Other
@@ -1781,6 +1787,7 @@ const Wallet = (): JSX.Element => {
             alert(`Execution failed: ${error.message || error}`);
         } finally {
             setIsLoading(false);
+            setFlowLoading(false);
             setLoadingMessage('LOADING WALLET');
             setPendingAction(null);
             setWalletPassword('');
