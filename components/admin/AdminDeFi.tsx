@@ -24,7 +24,7 @@ import { ethers } from 'ethers';
 import { useAdminRole } from './adminRoleContext';
 
 // ============ Bridge Staking Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x593dFDc2e31F32D17B981392786F84b0E1228Ab6';
+const BRIDGE_STAKING_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
 
 const BRIDGE_STAKING_ABI = [
     'function totalStaked() external view returns (uint256)',
@@ -42,7 +42,7 @@ const BRIDGE_STAKING_ABI = [
     'function totalRewardsPaid() external view returns (uint256)'
 ];
 
-const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+const VCN_TOKEN_ADDRESS = '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
 const VCN_ABI = [
     'function approve(address spender, uint256 amount) external returns (bool)',
     'function allowance(address owner, address spender) external view returns (uint256)',

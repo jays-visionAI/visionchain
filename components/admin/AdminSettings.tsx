@@ -363,7 +363,7 @@ export default function AdminSettings() {
                                         <tbody class="divide-y divide-white/5">
                                             <tr class="hover:bg-white/[0.02]">
                                                 <td class="py-2.5 px-3 font-bold text-white">VCN Token</td>
-                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x5FbDB2315678afecb367f032d93F642f64180aa3</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x5FC8d32690cc91D4c39d9d3abcBD16989F875707</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
                                                 <td class="py-2.5 px-3 font-bold text-white">Node License</td>
@@ -375,7 +375,7 @@ export default function AdminSettings() {
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
                                                 <td class="py-2.5 px-3 font-bold text-white">VCN Vesting</td>
-                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x0165878A594ca255338adfa4d48449f69242Eb8F</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
                                                 <td class="py-2.5 px-3 font-bold text-white">Vision Equalizer</td>

@@ -455,7 +455,7 @@ const Bridge: Component<BridgeProps> = (props) => {
             const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
 
             // VCN is an ERC-20 token on Vision Chain v2
-            const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+            const VCN_TOKEN_ADDRESS = '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
             const ERC20_BALANCE_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
             let tokenBalance = '0';
@@ -549,7 +549,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                 const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
                 const signer = new ethers.Wallet(privateKey, provider);
 
-                const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+                const VCN_TOKEN = '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
                 const vcnContract = new ethers.Contract(VCN_TOKEN, [
                     ...ERC20_ABI,
                     'function nonces(address owner) view returns (uint256)',

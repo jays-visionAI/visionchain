@@ -13,10 +13,10 @@ const ADDRESSES = {
     // VCN is now an ERC-20 token deployed on Vision Chain v2
 
     // Core Contracts (Vision Chain v2) - Deployed 2026-02-06
-    VCN_TOKEN: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // VCN ERC-20 Token
-    VCN_PAYMASTER: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512", // VCNPaymasterNative
+    VCN_TOKEN: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", // VCN ERC-20 Token
+    VCN_PAYMASTER: "0x0165878A594ca255338adfa4d48449f69242Eb8F", // VCNPaymasterNative
     PAYMASTER_ADMIN: "0x08A1B183a53a0f8f1D875945D504272738E3AF34", // Executor wallet for gasless transfers (matches server VCN_EXECUTOR_PK)
-    BRIDGE_STAKING: "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6", // BridgeStaking V3 (with stakeFor)
+    BRIDGE_STAKING: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6", // BridgeStaking V3 (with stakeFor)
 
     // Legacy Core Contracts (old chain)
     VCN_VESTING: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
@@ -34,7 +34,7 @@ const ADDRESSES = {
 
     // Legacy (kept for compatibility)
     TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
-    TIME_LOCK_AGENT_MOCK: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    TIME_LOCK_AGENT_MOCK: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
 
     // V2 Security Core
     VISION_EQUALIZER: "0x0000000000000000000000000000000000000000", // Pending

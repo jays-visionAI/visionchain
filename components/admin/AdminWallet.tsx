@@ -189,7 +189,7 @@ export default function AdminWallet() {
             const provider = await contractService.getRobustProvider();
 
             // Get VCN Token total supply
-            const vcnAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+            const vcnAddress = '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
             const vcnAbi = ['function totalSupply() view returns (uint256)', 'function decimals() view returns (uint8)'];
             const vcnContract = new ethers.Contract(vcnAddress, vcnAbi, provider);
 

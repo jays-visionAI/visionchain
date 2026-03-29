@@ -6,7 +6,7 @@ import { collection, query, where, limit, getDocs, updateDoc, doc, runTransactio
 const MAX_RETRIES = 3;
 const LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes lock
 const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2
-const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const VCN_TOKEN_ADDRESS = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
 
 // VCN Token ABI for transferFrom
 const VCN_TOKEN_ABI = [

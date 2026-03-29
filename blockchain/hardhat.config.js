@@ -49,7 +49,7 @@ module.exports = {
         },
         // Vision Chain Custom Testnet v2 (Current)
         visionV2: {
-            url: "https://api.visionchain.co/rpc-proxy",
+            url: "http://46.224.221.201:8545",
             chainId: 3151909,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
             gasPrice: 1000000000, // 1 gwei

@@ -717,10 +717,10 @@ const VCN_EXECUTOR_PK = (process.env.VCN_EXECUTOR_PK || "").trim();
 const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || (process.env.EXECUTOR_PK || "").trim();
 
 // --- VCN Token Address (Vision Chain v2) ---
-const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const VCN_TOKEN_ADDRESS = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
 
 // --- BridgeStaking Contract Config ---
-const BRIDGE_STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6"; // V3 (with stakeFor)
+const BRIDGE_STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"; // V3 (with stakeFor)
 
 const BRIDGE_STAKING_ABI = [
   "function setTargetAPY(uint256 _apyBasisPoints) external",
@@ -2228,7 +2228,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
 
   try {
     // Staking contract address
-    const BRIDGE_STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6"; // V3 (with stakeFor)
+    const BRIDGE_STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"; // V3 (with stakeFor)
 
     // Staking contract ABI (with Paymaster delegation functions)
     const STAKING_ABI = [
@@ -10963,7 +10963,7 @@ exports.agentGateway = onRequest({
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const STAKING_ABI_FULL = [
           "function stakeFor(address beneficiary, uint256 amount) external",
           "function getStake(address account) external view returns (uint256)",
@@ -11052,7 +11052,7 @@ exports.agentGateway = onRequest({
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const STAKING_ABI_FULL = [
           "function requestUnstakeFor(address beneficiary, uint256 amount) external",
           "function getStake(address account) external view returns (uint256)",
@@ -11111,7 +11111,7 @@ exports.agentGateway = onRequest({
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const STAKING_ABI_FULL = [
           "function claimRewardsFor(address beneficiary) external",
           "function pendingReward(address account) external view returns (uint256)",
@@ -11168,7 +11168,7 @@ exports.agentGateway = onRequest({
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const STAKING_ABI_FULL = [
           "function getStake(address account) external view returns (uint256)",
           "function pendingReward(address account) external view returns (uint256)",
@@ -11230,7 +11230,7 @@ exports.agentGateway = onRequest({
               address: VCN_TOKEN_ADDRESS,
               decimals: 18,
             },
-            staking_contract: "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6",
+            staking_contract: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
             explorer: "https://visionchain.co/visionscan",
             total_agents: totalAgents,
           },
@@ -11791,7 +11791,7 @@ exports.agentGateway = onRequest({
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const STAKING_ABI_WITHDRAW = [
           "function withdrawFor(address beneficiary) external",
           "function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)",
@@ -11856,7 +11856,7 @@ exports.agentGateway = onRequest({
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const STAKING_ABI_COMPOUND = [
           "function claimRewardsFor(address beneficiary) external",
           "function stakeFor(address beneficiary, uint256 amount) external",
@@ -11936,7 +11936,7 @@ exports.agentGateway = onRequest({
     if (action === "rewards" || action === "staking.rewards") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
           "function pendingReward(address account) external view returns (uint256)",
           "function getStake(address account) external view returns (uint256)",
@@ -11964,7 +11964,7 @@ exports.agentGateway = onRequest({
     if (action === "apy" || action === "staking.apy") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
           "function currentAPY() external view returns (uint256)",
           "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
@@ -12000,7 +12000,7 @@ exports.agentGateway = onRequest({
     if (action === "cooldown" || action === "staking.cooldown") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
           "function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)",
         ], provider);

@@ -34,7 +34,7 @@ async function main() {
 
     // ============ 1. Deploy VCNToken ============
     console.log("1. Deploying VCNToken (ERC-20)...");
-    const VCNToken = await hre.ethers.getContractFactory("VCNToken");
+    const VCNToken = await hre.ethers.getContractFactory("contracts/VCNToken.sol:VCNToken");
     const vcnToken = await VCNToken.deploy(deployer.address, deployer.address);
     await vcnToken.waitForDeployment();
     deployedAddresses.VCN_TOKEN = await vcnToken.getAddress();
@@ -43,7 +43,7 @@ async function main() {
     // ============ 2. Deploy VCNPaymasterNative ============
     console.log("\n2. Deploying VCNPaymasterNative...");
     const Paymaster = await hre.ethers.getContractFactory("VCNPaymasterNative");
-    const paymaster = await Paymaster.deploy(deployedAddresses.VCN_TOKEN);
+    const paymaster = await Paymaster.deploy([deployer.address], 1); // 1 signer, 1 required
     await paymaster.waitForDeployment();
     deployedAddresses.PAYMASTER = await paymaster.getAddress();
     console.log("   VCNPaymasterNative:", deployedAddresses.PAYMASTER);
