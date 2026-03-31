@@ -1,7 +1,9 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, Show, For, lazy, Suspense } from 'solid-js';
 import * as XLSX from 'xlsx';
 import { getFirebaseDb } from '../../services/firebaseService';
 import { collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
+
+const SalesCompare = lazy(() => import('./SalesCompare').then(m => ({ default: m.SalesCompare })));
 
 export interface SalesRecord {
     id?: string;
@@ -27,7 +29,7 @@ export const SalesHistory = () => {
     const [isLoading, setIsLoading] = createSignal(false);
     const [uploadStatus, setUploadStatus] = createSignal<{ success: boolean; message: string } | null>(null);
     const [parseError, setParseError] = createSignal<string | null>(null);
-    const [activeView, setActiveView] = createSignal<'upload' | 'history'>('upload');
+    const [activeView, setActiveView] = createSignal<'upload' | 'history' | 'compare'>('upload');
 
     // Fetch existing records on load
     const fetchSavedRecords = async () => {
@@ -267,6 +269,24 @@ export const SalesHistory = () => {
                             <polyline points="10 9 9 9 8 9" />
                         </svg>
                         내역 조회 ({savedRecords().length})
+                    </span>
+                </button>
+                <button
+                    onClick={() => setActiveView('compare')}
+                    class={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        activeView() === 'compare'
+                            ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                            : 'bg-white/[0.03] text-slate-500 border border-white/5 hover:border-white/10 hover:text-slate-400'
+                    }`}
+                >
+                    <span class="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 3h5v5" />
+                            <line x1="21" y1="3" x2="14" y2="10" />
+                            <path d="M8 21H3v-5" />
+                            <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                        비교 분석
                     </span>
                 </button>
             </div>
@@ -612,6 +632,17 @@ export const SalesHistory = () => {
                         </div>
                     </div>
                 </Show>
+            </Show>
+
+            {/* ========== COMPARE VIEW ========== */}
+            <Show when={activeView() === 'compare'}>
+                <Suspense fallback={
+                    <div class="flex items-center justify-center h-64">
+                        <div class="w-8 h-8 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+                    </div>
+                }>
+                    <SalesCompare />
+                </Suspense>
             </Show>
         </div>
     );
