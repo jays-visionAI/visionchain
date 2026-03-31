@@ -80,7 +80,7 @@ export default function AdminVCNDistribution() {
                 />
                 <TabButton
                     id="sales"
-                    label="\uD310\uB9E4\uB0B4\uC5ED"
+                    label="판매내역"
                     icon={ShoppingBag}
                     active={activeTab() === 'sales'}
                     onClick={() => setActiveTab('sales')}
