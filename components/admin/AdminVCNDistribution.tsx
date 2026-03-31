@@ -4,13 +4,15 @@ import {
     Upload,
     Users,
     Activity,
-    Megaphone
+    Megaphone,
+    ShoppingBag
 } from 'lucide-solid';
 
 const UploadCSV = lazy(() => import('./UploadCSV').then(m => ({ default: m.UploadCSV })));
 const ActivateContract = lazy(() => import('./ActivateContract'));
 const ManagePartners = lazy(() => import('./ManagePartners').then(m => ({ default: m.ManagePartners })));
 const Announcement = lazy(() => import('./Announcement').then(m => ({ default: m.Announcement })));
+const SalesHistory = lazy(() => import('./SalesHistory').then(m => ({ default: m.SalesHistory })));
 
 // Helper for loading state
 const TabLoading = () => (
@@ -20,7 +22,7 @@ const TabLoading = () => (
 );
 
 export default function AdminVCNDistribution() {
-    const [activeTab, setActiveTab] = createSignal<'upload' | 'contract' | 'partners' | 'announcement'>('upload');
+    const [activeTab, setActiveTab] = createSignal<'upload' | 'contract' | 'partners' | 'announcement' | 'sales'>('upload');
 
     const TabButton = (props: { id: string, label: string, icon: any, active: boolean, onClick: () => void }) => (
         <button
@@ -76,6 +78,13 @@ export default function AdminVCNDistribution() {
                     active={activeTab() === 'announcement'}
                     onClick={() => setActiveTab('announcement')}
                 />
+                <TabButton
+                    id="sales"
+                    label="\uD310\uB9E4\uB0B4\uC5ED"
+                    icon={ShoppingBag}
+                    active={activeTab() === 'sales'}
+                    onClick={() => setActiveTab('sales')}
+                />
             </div>
 
             {/* Content Area */}
@@ -93,6 +102,9 @@ export default function AdminVCNDistribution() {
                         </Match>
                         <Match when={activeTab() === 'announcement'}>
                             <Announcement />
+                        </Match>
+                        <Match when={activeTab() === 'sales'}>
+                            <SalesHistory />
                         </Match>
                     </Switch>
                 </Suspense>

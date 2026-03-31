@@ -35,7 +35,8 @@
     "solid-apexcharts": "^0.6.0",
     "solid-js": "^1.9.3",
     "solid-motionone": "^1.0.4",
-    "source-map": "^0.7.6"
+    "source-map": "^0.7.6",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
