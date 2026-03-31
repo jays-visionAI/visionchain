@@ -91,17 +91,130 @@ export const SalesHistory = () => {
         setUploadStatus(null);
         setParseError(null);
         try {
-            const data = await parseExcel(f);
+            console.log(`[SalesHistory] Processing file: ${f.name} (${f.size} bytes, type: ${f.type})`);
+            const data = ext === 'csv' ? await parseCSVFile(f) : await parseExcel(f);
+            console.log(`[SalesHistory] Successfully parsed ${data.length} records`);
+            if (data.length === 0) {
+                setParseError('파일에서 유효한 데이터를 찾을 수 없습니다. 파일 형식을 확인해 주세요.');
+            }
             setParsedData(data);
         } catch (err: any) {
+            console.error('[SalesHistory] Parse error:', err);
             setParseError(`파일 파싱 실패: ${err.message || err}`);
             setParsedData([]);
         }
     };
 
+    // CSV-specific parser: handles EUC-KR and UTF-8 encoding
+    const parseCSVFile = async (file: File): Promise<SalesRecord[]> => {
+        const buffer = await file.arrayBuffer();
+        let text = '';
+
+        // Try UTF-8 first, check for replacement characters
+        const utf8Text = new TextDecoder('utf-8').decode(buffer);
+        const hasBadChars = utf8Text.includes('\uFFFD') || /[\x80-\xff]{2,}/.test(utf8Text.split('\n')[0] || '');
+
+        if (hasBadChars) {
+            // Likely EUC-KR encoded (common for Korean Excel CSV exports)
+            try {
+                text = new TextDecoder('euc-kr').decode(buffer);
+                console.log('[SalesHistory] CSV decoded as EUC-KR');
+            } catch {
+                text = utf8Text;
+                console.log('[SalesHistory] CSV fallback to UTF-8');
+            }
+        } else {
+            text = utf8Text;
+            // Strip BOM if present
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+            console.log('[SalesHistory] CSV decoded as UTF-8');
+        }
+
+        return parseCSVText(text);
+    };
+
+    const parseCSVText = (text: string): SalesRecord[] => {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) throw new Error('CSV 파일에 데이터가 부족합니다 (헤더 + 최소 1행 필요).');
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+        console.log('[SalesHistory] CSV headers:', headers);
+
+        return mapRowsToRecords(headers, lines.slice(1).map(line => {
+            // Handle quoted CSV values
+            const values: string[] = [];
+            let current = '';
+            let inQuotes = false;
+            for (const ch of line) {
+                if (ch === '"') { inQuotes = !inQuotes; }
+                else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+                else { current += ch; }
+            }
+            values.push(current.trim());
+            return values;
+        }));
+    };
+
+    const mapRowsToRecords = (headers: string[], rows: string[][]): SalesRecord[] => {
+        const findIdx = (candidates: string[]): number => {
+            return headers.findIndex(h => candidates.some(c => h.toLowerCase().includes(c.toLowerCase())));
+        };
+
+        const dateIdx = findIdx(['date', '날짜', '일자']);
+        const buyerIdx = findIdx(['buyer', '구매자', '이름', 'name', '성명', '구매']);
+        const emailIdx = findIdx(['email', '이메일']);
+        const productIdx = findIdx(['product', '상품', '제품', '품목', 'item']);
+        const qtyIdx = findIdx(['quantity', '수량', 'qty']);
+        const priceIdx = findIdx(['price', '단가', '가격', 'unitprice']);
+        const totalIdx = findIdx(['total', '합계', '총액', '금액', 'amount', '매출']);
+        const paymentIdx = findIdx(['payment', '결제', '결제방법', '결제수단']);
+        const statusIdx = findIdx(['status', '상태']);
+        const noteIdx = findIdx(['note', '비고', '메모', 'remark']);
+
+        console.log('[SalesHistory] Column mapping:', { dateIdx, buyerIdx, emailIdx, productIdx, qtyIdx, priceIdx, totalIdx, paymentIdx, statusIdx, noteIdx });
+
+        // If no columns matched at all, try using raw column indices
+        const noMatch = [dateIdx, buyerIdx, emailIdx, productIdx, qtyIdx, priceIdx, totalIdx].every(i => i === -1);
+
+        const records: SalesRecord[] = [];
+        for (const vals of rows) {
+            if (vals.every(v => !v)) continue; // skip empty rows
+
+            const get = (idx: number) => idx >= 0 && idx < vals.length ? vals[idx].replace(/^["']|["']$/g, '') : '';
+            const getNum = (idx: number) => {
+                const raw = get(idx).replace(/,/g, '').replace(/원/g, '').replace(/\$/g, '').trim();
+                return Number(raw) || 0;
+            };
+
+            let qty: number, price: number, total: number;
+            if (noMatch) {
+                // Fallback: use all columns as-is, put everything in note
+                records.push({
+                    date: vals[0] || '', buyer: vals[1] || '', email: '',
+                    productName: vals[2] || '', quantity: 0, unitPrice: 0,
+                    totalAmount: 0, paymentMethod: '', status: '',
+                    note: vals.join(' | '),
+                });
+                continue;
+            }
+
+            qty = getNum(qtyIdx);
+            price = getNum(priceIdx);
+            total = getNum(totalIdx) || (qty * price);
+
+            records.push({
+                date: get(dateIdx), buyer: get(buyerIdx), email: get(emailIdx),
+                productName: get(productIdx), quantity: qty, unitPrice: price,
+                totalAmount: total, paymentMethod: get(paymentIdx),
+                status: get(statusIdx) || 'Completed', note: get(noteIdx),
+            });
+        }
+        return records;
+    };
+
     const parseExcel = async (file: File): Promise<SalesRecord[]> => {
         const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array' });
+        const workbook = XLSX.read(buffer, { type: 'array', codepage: 949 });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
@@ -111,25 +224,25 @@ export const SalesHistory = () => {
         }
 
         const records: SalesRecord[] = [];
-
-        // Try to auto-map columns from the first row's keys
         const keys = Object.keys(jsonData[0]);
+        console.log('[SalesHistory] Excel columns:', keys);
 
-        // Flexible column mapping
         const findCol = (candidates: string[]): string | undefined => {
             return keys.find(k => candidates.some(c => k.toLowerCase().includes(c.toLowerCase())));
         };
 
         const dateCol = findCol(['date', '날짜', '일자', 'Date']);
-        const buyerCol = findCol(['buyer', '구매자', '이름', 'name', 'Name', '성명']);
+        const buyerCol = findCol(['buyer', '구매자', '이름', 'name', 'Name', '성명', '구매']);
         const emailCol = findCol(['email', '이메일', 'Email', 'E-mail']);
         const productCol = findCol(['product', '상품', '제품', '품목', 'Product', 'item', 'Item']);
         const qtyCol = findCol(['quantity', '수량', 'qty', 'Qty', 'Quantity']);
         const priceCol = findCol(['price', '단가', '가격', 'unitPrice', 'Price', 'UnitPrice']);
-        const totalCol = findCol(['total', '합계', '총액', '금액', 'amount', 'Total', 'Amount']);
+        const totalCol = findCol(['total', '합계', '총액', '금액', 'amount', 'Total', 'Amount', '매출']);
         const paymentCol = findCol(['payment', '결제', '결제방법', '결제수단', 'Payment', 'method']);
         const statusCol = findCol(['status', '상태', 'Status']);
         const noteCol = findCol(['note', '비고', '메모', 'Note', 'remark', 'Remark']);
+
+        console.log('[SalesHistory] Column mapping:', { dateCol, buyerCol, emailCol, productCol, qtyCol, priceCol, totalCol, paymentCol, statusCol, noteCol });
 
         for (let i = 0; i < jsonData.length; i++) {
             const row = jsonData[i];
