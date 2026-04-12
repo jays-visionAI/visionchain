@@ -4,7 +4,7 @@ const hre = require("hardhat");
 
 async function main() {
     const [deployer] = await hre.ethers.getSigners();
-    const VCN_TOKEN = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+    const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
 
     console.log("Deployer:", deployer.address);
     const balance = await hre.ethers.provider.getBalance(deployer.address);

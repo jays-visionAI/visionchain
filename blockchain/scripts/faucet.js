@@ -14,7 +14,7 @@ async function main() {
     }
 
     // Address of VCNToken from deployment (Vision Testnet v2)
-    const VCN_TOKEN_ADDRESS = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+    const VCN_TOKEN_ADDRESS = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
 
     const token = await hre.ethers.getContractAt("VCNToken", VCN_TOKEN_ADDRESS);
 

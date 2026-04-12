@@ -269,7 +269,7 @@ export class ActionResolverService {
             : 137; // Polygon placeholder
 
         // Vision Chain - Secure Bridge (Phase 1) Contracts
-        const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
+        const INTENT_COMMITMENT_ADDRESS = '0x5115200132831af540e53A1F8e6C8C649eBD837e';
         const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
 
         // Build bridge data for 2-step secure bridge

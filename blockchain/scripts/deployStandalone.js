@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-const VCN_TOKEN = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
 const STAKING_ADMIN = "0xAFf852Ee7DF3C036719e7b5461840aA2c66aC0ae";
 
 function askSecret(query) {

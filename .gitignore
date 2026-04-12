@@ -33,3 +33,7 @@ dist-ssr
 vision_key
 vision_key.pub
 functions/find-duplicate-phones.cjs
+
+# Mainnet deploy keys (NEVER commit)
+blockchain/mainnet-deploy/
+keys-backup.txt

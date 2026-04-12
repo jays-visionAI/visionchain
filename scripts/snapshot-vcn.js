@@ -13,7 +13,7 @@ import fs from 'fs';
 
 // Configuration
 const RPC_URL = 'http://46.224.221.201:8545';
-const VCN_TOKEN_ADDRESS = '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
+const VCN_TOKEN_ADDRESS = '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33';
 const OUTPUT_FILE = './snapshots/vcn-snapshot.json';
 
 // ERC-20 ABI (minimal)

@@ -18,7 +18,7 @@ async function main() {
 
     // Check VCN Token Balance if VCN Token address is known
     // Vision Testnet V2 VCN Token
-    const vcnAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+    const vcnAddress = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
     const code = await hre.ethers.provider.getCode(vcnAddress);
 
     if (code !== "0x") {

@@ -40,10 +40,10 @@ const NETWORK_CONFIG = {
     rpcUrl: 'https://api.visionchain.co/rpc-proxy',
     rpcFallback: 'https://rpc.visionchain.co',
     tokenSymbol: 'VCN',
-    tokenAddress: '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707',
-    paymasterContract: '0x0165878A594ca255338adfa4d48449f69242Eb8F',
+    tokenAddress: '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33',
+    paymasterContract: '0x1F62fd30715131be3DA6C162678aBAFED075c77f',
     explorerUrl: 'https://www.visionchain.co/visionscan',
-    stakingContract: '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6',
+    stakingContract: '0x5115200132831af540e53A1F8e6C8C649eBD837e',
     paymasterApi: 'https://paymaster-sapjcm3s5a-uc.a.run.app',
 };
 

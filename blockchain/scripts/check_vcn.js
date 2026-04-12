@@ -2,7 +2,7 @@ const { ethers } = require("hardhat");
 
 async function main() {
     const [deployer] = await ethers.getSigners();
-    const tokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+    const tokenAddress = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
 
     console.log(`Checking VCN Balance for ${deployer.address} at ${tokenAddress}...`);
 

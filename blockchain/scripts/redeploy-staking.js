@@ -9,7 +9,7 @@ const path = require('path');
 
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
 const CHAIN_ID = 3151909;
-const VCN_TOKEN = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
 const OLD_STAKING = "0xf3c337cA02f3370f85F54e9644890a497cFD762D";
 
 // EXECUTOR private key (same as Cloud Function's VCN_EXECUTOR_PK)
