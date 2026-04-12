@@ -118,7 +118,7 @@ async function main() {
 
     // Transfer ownership to Paymaster (0x08A1...) so it can call stakeFor
     console.log("\n=== STEP 3: Transfer ownership to Paymaster ===");
-    const PAYMASTER_ADDR = "0x08A1B183a53a0f8f1D875945D504272738E3AF34";
+    const PAYMASTER_ADDR = "0x805E8DB0175aeC75d2e2852aD14092466C281e3b";
     console.log(`Transferring ownership to ${PAYMASTER_ADDR}...`);
     const ownerTx = await staking.transferOwnership(PAYMASTER_ADDR);
     await ownerTx.wait();

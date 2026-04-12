@@ -15,7 +15,7 @@ const ADDRESSES = {
     // Core Contracts (Vision Chain v2) - Deployed 2026-02-06
     VCN_TOKEN: "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33", // VCN ERC-20 Token
     VCN_PAYMASTER: "0x1F62fd30715131be3DA6C162678aBAFED075c77f", // VCNPaymasterNative
-    PAYMASTER_ADMIN: "0x08A1B183a53a0f8f1D875945D504272738E3AF34", // Executor wallet for gasless transfers (matches server VCN_EXECUTOR_PK)
+    PAYMASTER_ADMIN: "0x805E8DB0175aeC75d2e2852aD14092466C281e3b", // Executor wallet for gasless transfers (matches server VCN_EXECUTOR_PK)
     BRIDGE_STAKING: "0x5115200132831af540e53A1F8e6C8C649eBD837e", // BridgeStaking V3 (with stakeFor)
 
     // Legacy Core Contracts (old chain)

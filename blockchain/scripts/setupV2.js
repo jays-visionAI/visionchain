@@ -4,7 +4,7 @@ const readline = require("readline");
 
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
 const CONTRACT = "0xf3c337cA02f3370f85F54e9644890a497cFD762D";
-const PAYMASTER = "0x08A1B183a53a0f8f1D875945D504272738E3AF34";
+const PAYMASTER = "0x805E8DB0175aeC75d2e2852aD14092466C281e3b";
 
 const ABI = [
     "function setTargetAPY(uint256) external",

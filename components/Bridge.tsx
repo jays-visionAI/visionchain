@@ -561,7 +561,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                     vcnContract.nonces(userAddr)
                 ]);
 
-                const PAYMASTER_ADMIN = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
+                const PAYMASTER_ADMIN = '0x805E8DB0175aeC75d2e2852aD14092466C281e3b';
 
                 const domain = {
                     name: tokenName,

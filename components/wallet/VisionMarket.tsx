@@ -48,7 +48,7 @@ import { useI18n } from '../../i18n/i18nContext';
 
 // Contract constants (must match transferService.ts)
 const VCN_TOKEN = '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33';
-const PAYMASTER_ADMIN = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
+const PAYMASTER_ADMIN = '0x805E8DB0175aeC75d2e2852aD14092466C281e3b';
 const CHAIN_ID = 3151909;
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
 

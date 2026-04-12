@@ -8,7 +8,7 @@ const readline = require("readline");
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
 const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
 const STAKING_ADMIN = "0xAFf852Ee7DF3C036719e7b5461840aA2c66aC0ae";
-const PAYMASTER_ADDR = "0x08A1B183a53a0f8f1D875945D504272738E3AF34";
+const PAYMASTER_ADDR = "0x805E8DB0175aeC75d2e2852aD14092466C281e3b";
 
 async function main() {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
