@@ -20446,11 +20446,17 @@ async function dispatchWebhook(db, agentId, hook, event, data, axios, crypto) {
 // ============================================================================
 
 const NODE_ENDPOINTS = [
-  { name: "node-1", url: "http://46.224.221.201:8545", port: 8545, role: "Bootnode & Sealer", enode: "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" },
-  { name: "node-2", url: "http://46.224.221.201:8546", port: 8546, role: "Validator 1", enode: "enode://f394a0fd8fff8e8449dc0a2731fa78fe2939d27131c695eb4006c022b11c1ab9adb309798cc168e020ecf2822e5bb103f2a215ca4c6c20d43cd3072522bd94ac@172.20.0.12:30303" },
-  { name: "node-3", url: "http://46.224.221.201:8547", port: 8547, role: "Validator 2", enode: "enode://7286cdb2cdec31865c78f65552532aa6e28c937670b027b5144c2b4cf77c480039bb74914f0e2d1999ef9d251d3b3447e7cd1e9782a8615633ae5f07290ec59a@172.20.0.13:30303" },
-  { name: "node-4", url: "http://46.224.221.201:8548", port: 8548, role: "Validator 3", enode: "enode://6d91ebc2038227b422afe67f1e5f92a61dc1b3a0310be4decfaae59cd7fcfedf7bea46d9b1f484d04712668751253171f87bc3a5fb7b607bac84bba0a29d890c@172.20.0.14:30303" },
-  { name: "node-5", url: "http://46.224.221.201:8549", port: 8549, role: "Validator 4", enode: "enode://2198afd2651575351095d6b248d4910a7990b57736d9a4a10c72b92cd8a4dabb6bea72382fe1bb095ddafb15d2e75677e35eeabab8973f4f5180ef8dfdcf4330@172.20.0.15:30303" },
+  // Server 1 (46.224.221.201, Germany) - via Nginx HTTPS proxy
+  { name: "node-1", url: "https://rpc.visionchain.co", port: 8545, role: "Bootnode & Sealer", server: "S1-DE", enode: "enode://8ee5978635af393eb382e0ca919fec0dd976b8d82c89b03a37eaa7e2cc1ea49c79f9e62aaf64a6e2b0ccf35d42c6484f46ff7257b6cce72aba4d7fd6b239e4e1@46.224.221.201:30303" },
+  { name: "node-2", url: "https://rpc.visionchain.co/node-2", port: 8546, role: "Validator 1", server: "S1-DE", enode: "enode://d6564ca45a62e5a0af8f714b8d07684243b48b7f9ef94bcb0f7c494272236c6c10cd39fc68b9fd5f171b59bf0088c39efe48bdf9466fad78de7af6e8aa41e1f8@46.224.221.201:30304" },
+  { name: "node-3", url: "https://rpc.visionchain.co/node-3", port: 8547, role: "Validator 2", server: "S1-DE", enode: "enode://c43fe5afd87dbb4927f49c62e1e80e80f45952c278fbcaedaa37725b57f94f1c385d030031b9479e3a03f12fb535c51dcc57a5a42c3a9dce7cf0ad501e87d035@46.224.221.201:30305" },
+  { name: "node-4", url: "https://rpc.visionchain.co/node-4", port: 8548, role: "Validator 3", server: "S1-DE", enode: "enode://113d4eee640cd6063d7826e0071f62015717e49e7a7790700ee173097c74965621737ce6b8e3348f159c9dab2be4bd9144894475f7e6fefaeace44a68c8b31be@46.224.221.201:30306" },
+  { name: "node-5", url: "https://rpc.visionchain.co/node-5", port: 8549, role: "Validator 4", server: "S1-DE", enode: "enode://523350ea92dc5da5fd04659ca9a37f2715de1e763d010579156228f1f31c5d240b09bfd457ba7f2228bd41f1a9ecbabd5e42c425a304cef2fbbcfa77f9393bbc@46.224.221.201:30307" },
+  // Server 2 (135.181.87.25, Finland) - via Nginx HTTPS proxy
+  { name: "node-6", url: "https://rpc.visionchain.co/node-6", port: 8545, role: "Validator 5", server: "S2-FI", enode: "enode://66f3e69df06eacee91dbc2dc378464f44601a6194fffa26c791ba0d08b797d285369040dac2a43be676c5a3c2dd76d90c8f2d17dafd9c1fb1337445172d45375@135.181.87.25:30303" },
+  { name: "node-7", url: "https://rpc.visionchain.co/node-7", port: 8546, role: "Validator 6", server: "S2-FI", enode: "enode://d9028cac282733f56a3eb7619066d946f06c558b36d2ac8050cc60d9bf358417bfc42e4675df72a84903551ff372ba520e144913d75f8bdbbd10a75c54418419@135.181.87.25:30304" },
+  { name: "node-8", url: "https://rpc.visionchain.co/node-8", port: 8547, role: "Validator 7", server: "S2-FI", enode: "enode://32c5bed4b91afd8543e9385c452ddbeec2bc660c6107db991c6b2cf58ed29ed4889ae6dffbfaa4fc57efeb477e80aa91d5ba20084be5bb0cf4ce0a12562b44fa@135.181.87.25:30305" },
+  { name: "node-9", url: "https://rpc.visionchain.co/node-9", port: 8548, role: "Validator 8", server: "S2-FI", enode: "enode://ca4e25fa3306027cf4c76f1ab99afa3d83aa02fca1accc2bb05499b2926a84a675c75808450f0a9c1dc9bc3cf865bdd4f4637012f5ee55336e262fe81747308e@135.181.87.25:30306" },
 ];
 
 async function nodeRpc(url, method, params = []) {
@@ -20484,6 +20490,7 @@ async function getNodeStatuses() {
         name: node.name,
         role: node.role,
         port: node.port,
+        server: node.server || "S1-DE",
         online: blockHex !== null,
         block: blockHex ? parseInt(blockHex, 16) : 0,
         peers: peerHex ? parseInt(peerHex, 16) : 0,
@@ -20494,6 +20501,7 @@ async function getNodeStatuses() {
         name: node.name,
         role: node.role,
         port: node.port,
+        server: node.server || "S1-DE",
         online: false,
         block: 0,
         peers: 0,

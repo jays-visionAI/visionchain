@@ -5,6 +5,7 @@ interface NodeStatus {
     name: string;
     role: string;
     port: number;
+    server: string;
     online: boolean;
     block: number;
     peers: number;
@@ -220,6 +221,7 @@ const AdminNodeHealth: Component = () => {
                         <tr>
                             <th class="p-4">Status</th>
                             <th class="p-4">Node</th>
+                            <th class="p-4">Server</th>
                             <th class="p-4">Role</th>
                             <th class="p-4">Block Height</th>
                             <th class="p-4">Behind</th>
@@ -245,6 +247,11 @@ const AdminNodeHealth: Component = () => {
                                         <td class="p-4">
                                             <div class="font-bold">{node.name}</div>
                                             <div class="text-xs text-gray-500">:{node.port}</div>
+                                        </td>
+                                        <td class="p-4">
+                                            <span class={`px-2 py-0.5 rounded-md text-xs font-bold ${node.server === 'S2-FI' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                                                {node.server || 'S1-DE'}
+                                            </span>
                                         </td>
                                         <td class="p-4 text-gray-400">{node.role}</td>
                                         <td class="p-4 font-mono font-bold">{node.online ? node.block.toLocaleString() : '-'}</td>
