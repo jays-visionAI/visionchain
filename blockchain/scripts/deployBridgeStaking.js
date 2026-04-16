@@ -8,7 +8,7 @@ async function main() {
     // Vision Testnet config - connect manually
     const RPC_URL = "https://api.visionchain.co/rpc-proxy";
     const PRIVATE_KEY = process.env.VISION_ADMIN_PK;
-    const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+    const VCN_TOKEN = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 
     // Create custom provider and signer
     const provider = new hre.ethers.JsonRpcProvider(RPC_URL);

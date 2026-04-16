@@ -37,7 +37,7 @@ export default function VisionScan() {
     // Constants
     const API_URL = "https://api.visionchain.co/api/transactions";
     const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-    const VCN_TOKEN_ADDRESS = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+    const VCN_TOKEN_ADDRESS = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 
     // Fetch on-chain VCN balance for an address
     const fetchOnChainBalance = async (address: string): Promise<string> => {

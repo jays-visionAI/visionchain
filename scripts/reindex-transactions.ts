@@ -16,7 +16,7 @@ const firebaseConfig = {
     appId: "1:451188892027:web:1c5232d790dc32cfee1dde"
 };
 
-const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+const VCN_TOKEN = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 const RPC_URL = "http://46.224.221.201:8545";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 

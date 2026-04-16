@@ -3,19 +3,48 @@ import { ExternalLink, RefreshCw, Zap, Box, Tag } from 'lucide-solid';
 import { getVcnPrice, initPriceService } from '../../../services/vcnPriceService';
 
 export const DashboardHeader: Component = () => {
-    // Mock Ticker Data
-    const [blockHeight, setBlockHeight] = createSignal(12458923);
-    const [gasPrice, setGasPrice] = createSignal(12); // gwei
+    const [blockHeight, setBlockHeight] = createSignal(0);
+    const [gasPrice, setGasPrice] = createSignal(0); // gwei
+
+    const RPC_URL = "https://api.visionchain.co/rpc-proxy";
+
+    const fetchChainStats = async () => {
+        try {
+            const [blockRes, gasRes] = await Promise.all([
+                fetch(RPC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
+                }),
+                fetch(RPC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_gasPrice', params: [], id: 2 }),
+                }),
+            ]);
+
+            const blockData = await blockRes.json();
+            const gasData = await gasRes.json();
+
+            if (blockData.result) {
+                setBlockHeight(parseInt(blockData.result, 16));
+            }
+            if (gasData.result) {
+                // Convert from Wei to Gwei
+                setGasPrice(Math.round(parseInt(gasData.result, 16) / 1e9));
+            }
+        } catch (e) {
+            console.warn('[DashboardHeader] Failed to fetch chain stats:', e);
+        }
+    };
 
     onMount(() => {
         initPriceService();
+        fetchChainStats();
     });
 
-    // Simulate live updates - slower block height
-    const timer = setInterval(() => {
-        setBlockHeight(p => p + 1); // Block height increments by 1 every 5 seconds
-        setGasPrice(p => Math.max(5, Math.min(20, p + (Math.random() - 0.5) * 2)));
-    }, 5000); // Slower - every 5 seconds
+    // Refresh live data every 5 seconds
+    const timer = setInterval(fetchChainStats, 5000);
 
     onCleanup(() => clearInterval(timer));
 

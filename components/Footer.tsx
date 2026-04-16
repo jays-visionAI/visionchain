@@ -95,6 +95,7 @@ const Footer = (): JSX.Element => {
               <A href="/api" class="text-[#86868b] hover:text-white transition-colors">API Docs</A>
               <A href="/docs/user-guide" class="text-[#86868b] hover:text-white transition-colors">User Guide</A>
               <A href="/agent" class="text-[#86868b] hover:text-white transition-colors">Agent Gateway</A>
+              <A href="/secretorage" class="text-[#86868b] hover:text-white transition-colors">Secretorage</A>
               <A href="/contact" class="text-[#86868b] hover:text-white transition-colors">Contact Us</A>
             </div>
           </div>

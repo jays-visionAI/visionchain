@@ -1,0 +1,10 @@
+{
+  "network": "visionV2",
+  "chainId": 3151909,
+  "timestamp": "2026-04-13T04:51:01.345Z",
+  "addresses": {
+    "VCN_TOKEN": "0xf8a2F49C782447a8660554F7c3274cbd765b1963",
+    "PAYMASTER": "0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3",
+    "BRIDGE_STAKING": "0x009326c391012593Aeca601B09c02545E00Aa818"
+  }
+}

@@ -121,7 +121,7 @@ render(() => (
         <Route path="/adminsystem/api-docs" component={Admin.AdminApiDocsPage} />
         <Route path="/adminsystem/api-docs/*" component={Admin.AdminApiDocsPage} />
         <Route path="/adminsystem/settings" component={Admin.AdminSettingsPage} />
-        <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
+        {/* /adminsystem/paymaster route removed - PaymasterAdmin component deleted */}
         <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
         <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
         <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />

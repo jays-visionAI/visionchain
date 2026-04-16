@@ -314,7 +314,7 @@ app.get('/api/transactions', async (req, res) => {
             const { ethers } = require('ethers');
             const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
             const vcnAbi = ["function balanceOf(address) view returns (uint256)"];
-            const vcnContract = new ethers.Contract("0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33", vcnAbi, provider);
+            const vcnContract = new ethers.Contract("0xf8a2F49C782447a8660554F7c3274cbd765b1963", vcnAbi, provider);
             const balance = await vcnContract.balanceOf(address);
             rpcBalance = ethers.formatUnits(balance, 18);
             console.log(`🔍 [RPC] Live balance for ${address}: ${rpcBalance} VCN`);

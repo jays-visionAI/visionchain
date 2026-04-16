@@ -23,8 +23,8 @@ import { WalletService } from '../services/walletService';
 import { addRewardPoints, getRPConfig } from '../services/firebaseService';
 
 // ============ Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x5115200132831af540e53A1F8e6C8C649eBD837e'; // BridgeStaking V3 (with stakeFor)
-const VCN_TOKEN_ADDRESS = '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33'; // VCN Token address
+const BRIDGE_STAKING_ADDRESS = '0x009326c391012593Aeca601B09c02545E00Aa818'; // BridgeStaking V3 (with stakeFor)
+const VCN_TOKEN_ADDRESS = '0xf8a2F49C782447a8660554F7c3274cbd765b1963'; // VCN Token address
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy'; // HTTPS RPC Proxy
 const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app'; // Paymaster API
 

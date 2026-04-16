@@ -10,7 +10,7 @@ const solc = require('solc');
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY || '0x78ef903e82813aebe7ff3dfb46581520435c70f8b05d8fa1d728a2bebc3179b0';
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
-const VCN_TOKEN = '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33';
+const VCN_TOKEN = '0xf8a2F49C782447a8660554F7c3274cbd765b1963';
 
 function findImports(importPath) {
     const dirs = [

@@ -3211,6 +3211,17 @@ export const subscribeToQueue = (
 
             // Calculate relative time or formatted time
             let unlockTime = data.unlockTime; // Unix timestamp (seconds)
+
+            // Fallback: read from unlockTimeTs (Firestore Timestamp) if unlockTime is missing
+            if (!unlockTime && data.unlockTimeTs) {
+                const ts = data.unlockTimeTs;
+                if (ts && typeof ts.toDate === 'function') {
+                    unlockTime = Math.floor(ts.toDate().getTime() / 1000);
+                } else if (ts && ts.seconds) {
+                    unlockTime = ts.seconds;
+                }
+            }
+
             // Validate unlockTime - if it's too large, it's corrupted data
             if (!unlockTime || unlockTime > 1e12) {
                 if (unlockTime > 1e15) {

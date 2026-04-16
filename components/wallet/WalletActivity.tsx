@@ -28,7 +28,7 @@ interface Transaction {
     recipient?: string;          // Bridge recipient address
 }
 
-const VCN_TOKEN_ADDRESS = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+const VCN_TOKEN_ADDRESS = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 export const WalletActivity = (props: WalletActivityProps) => {

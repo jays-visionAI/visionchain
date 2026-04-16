@@ -23,7 +23,7 @@ const getGatewayUrl = (): string => {
 };
 
 // Contract addresses (must match contractService)
-const VCN_TOKEN = '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33';
+const VCN_TOKEN = '0xf8a2F49C782447a8660554F7c3274cbd765b1963';
 const PAYMASTER_ADMIN = '0x805E8DB0175aeC75d2e2852aD14092466C281e3b'; // Executor wallet (matches server VCN_EXECUTOR_PK)
 const CHAIN_ID = 3151909;
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
@@ -224,10 +224,18 @@ export async function scheduleTransfer(
     executeAt: string | number, // ISO 8601 string or unix timestamp
 ): Promise<TransferResult> {
     try {
+        // Convert to ISO string if unix timestamp
+        const executeAtStr = typeof executeAt === 'number'
+            ? new Date(executeAt * 1000).toISOString()
+            : executeAt;
+
         const result = await callGateway('transfer.scheduled', {
             to,
             amount,
-            execute_at: executeAt,
+            condition: {
+                type: 'time_after',
+                value: executeAtStr,
+            },
         });
 
         return {
@@ -421,30 +429,58 @@ export async function sendBatchTransfer(
         throw new Error('Wallet not connected.');
     }
 
-    const results: TransferResult[] = [];
-    let successCount = 0;
-    let failedCount = 0;
+    try {
+        // Calculate total amount + 1 VCN flat fee for the entire batch
+        const totalAmount = recipients.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+        const fee = 1.0;
+        const totalVcn = (totalAmount + fee).toString();
 
-    for (let i = 0; i < recipients.length; i++) {
-        const { to, amount } = recipients[i];
-        const result = await sendTransfer(to, amount, activeSigner);
-        results.push(result);
+        // Sign a single permit for the total
+        const permit = await signPermit(activeSigner, totalVcn);
+        const fromAddress = await activeSigner.getAddress();
 
-        if (result.success) successCount++;
-        else failedCount++;
+        // Call Agent Gateway batch endpoint (1 permit, server distributes)
+        const result = await callGateway('transfer.batch', {
+            transactions: recipients.map(r => ({ to: r.to, amount: r.amount })),
+            from: fromAddress,
+            signature: permit.signature,
+            deadline: permit.deadline,
+            fee: ethers.parseUnits(fee.toString(), 18).toString(),
+        });
 
-        if (onProgress) onProgress(i + 1, recipients.length, result);
+        const results: TransferResult[] = (result.results || []).map((r: any) => ({
+            success: r.status === 'success',
+            txHash: r.tx_hash || r.txHash,
+            to: r.to || r.recipient,
+            amount: r.amount,
+            error: r.error,
+        }));
 
-        // Wait between transfers for nonce stability
-        if (i < recipients.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
+        const successCount = results.filter(r => r.success).length;
+        const failedCount = results.length - successCount;
+
+        // Notify progress for completion
+        if (onProgress && results.length > 0) {
+            onProgress(results.length, recipients.length, results[results.length - 1]);
         }
-    }
 
-    return {
-        results,
-        summary: { total: recipients.length, success: successCount, failed: failedCount },
-    };
+        return {
+            results,
+            summary: { total: recipients.length, success: successCount, failed: failedCount },
+        };
+    } catch (error: any) {
+        console.error('[TransferService] sendBatchTransfer failed:', error);
+        // Return all-failed result
+        return {
+            results: recipients.map(r => ({
+                success: false,
+                to: r.to,
+                amount: r.amount,
+                error: error.message || 'Batch transfer failed',
+            })),
+            summary: { total: recipients.length, success: 0, failed: recipients.length },
+        };
+    }
 }
 
 /**

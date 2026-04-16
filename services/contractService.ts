@@ -13,19 +13,19 @@ const ADDRESSES = {
     // VCN is now an ERC-20 token deployed on Vision Chain v2
 
     // Core Contracts (Vision Chain v2) - Deployed 2026-02-06
-    VCN_TOKEN: "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33", // VCN ERC-20 Token
-    VCN_PAYMASTER: "0x1F62fd30715131be3DA6C162678aBAFED075c77f", // VCNPaymasterNative
+    VCN_TOKEN: "0xf8a2F49C782447a8660554F7c3274cbd765b1963", // VCN ERC-20 Token
+    VCN_PAYMASTER: "0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3", // VCNPaymasterNative
     PAYMASTER_ADMIN: "0x805E8DB0175aeC75d2e2852aD14092466C281e3b", // Executor wallet for gasless transfers (matches server VCN_EXECUTOR_PK)
-    BRIDGE_STAKING: "0x5115200132831af540e53A1F8e6C8C649eBD837e", // BridgeStaking V3 (with stakeFor)
+    BRIDGE_STAKING: "0x009326c391012593Aeca601B09c02545E00Aa818", // BridgeStaking V3 (with stakeFor)
 
     // Legacy Core Contracts (old chain)
     VCN_VESTING: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     NODE_LICENSE: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-    MINING_POOL: "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33",
-    VISION_BRIDGE: "0x1F62fd30715131be3DA6C162678aBAFED075c77f",
+    MINING_POOL: "0xf8a2F49C782447a8660554F7c3274cbd765b1963",
+    VISION_BRIDGE: "0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3",
 
     // Secure Bridge (Phase 1 - Optimistic Security)
-    INTENT_COMMITMENT: "0x5115200132831af540e53A1F8e6C8C649eBD837e",
+    INTENT_COMMITMENT: "0x009326c391012593Aeca601B09c02545E00Aa818",
     MESSAGE_INBOX: "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
     VISION_BRIDGE_SECURE: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
 
@@ -34,7 +34,7 @@ const ADDRESSES = {
 
     // Legacy (kept for compatibility)
     TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
-    TIME_LOCK_AGENT_MOCK: "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33",
+    TIME_LOCK_AGENT_MOCK: "0xf8a2F49C782447a8660554F7c3274cbd765b1963",
 
     // V2 Security Core
     VISION_EQUALIZER: "0x0000000000000000000000000000000000000000", // Pending
@@ -527,81 +527,13 @@ export class ContractService {
         }
     }
 
-    /**
-     * @deprecated Agent Gateway handles gas estimation internally.
-     */
-    async estimateTimeLockGas(_recipient: string, _amount: string, _delaySeconds: number): Promise<{
-        gasLimit: bigint; gasPrice: bigint; totalCostVCN: string; serviceFee: string; totalFee: string;
-    }> {
-        return {
-            gasLimit: BigInt(150000),
-            gasPrice: ethers.parseUnits("1", "gwei"),
-            totalCostVCN: "0.00015",
-            serviceFee: "1.0",
-            totalFee: "1.00015"
-        };
-    }
-
-    /**
-     * @deprecated Agent Gateway handles batch gas estimation internally.
-     */
-    async estimateBatchGas(_transactions: Array<{ recipient: string; amount: string }>): Promise<{
-        perTxGas: string; totalGasVCN: string; serviceFee: string; totalFee: string;
-        breakdown: Array<{ recipient: string; amount: string; estimatedGas: string }>;
-    }> {
-        return { perTxGas: "0.0001", totalGasVCN: "0.001", serviceFee: "1.0", totalFee: "1.001", breakdown: [] };
-    }
-
     // ============================================
-    // GASLESS PAYMASTER FUNCTIONS (DEPRECATED)
-    // Use transferService.ts instead.
+    // GASLESS PAYMASTER FUNCTIONS - REMOVED
+    // Deprecated stubs removed. Use transferService.ts for:
+    //   - scheduleTransfer() (replaces scheduleTimeLockGasless, scheduleTransferNative)
+    //   - sendBatchTransfer() (replaces sendBatchGasless)
+    //   - Gas estimation and fee quotes are handled server-side by the Agent Gateway.
     // ============================================
-
-    /**
-     * @deprecated Use transferService.scheduleTransfer() instead.
-     */
-    async scheduleTimeLockGasless(
-        recipient: string, amount: string, delaySeconds: number, _userEmail?: string
-    ): Promise<{ receipt: any; scheduleId: string; txHash: string }> {
-        console.warn('[contractService] scheduleTimeLockGasless is deprecated. Use transferService.scheduleTransfer().');
-        const { scheduleTransfer } = await import('./transferService');
-        const executeAt = new Date(Date.now() + delaySeconds * 1000).toISOString();
-        const result = await scheduleTransfer(recipient, amount, executeAt);
-        return { receipt: null, scheduleId: result.scheduleId || '', txHash: result.txHash || '' };
-    }
-
-    /**
-     * @deprecated Use transferService.sendBatchTransfer() instead.
-     */
-    async sendBatchGasless(
-        _transactions: Array<{ recipient: string; amount: string }>,
-        _userEmail?: string
-    ): Promise<{ results: Array<{ recipient: string; status: string; txHash?: string }> }> {
-        console.warn('[contractService] sendBatchGasless is deprecated. Use transferService.sendBatchTransfer().');
-        return { results: [] };
-    }
-
-    /**
-     * @deprecated Agent Gateway handles fees internally.
-     */
-    async getFeeQuote(_type: 'single' | 'timelock' | 'batch', _params: {
-        amount?: string; recipient?: string; delaySeconds?: number;
-        transactions?: Array<{ recipient: string; amount: string }>;
-    }): Promise<{ type: string; gasCostVCN: string; serviceFee: string; totalFee: string; breakdown?: any }> {
-        return { type: _type, gasCostVCN: "0.0001", serviceFee: "1.0", totalFee: "1.0001" };
-    }
-
-    // --- TimeLock Agent Functions ---
-    /**
-     * @deprecated Use transferService.scheduleTransfer() instead.
-     */
-    async scheduleTransferNative(recipient: string, amount: string, delaySeconds: number) {
-        console.warn('[contractService] scheduleTransferNative is deprecated. Use transferService.scheduleTransfer().');
-        const { scheduleTransfer } = await import('./transferService');
-        const executeAt = new Date(Date.now() + delaySeconds * 1000).toISOString();
-        const result = await scheduleTransfer(recipient, amount, executeAt);
-        return { receipt: { hash: result.txHash || '' }, scheduleId: result.scheduleId || '' };
-    }
 
 
     async cancelScheduledTransfer(scheduleId: string) {

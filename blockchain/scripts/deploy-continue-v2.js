@@ -1,6 +1,6 @@
 /**
  * Vision Chain v2 - Continue Deployment
- * VCNToken already deployed at 0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33
+ * VCNToken already deployed at 0xf8a2F49C782447a8660554F7c3274cbd765b1963
  */
 
 const { ethers } = require('ethers');
@@ -13,7 +13,7 @@ const ADMIN_KEY = process.env.VISION_ADMIN_PK;
 const CHAIN_ID = 3151909;
 
 // Already deployed
-const VCN_TOKEN_ADDRESS = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+const VCN_TOKEN_ADDRESS = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 
 async function main() {
     console.log("\n" + "=".repeat(60));

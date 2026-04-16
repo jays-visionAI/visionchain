@@ -15,7 +15,7 @@ export const AdminReferrals = lazy(() => import('../components/admin/AdminReferr
 export const AdminVCNDistribution = lazy(() => import('../components/admin/AdminVCNDistribution'));
 export const AdminTraffic = lazy(() => import('../components/admin/AdminTraffic'));
 export const VcnSettings = lazy(() => import('../components/admin/VcnSettings'));
-export const PaymasterAdmin = lazy(() => import('../components/admin/PaymasterAdmin'));
+// PaymasterAdmin removed - component deleted (orphan, depended on removed paymaster service files)
 export const AdminDeFi = lazy(() => import('../components/admin/AdminDeFi'));
 export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
 export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminBridgeNetworks'));
@@ -196,16 +196,7 @@ export function VcnSettingsPage() {
     );
 }
 
-export function PaymasterAdminPage() {
-    document.title = 'Paymaster Management | Admin';
-    return (
-        <Suspense fallback={<PageLoader />}>
-            <AdminLayout>
-                <PaymasterAdmin />
-            </AdminLayout>
-        </Suspense>
-    );
-}
+// PaymasterAdminPage removed - component deleted (depended on removed paymaster service files)
 export function AdminDeFiPage() {
     document.title = 'De-Fi Management | Admin';
     return (

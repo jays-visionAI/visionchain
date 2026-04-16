@@ -253,7 +253,7 @@ export const NodeDistributionChart: Component<NodeDistributionProps> = (props) =
 
     const segments = [
         { label: 'Authority', key: 'authority', color: 'bg-blue-500', shadow: 'shadow-blue-500/50' },
-        { label: 'Consensus', key: 'consensus', color: 'bg-green-500', shadow: 'shadow-green-500/50' },
+        { label: 'Connected', key: 'consensus', color: 'bg-green-500', shadow: 'shadow-green-500/50' },
         { label: 'Agent', key: 'agent', color: 'bg-purple-500', shadow: 'shadow-purple-500/50' },
         { label: 'Edge', key: 'edge', color: 'bg-slate-500', shadow: 'shadow-slate-500/50' },
     ];

@@ -6,7 +6,7 @@ const path = require("path");
 const readline = require("readline");
 
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-const VCN_TOKEN = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+const VCN_TOKEN = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 const STAKING_ADMIN = "0xAFf852Ee7DF3C036719e7b5461840aA2c66aC0ae";
 const PAYMASTER_ADDR = "0x805E8DB0175aeC75d2e2852aD14092466C281e3b";
 

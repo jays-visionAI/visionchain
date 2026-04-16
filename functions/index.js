@@ -717,10 +717,10 @@ const VCN_EXECUTOR_PK = (process.env.VCN_EXECUTOR_PK || "").trim();
 const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || (process.env.EXECUTOR_PK || "").trim();
 
 // --- VCN Token Address (Vision Chain v2) ---
-const VCN_TOKEN_ADDRESS = "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33";
+const VCN_TOKEN_ADDRESS = "0xf8a2F49C782447a8660554F7c3274cbd765b1963";
 
 // --- BridgeStaking Contract Config ---
-const BRIDGE_STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e"; // V3 (with stakeFor)
+const BRIDGE_STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818"; // V3 (with stakeFor)
 
 const BRIDGE_STAKING_ABI = [
   "function setTargetAPY(uint256 _apyBasisPoints) external",
@@ -734,7 +734,7 @@ const BRIDGE_STAKING_ABI = [
 ];
 
 // --- VisionAgentSBT Contract Config (EIP-5192) ---
-const AGENT_SBT_ADDRESS = "0x25fD5C55Dd5ed38DcaF2821AE5Cba1092f6BDffc";
+const AGENT_SBT_ADDRESS = "0x52D6e11B4ae4d1D51Df35BF839Baa8711C3702a7";
 const AGENT_SBT_ABI = [
   "function mintAgentIdentity(address to, string agentName, string platform) external returns (uint256)",
   "function getAgentByAddress(address wallet) external view returns (uint256, string, string, uint256)",
@@ -758,9 +758,9 @@ const ERC20_ABI = [
 ];
 
 // --- Storage Contracts ---
-const STORAGE_REGISTRY_ADDRESS = "0x26d4b785e5861694Bd6B8EAA08b5e5A7458D6739";
-const STORAGE_PROOF_ADDRESS = "0x4C8789B177A2271252A1b8D054778326D40cADC4";
-const STORAGE_REWARDS_ADDRESS = "0x30268b6f5448B863d4C9f6f471a2A79180eed4DF";
+const STORAGE_REGISTRY_ADDRESS = "0xa58b9F7C274b0402Ad2684B6DBBF8e24F396f065";
+const STORAGE_PROOF_ADDRESS = "0x2B3f58429a68695eff8045E4AD5AB5f4Ca2E5F28";
+const STORAGE_REWARDS_ADDRESS = "0xeaA1b6777Bb00770FD7Ef7897643D6706d46Edac";
 
 const STORAGE_REGISTRY_ABI = [
   "function registerNode(bytes32 nodeId, address operator, uint256 capacityGB, string nodeClass) external",
@@ -1104,69 +1104,12 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
         case "agent_execution":
           return await handleAgentExecution(req, res, { user, amount, fee, deadline, signature, tokenContract, adminWallet });
 
-        case "reverse_bridge_info": {
-          // Return relayer address for client reference
-          const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
-          if (!sepoliaRelayerPk) {
-            return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
-          }
-          const relayerWallet = new ethers.Wallet(sepoliaRelayerPk);
-          return res.status(200).json({
-            success: true,
-            relayerAddress: relayerWallet.address,
-            vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
-          });
-        }
 
-        case "reverse_bridge_prepare": {
-          // Gas sponsorship: send Sepolia ETH to user so they can call approve()
-          // This is needed because VCNTokenSepolia does NOT support ERC-2612 Permit
-          const prepRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
-          if (!prepRelayerPk) {
-            return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
-          }
-          if (!user) {
-            return res.status(400).json({ error: "Missing required field: user" });
-          }
+        // NOTE: reverse_bridge_info, reverse_bridge_prepare, reverse_bridge removed
+        // These are now handled exclusively by the Agent Gateway (bridge.reverse_prepare, bridge.reverse)
+        // The Paymaster versions were functionally identical but unused by any frontend code.
 
-          const prepSepoliaProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
-          const prepRelayerWallet = new ethers.Wallet(prepRelayerPk, prepSepoliaProvider);
-          const prepRelayerAddress = prepRelayerWallet.address;
 
-          // Check user's Sepolia ETH balance
-          const userEthBalance = await prepSepoliaProvider.getBalance(user);
-          const GAS_SPONSOR_AMOUNT = ethers.parseEther("0.005"); // ~enough for 2-3 approve txs
-
-          let gasRefillTxHash = null;
-          if (userEthBalance < GAS_SPONSOR_AMOUNT) {
-            console.log(`[ReverseBridgePrepare] Sending ${ethers.formatEther(GAS_SPONSOR_AMOUNT)} ETH to ${user} for gas...`);
-            const relayerEthBal = await prepSepoliaProvider.getBalance(prepRelayerAddress);
-            if (relayerEthBal < GAS_SPONSOR_AMOUNT + ethers.parseEther("0.01")) {
-              return res.status(503).json({ error: "Relayer ETH balance too low for gas sponsorship" });
-            }
-            const gasTx = await prepRelayerWallet.sendTransaction({
-              to: user,
-              value: GAS_SPONSOR_AMOUNT,
-              gasLimit: 21000,
-            });
-            await gasTx.wait();
-            gasRefillTxHash = gasTx.hash;
-            console.log(`[ReverseBridgePrepare] Gas refill tx: ${gasRefillTxHash}`);
-          } else {
-            console.log(`[ReverseBridgePrepare] User already has ${ethers.formatEther(userEthBalance)} ETH, skipping refill`);
-          }
-
-          return res.status(200).json({
-            success: true,
-            relayerAddress: prepRelayerAddress,
-            vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
-            gasRefillTxHash,
-            userEthBalance: ethers.formatEther(userEthBalance),
-          });
-        }
-
-        case "reverse_bridge":
-          return await handleReverseBridge(req, res, { user, recipient, amount, fee, deadline, signature, adminWallet });
 
         case "sepolia_transfer":
           return await handleSepoliaTransfer(req, res, { user, recipient, amount, fee, deadline, signature });
@@ -1628,7 +1571,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
 
   try {
     // Contract addresses (Vision Chain v2 Testnet)
-    const INTENT_COMMITMENT_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+    const INTENT_COMMITMENT_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
     const VISION_BRIDGE_SECURE_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
 
     // IntentCommitment ABI (V2 - simpler interface)
@@ -2228,7 +2171,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
 
   try {
     // Staking contract address
-    const BRIDGE_STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e"; // V3 (with stakeFor)
+    const BRIDGE_STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818"; // V3 (with stakeFor)
 
     // Staking contract ABI (with Paymaster delegation functions)
     const STAKING_ABI = [
@@ -4596,7 +4539,7 @@ async function executeVisionChainBridgeTransfer(bridge) {
   // For Native VCN, we simply send VCN directly (no ERC-20 contract needed)
   // The Bridge contract holds locked VCN and releases it
   // eslint-disable-next-line no-unused-vars
-  const VISION_BRIDGE_ADDRESS = "0x1F62fd30715131be3DA6C162678aBAFED075c77f";
+  const VISION_BRIDGE_ADDRESS = "0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3";
 
   // Check if we should use bridge contract or direct transfer (for small amounts/testing)
   const adminBalance = await provider.getBalance(adminWallet.address);
@@ -6838,7 +6781,7 @@ exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public", secret
 
 // Secure Bridge Contract Addresses (Vision Chain) - Phase 1 Security
 // eslint-disable-next-line no-unused-vars
-const _SECURE_INTENT_COMMITMENT = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+const _SECURE_INTENT_COMMITMENT = "0x009326c391012593Aeca601B09c02545E00Aa818";
 const SECURE_MESSAGE_INBOX = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318";
 // eslint-disable-next-line no-unused-vars
 const _SECURE_VISION_BRIDGE = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
@@ -10963,7 +10906,7 @@ exports.agentGateway = onRequest({
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const STAKING_ABI_FULL = [
           "function stakeFor(address beneficiary, uint256 amount) external",
           "function getStake(address account) external view returns (uint256)",
@@ -11052,7 +10995,7 @@ exports.agentGateway = onRequest({
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const STAKING_ABI_FULL = [
           "function requestUnstakeFor(address beneficiary, uint256 amount) external",
           "function getStake(address account) external view returns (uint256)",
@@ -11111,7 +11054,7 @@ exports.agentGateway = onRequest({
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const STAKING_ABI_FULL = [
           "function claimRewardsFor(address beneficiary) external",
           "function pendingReward(address account) external view returns (uint256)",
@@ -11168,7 +11111,7 @@ exports.agentGateway = onRequest({
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const STAKING_ABI_FULL = [
           "function getStake(address account) external view returns (uint256)",
           "function pendingReward(address account) external view returns (uint256)",
@@ -11230,7 +11173,7 @@ exports.agentGateway = onRequest({
               address: VCN_TOKEN_ADDRESS,
               decimals: 18,
             },
-            staking_contract: "0x5115200132831af540e53A1F8e6C8C649eBD837e",
+            staking_contract: "0x009326c391012593Aeca601B09c02545E00Aa818",
             explorer: "https://visionchain.co/visionscan",
             total_agents: totalAgents,
           },
@@ -11602,25 +11545,29 @@ exports.agentGateway = onRequest({
           totalAmount += ethers.parseEther(tx.amount.toString());
         }
 
-        // Check balance
+        // Add 1 VCN flat batch fee (matches client-side signPermit)
+        const batchFee = req.body.fee ? BigInt(req.body.fee) : ethers.parseEther("1");
+        const totalWithFee = totalAmount + batchFee;
+
+        // Check balance (including fee)
         const batchUserAddr = req.body.from || agent.walletAddress;
         const bal = await tokenContract.balanceOf(batchUserAddr);
-        if (bal < totalAmount) {
+        if (bal < totalWithFee) {
           return res.status(400).json({
             error: "Insufficient balance for batch",
             balance: ethers.formatEther(bal),
-            required: ethers.formatEther(totalAmount),
+            required: ethers.formatEther(totalWithFee),
           });
         }
 
         // ========== Consolidate funds to admin ==========
         if (agent._isUser) {
-          // USER MODE: Use permit to transfer total amount to admin
+          // USER MODE: Use permit to transfer total amount + fee to admin
           const { signature, deadline } = req.body;
           if (!signature || !deadline) {
             return res.status(400).json({
               error: "User-mode batch requires: transactions, signature, deadline",
-              hint: "Sign an EIP-712 Permit for the total batch amount to authorize the transfers.",
+              hint: "Sign an EIP-712 Permit for the total batch amount (including fee) to authorize the transfers.",
             });
           }
 
@@ -11630,13 +11577,13 @@ exports.agentGateway = onRequest({
           const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
 
           const permitTx = await tokenContract.permit(
-            batchUserAddr, adminWallet.address, totalAmount, deadline, v, r, sigS,
+            batchUserAddr, adminWallet.address, totalWithFee, deadline, v, r, sigS,
             { nonce: startNonce },
           );
           await permitTx.wait();
 
           const consolidateTx = await tokenContract.transferFrom(
-            batchUserAddr, adminWallet.address, totalAmount,
+            batchUserAddr, adminWallet.address, totalWithFee,
             { nonce: startNonce + 1 },
           );
           await consolidateTx.wait();
@@ -11754,6 +11701,62 @@ exports.agentGateway = onRequest({
       }
 
       try {
+        // === time_after: Save to scheduledTransfers root collection (schedulerRunner compatible) ===
+        if (condition.type === "time_after") {
+          const executeTime = new Date(condition.value);
+          if (isNaN(executeTime.getTime())) {
+            return res.status(400).json({ error: "Invalid time_after value. Must be ISO 8601 date string." });
+          }
+
+          const scheduleId = `tl_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          const amountWei = ethers.parseEther(amount.toString()).toString();
+
+          const jobRef = await db.collection("scheduledTransfers").add({
+            scheduleId: scheduleId,
+            from: agent.walletAddress,
+            to: to,
+            senderAddress: agent.walletAddress,
+            recipient: to,
+            amount: amountWei,
+            unlockTime: Math.floor(executeTime.getTime() / 1000),
+            unlockTimeTs: admin.firestore.Timestamp.fromDate(executeTime),
+            status: "WAITING",
+            createdAt: admin.firestore.Timestamp.now(),
+            txHash: null,
+            fee: "0",
+            type: "TIMELOCK",
+            userEmail: agent._isUser ? agent.email : null,
+            token: "VCN",
+            retryCount: 0,
+          });
+
+          console.log(`[Agent Gateway] Scheduled transfer created: ${jobRef.id} (scheduleId: ${scheduleId})`);
+
+          // Notification (fire-and-forget)
+          if (agent._isUser && agent.email) {
+            db.collection("users").doc(agent.email).collection("notifications").add({
+              type: "transfer_scheduled",
+              title: "Transfer Scheduled",
+              content: `${amount} VCN will be sent to ${to.slice(0, 10)}... at ${executeTime.toISOString()}`,
+              data: { scheduleId, jobId: jobRef.id, to, amount, executeAt: condition.value },
+              read: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => { });
+          }
+
+          return res.status(200).json({
+            success: true,
+            schedule_id: scheduleId,
+            condition_id: jobRef.id,
+            to,
+            amount: amount.toString(),
+            condition,
+            status: "watching",
+            message: `Transfer scheduled. Will execute after ${condition.value}.`,
+          });
+        }
+
+        // === balance_above / balance_below: Save to conditional_transfers sub-collection ===
         const parentCollection = agent._isUser ? "users" : "agents";
         const parentDocId = agent._isUser ? agent.uid : agent.id;
 
@@ -11767,18 +11770,14 @@ exports.agentGateway = onRequest({
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        const isScheduled = action === "scheduled_transfer" || action === "transfer.scheduled";
         return res.status(200).json({
           success: true,
           condition_id: condRef.id,
-          ...(isScheduled ? { schedule_id: condRef.id } : {}),
           to,
           amount: amount.toString(),
           condition,
           status: "watching",
-          message: condition.type === "time_after" ?
-            `Transfer scheduled. Will execute after ${condition.value}.` :
-            `Conditional transfer created. Will execute when ${condition.type} ${condition.value}.`,
+          message: `Conditional transfer created. Will execute when ${condition.type} ${condition.value}.`,
         });
       } catch (e) {
         return res.status(500).json({ error: `Conditional transfer failed: ${e.message}` });
@@ -11791,7 +11790,7 @@ exports.agentGateway = onRequest({
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const STAKING_ABI_WITHDRAW = [
           "function withdrawFor(address beneficiary) external",
           "function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)",
@@ -11856,7 +11855,7 @@ exports.agentGateway = onRequest({
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const STAKING_ABI_COMPOUND = [
           "function claimRewardsFor(address beneficiary) external",
           "function stakeFor(address beneficiary, uint256 amount) external",
@@ -11936,7 +11935,7 @@ exports.agentGateway = onRequest({
     if (action === "rewards" || action === "staking.rewards") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
           "function pendingReward(address account) external view returns (uint256)",
           "function getStake(address account) external view returns (uint256)",
@@ -11964,7 +11963,7 @@ exports.agentGateway = onRequest({
     if (action === "apy" || action === "staking.apy") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
           "function currentAPY() external view returns (uint256)",
           "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
@@ -12000,7 +11999,7 @@ exports.agentGateway = onRequest({
     if (action === "cooldown" || action === "staking.cooldown") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const STAKING_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const STAKING_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
           "function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)",
         ], provider);
@@ -12484,7 +12483,7 @@ exports.agentGateway = onRequest({
         }
 
         // ========== Commit intent (same for both modes) ==========
-        const INTENT_COMMITMENT_ADDRESS = "0x5115200132831af540e53A1F8e6C8C649eBD837e";
+        const INTENT_COMMITMENT_ADDRESS = "0x009326c391012593Aeca601B09c02545E00Aa818";
         const INTENT_ABI = [
           "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
           "event IntentCommitted(bytes32 indexed intentHash, address indexed user, address indexed recipient, uint256 amount, uint256 nonce, uint256 createdAt, uint256 destChainId)",
@@ -12505,24 +12504,66 @@ exports.agentGateway = onRequest({
           }
         }
 
+        // === STEP 2: Lock VCN with intentHash (mirrors Paymaster handleBridge) ===
+        const VISION_BRIDGE_SECURE_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
+        const BRIDGE_SECURE_ABI_LOCAL = [
+          "function lockVCN(bytes32 intentHash, address recipient, uint256 destChainId) payable",
+        ];
+        const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, BRIDGE_SECURE_ABI_LOCAL, adminWallet);
+
+        let lockTxHash = null;
+        try {
+          console.log(`[Agent Gateway] Bridge Step 2: Locking ${ethers.formatEther(amountWei)} VCN...`);
+          const lockTx = await bridgeContract.lockVCN(intentHash, bridgeRecipient, destChainId, {
+            value: amountWei,
+            gasLimit: 300000,
+          });
+          await lockTx.wait();
+          lockTxHash = lockTx.hash;
+          console.log(`[Agent Gateway] Bridge lockVCN confirmed: ${lockTxHash}`);
+        } catch (lockErr) {
+          console.error(`[Agent Gateway] Bridge lockVCN failed (commit succeeded):`, lockErr.message);
+          // commitIntent succeeded, so record the partial bridge and continue
+        }
+
         // Record bridge in Firestore (under correct collection)
         const parentCollection = agent._isUser ? "users" : "agents";
         const parentDocId = agent._isUser ? agent.uid : agent.id;
+
+        const bridgeStatus = lockTxHash ? "LOCKED" : "committed";
 
         const bridgeRef = await db.collection(parentCollection).doc(parentDocId).collection("bridge_history").add({
           type: "outbound",
           amount: amount.toString(),
           fee: "1",
-          source_chain: 1337,
+          source_chain: 3151909,
           destination_chain: destChainId,
           recipient: bridgeRecipient,
           intent_hash: intentHash,
           commit_tx: commitTx.hash,
+          lock_tx: lockTxHash,
           wallet_address: agent.walletAddress,
           auth_mode: agent._isUser ? "firebase" : "api_key",
-          status: "committed",
+          status: bridgeStatus,
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
+
+        // Also record in bridgeTransactions root collection (for Bridge.tsx history compatibility)
+        db.collection("bridgeTransactions").add({
+          user: agent.walletAddress.toLowerCase(),
+          srcChainId: 3151909,
+          dstChainId: destChainId,
+          amount: amount.toString(),
+          fee: "1",
+          recipient: bridgeRecipient,
+          intentHash: intentHash,
+          txHash: lockTxHash || commitTx.hash,
+          commitTxHash: commitTx.hash,
+          lockTxHash: lockTxHash,
+          status: bridgeStatus,
+          createdAt: admin.firestore.Timestamp.now(),
+          type: "BRIDGE_GATEWAY",
+        }).catch(() => { });
 
         // Forward fee to staking (fire-and-forget)
         (async () => {
@@ -12548,26 +12589,27 @@ exports.agentGateway = onRequest({
           db.collection("users").doc(agent.email).collection("notifications").add({
             type: "bridge_started",
             title: "Bridge Initiated",
-            content: `Bridging ${amount} VCN to chain ${destChainId}. 15-min challenge period applies.`,
-            data: { amount, destChainId, intentHash, bridgeId: bridgeRef.id },
+            content: `Bridging ${amount} VCN to chain ${destChainId}. ${lockTxHash ? "VCN locked successfully." : "15-min challenge period applies."}`,
+            data: { amount, destChainId, intentHash, bridgeId: bridgeRef.id, lockTx: lockTxHash },
             read: false,
             createdAt: admin.firestore.Timestamp.now(),
           }).catch(() => { });
         }
 
         const displayName = agent._isUser ? agent.displayName : agent.agentName;
-        console.log(`[Agent Gateway] Bridge: ${displayName} -> chain ${destChainId}: ${amount} VCN, intent: ${intentHash}`);
+        console.log(`[Agent Gateway] Bridge: ${displayName} -> chain ${destChainId}: ${amount} VCN, intent: ${intentHash}, lock: ${lockTxHash}`);
 
         return res.status(200).json({
           success: true,
           bridge_id: bridgeRef.id,
           intent_hash: intentHash,
           commit_tx: commitTx.hash,
+          lock_tx: lockTxHash,
           amount,
           fee: "1",
           destination_chain: destChainId,
           recipient: bridgeRecipient,
-          status: "committed",
+          status: bridgeStatus,
           rp_earned: agent._isUser ? 0 : rpCfg.agent_bridge_initiate,
         });
       } catch (e) {

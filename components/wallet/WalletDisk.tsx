@@ -32,7 +32,7 @@ import NodeRewardPanel from './NodeRewardPanel';
 import { isBiometricAvailable, hasStoredPassword, savePasswordWithBiometric, getPasswordWithBiometric } from '../../services/diskPasskeyService';
 
 // ─── Gasless Permit Constants (must match transferService / contractService) ───
-const VCN_TOKEN = '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33';
+const VCN_TOKEN = '0xf8a2F49C782447a8660554F7c3274cbd765b1963';
 const PAYMASTER_ADMIN = '0x805E8DB0175aeC75d2e2852aD14092466C281e3b';
 const CHAIN_ID = 3151909;
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';

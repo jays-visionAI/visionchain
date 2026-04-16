@@ -25,8 +25,8 @@ const CHAIN_ID = 3151909;
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const DEPLOYED = {
-    VCN_TOKEN: "0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33",
-    PAYMASTER: "0x1F62fd30715131be3DA6C162678aBAFED075c77f"
+    VCN_TOKEN: "0xf8a2F49C782447a8660554F7c3274cbd765b1963",
+    PAYMASTER: "0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3"
 };
 
 // ─── Firebase Admin Init ────────────────────────────────────────────────────

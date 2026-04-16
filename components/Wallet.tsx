@@ -95,7 +95,7 @@ import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services
 import { generateText, generateTextStream } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
-import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
+import { sendTransfer, sendBatchTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
 import { parseVoiceIntent, resolveIntentRecipient, findFuzzyContactMatches, normalizeBlockchainTerms, buildBlockchainGrammar } from '../services/voiceIntentService';
 import type { VoiceIntent, FuzzyContactMatch } from '../services/voiceIntentService';
@@ -1574,82 +1574,104 @@ const Wallet = (): JSX.Element => {
                 }
 
                 const finalResults: any[] = [];
-                for (let i = 0; i < transactions.length; i++) {
-                    const tx = transactions[i];
-                    // Normalize recipient field (support both 'recipient' and 'address' for backwards compat)
-                    const recipientAddr = tx.recipient || tx.address;
-                    if (!recipientAddr) {
-                        console.error('Transaction missing recipient address:', tx);
-                        setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, failedCount: a.failedCount + 1 } : a));
-                        continue;
-                    }
-                    // Update Agent progress: 3/n Transactions - Update Background Agent, not global loader
-                    setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, currentCount: i + 1 } : a));
 
-                    try {
-                        let receipt;
-                        const symbol = tx.symbol || 'VCN';
-
-                        // Default to 'send' if no intent specified
-                        const intent = tx.intent || 'send';
-                        if (intent === 'send') {
-                            if (symbol === 'VCN') {
-                                const result = await sendTransfer(recipientAddr, tx.amount);
-                                if (!result.success) throw new Error(result.error || 'Transfer failed');
-                                receipt = { hash: result.txHash || '0x...' };
-                                console.log(`[Batch] Gateway transfer ${i + 1}/${transactions.length} successful:`, receipt.hash);
-                            } else {
-                                receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
-                            }
-                        } else if (tx.intent === 'schedule') {
-                            const delay = tx.executeAt ? Math.max(60, Math.floor((tx.executeAt - Date.now()) / 1000)) : 300;
-                            const executeAt = new Date(Date.now() + delay * 1000).toISOString();
-                            const schedResult = await scheduleTransfer(recipientAddr, tx.amount, executeAt);
-                            if (!schedResult.success) throw new Error(schedResult.error || 'Schedule failed');
-                            receipt = { hash: schedResult.scheduleId || 'scheduled' };
+                // Use server-side batch transfer (1 permit for total, server distributes)
+                const batchRecipients = transactions
+                    .filter((tx: any) => {
+                        const addr = tx.recipient || tx.address;
+                        if (!addr) {
+                            console.error('Transaction missing recipient address:', tx);
+                            return false;
                         }
+                        return true;
+                    })
+                    .map((tx: any) => ({
+                        to: tx.recipient || tx.address,
+                        amount: tx.amount.toString(),
+                    }));
 
-                        finalResults.push({ success: true, hash: receipt?.hash, tx });
-                        setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, successCount: a.successCount + 1 } : a));
+                if (batchRecipients.length === 0) {
+                    setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                        ...a, status: 'FAILED', error: 'No valid recipients', failedCount: transactions.length
+                    } : a));
+                    setMessages(prev => [...prev, { role: 'assistant', content: 'Batch transfer failed: No valid recipient addresses found.' }]);
+                    return;
+                }
 
-                        // Notify recipient for immediate transfers (not scheduled)
-                        if (tx.intent !== 'schedule' && receipt?.hash) {
-                            try {
-                                const recipientUser = await findUserByAddress(recipientAddr);
-                                if (recipientUser?.email) {
-                                    const senderAddress = userProfile().address;
-                                    const senderDisplayName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
-                                    await createNotification(recipientUser.email, {
-                                        type: 'transfer_received',
-                                        title: 'Coins Received',
-                                        content: `You received ${tx.amount} ${tx.symbol || 'VCN'} from ${senderDisplayName} (${senderAddress?.slice(0, 6)}...${senderAddress?.slice(-4)}).`,
-                                        data: { amount: tx.amount, symbol: tx.symbol || 'VCN', sender: userProfile().email, senderAddress, txHash: receipt.hash }
-                                    });
-                                }
-                            } catch (notiErr) {
-                                console.warn("Recipient notification failed:", notiErr);
-                            }
+                try {
+                    setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                        ...a, currentCount: 1
+                    } : a));
+
+                    const batchResult = await sendBatchTransfer(
+                        batchRecipients,
+                        contractService.getSigner(),
+                        (current, total, lastResult) => {
+                            setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                                ...a,
+                                currentCount: current,
+                                successCount: a.successCount + (lastResult.success ? 1 : 0),
+                                failedCount: a.failedCount + (lastResult.success ? 0 : 1),
+                            } : a));
                         }
-                    } catch (err: any) {
-                        console.error("Batch item failed:", err);
-                        const errorMsg = err.message || "Unknown error";
-                        finalResults.push({ success: false, error: errorMsg, tx });
-                        // Store error message in agent for UI display
-                        setBatchAgents(prev => prev.map(a => a.id === agentId ? {
-                            ...a,
-                            failedCount: a.failedCount + 1,
-                            error: errorMsg,
-                            lastError: { recipient: recipientAddr, amount: tx.amount, message: errorMsg }
-                        } : a));
+                    );
+
+                    // Map results back to finalResults format for report
+                    for (let i = 0; i < batchResult.results.length; i++) {
+                        const r = batchResult.results[i];
+                        const originalTx = transactions[i] || {};
+                        finalResults.push({
+                            success: r.success,
+                            hash: r.txHash || '',
+                            error: r.error,
+                            tx: {
+                                recipient: r.to || batchRecipients[i]?.to,
+                                amount: r.amount || batchRecipients[i]?.amount,
+                                symbol: originalTx.symbol || 'VCN',
+                                name: originalTx.name || (r.to ? `${r.to.slice(0, 6)}...` : ''),
+                            }
+                        });
                     }
 
-                    // 10 second interval for stability
-                    // 10 second interval for stability
-                    // Dynamic interval based on user preference
-                    if (i < transactions.length - 1) {
-                        const waitTime = (action.data.interval || 5) * 1000;
-                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                    // Update agent card with final counts
+                    setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                        ...a,
+                        currentCount: batchResult.results.length,
+                        successCount: batchResult.summary.success,
+                        failedCount: batchResult.summary.failed,
+                    } : a));
+
+                    // Send recipient notifications for successful transfers
+                    for (const r of finalResults.filter(r => r.success)) {
+                        try {
+                            const recipientUser = await findUserByAddress(r.tx.recipient);
+                            if (recipientUser?.email) {
+                                const senderAddress = userProfile().address;
+                                const senderDisplayName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
+                                await createNotification(recipientUser.email, {
+                                    type: 'transfer_received',
+                                    title: 'Coins Received',
+                                    content: `You received ${r.tx.amount} ${r.tx.symbol || 'VCN'} from ${senderDisplayName} (${senderAddress?.slice(0, 6)}...${senderAddress?.slice(-4)}).`,
+                                    data: { amount: r.tx.amount, symbol: r.tx.symbol || 'VCN', sender: userProfile().email, senderAddress, txHash: r.hash }
+                                });
+                            }
+                        } catch (notiErr) {
+                            console.warn('Recipient notification failed:', notiErr);
+                        }
                     }
+                } catch (batchErr: any) {
+                    console.error('[Batch] Server batch failed:', batchErr);
+                    // All failed
+                    for (const tx of transactions) {
+                        finalResults.push({
+                            success: false,
+                            error: batchErr.message || 'Batch transfer failed',
+                            tx: { recipient: tx.recipient || tx.address, amount: tx.amount, symbol: tx.symbol || 'VCN', name: tx.name || '' }
+                        });
+                    }
+                    setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                        ...a, failedCount: transactions.length, error: batchErr.message
+                    } : a));
                 }
 
                 // Calculate final counts for the report

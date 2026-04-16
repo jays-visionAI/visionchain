@@ -60,7 +60,7 @@ const highlight = (code: string, lang: string): string => {
 
 // ─── Constants ───
 const API = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
-const NET = { name: 'Vision Chain', chainId: 3151909, rpc: 'https://api.visionchain.co/rpc-proxy', token: 'VCN', tokenAddr: '0x76c3C3A9BdfbfBC22e9F92b602D86B46Db021c33', staking: '0x5115200132831af540e53A1F8e6C8C649eBD837e', paymaster: '0x1F62fd30715131be3DA6C162678aBAFED075c77f', explorer: 'https://www.visionchain.co/visionscan' };
+const NET = { name: 'Vision Chain', chainId: 3151909, rpc: 'https://api.visionchain.co/rpc-proxy', token: 'VCN', tokenAddr: '0xf8a2F49C782447a8660554F7c3274cbd765b1963', staking: '0x009326c391012593Aeca601B09c02545E00Aa818', paymaster: '0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3', explorer: 'https://www.visionchain.co/visionscan' };
 
 // ─── Endpoint Definitions ───
 interface Field { name: string; type: string; required: boolean; desc: string; }

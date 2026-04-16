@@ -49,11 +49,13 @@ module.exports = {
         },
         // Vision Chain Custom Testnet v2 (Current)
         visionV2: {
-            url: "http://46.224.221.201:8545",
+            url: "https://api.visionchain.co/rpc-proxy",
             chainId: 3151909,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
             gasPrice: 1000000000, // 1 gwei
-            gas: 8000000
+            gas: 8000000,
+            timeout: 120000, // 2 minute timeout for slow proxy
+            httpHeaders: { "Connection": "keep-alive" }
         },
         // Ethereum Sepolia Testnet
         sepolia: {

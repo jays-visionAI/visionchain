@@ -80,11 +80,13 @@ export const AdminDashboard: Component = () => {
     const [mauData, setMauData] = createSignal<{ day: string; value: number }[]>([]);
     const [activeUserTab, setActiveUserTab] = createSignal<'dau' | 'wau' | 'mau'>('dau');
     const [nodeData, setNodeData] = createSignal({
-        authority: 5, // 5 Nodes in cluster
+        authority: 0,
         consensus: 0,
         agent: 0,
         edge: 0
     });
+    const [nodeTrend, setNodeTrend] = createSignal<number | undefined>(undefined);
+    const [prevAuthorityCount, setPrevAuthorityCount] = createSignal(0);
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
     const [paymasterBal, setPaymasterBal] = createSignal("0");
     const [gaslessCount, setGaslessCount] = createSignal(0);
@@ -382,6 +384,51 @@ export const AdminDashboard: Component = () => {
         }
     };
 
+    const fetchValidatorNodes = async () => {
+        try {
+            const rpcUrl = RPC_NODES[0];
+
+            // Fetch Clique signers (authority/validator nodes)
+            const signersRes = await fetch(rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'clique_getSigners', params: ['latest'], id: 1 }),
+            });
+            const signersData = await signersRes.json();
+            const signers: string[] = signersData.result || [];
+            const authorityCount = signers.length;
+
+            // Fetch connected peers
+            const peersRes = await fetch(rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'net_peerCount', params: [], id: 2 }),
+            });
+            const peersData = await peersRes.json();
+            const peerCount = parseInt(peersData.result || '0x0', 16);
+
+            // Calculate trend vs previous fetch
+            const prev = prevAuthorityCount();
+            if (prev > 0 && authorityCount !== prev) {
+                const change = ((authorityCount - prev) / prev) * 100;
+                setNodeTrend(parseFloat(change.toFixed(1)));
+            } else if (prev === 0) {
+                // First load: no trend to show
+                setNodeTrend(undefined);
+            }
+            setPrevAuthorityCount(authorityCount);
+
+            setNodeData({
+                authority: authorityCount,
+                consensus: peerCount + 1, // peers + self = total connected nodes
+                agent: 0,
+                edge: 0,
+            });
+        } catch (e) {
+            console.error('Failed to fetch validator node data from RPC:', e);
+        }
+    };
+
     const fetchNodeStats = async () => {
         try {
             const db = getFirebaseDb();
@@ -536,6 +583,7 @@ export const AdminDashboard: Component = () => {
         fetchWAUData();
         fetchMAUData();
         fetchNodeStats();
+        fetchValidatorNodes();
         fetchRPActivity();
 
         // Refresh only fast-changing data every 30s (was 5s - too aggressive)
@@ -543,6 +591,7 @@ export const AdminDashboard: Component = () => {
         const dataInterval = setInterval(() => {
             fetchRecentTransactions();
             fetchPaymasterStats();
+            fetchValidatorNodes();
         }, 30000);
 
         // Mock TPS Simulation (cosmetic only, slowed from 2s to 10s)
@@ -571,9 +620,9 @@ export const AdminDashboard: Component = () => {
                     {/* Active Nodes Taxonomy */}
                     <MetricCard
                         title="Active Network Nodes"
-                        value={nodeData().authority + nodeData().consensus + nodeData().agent + nodeData().edge}
+                        value={nodeData().authority}
                         subValue="Live"
-                        trend={2.4}
+                        trend={nodeTrend()}
                         icon={Server}
                         color="blue"
                     >
