@@ -430,65 +430,55 @@ export async function sendBatchTransfer(
         throw new Error('Wallet not connected.');
     }
 
-    try {
-        // Calculate total amount + 1 VCN flat fee for the entire batch
-        const totalAmount = recipients.reduce((sum, r) => sum + parseFloat(r.amount), 0);
-        const fee = 1.0;
-        const totalVcn = (totalAmount + fee).toString();
-        console.log(`[BatchTransfer] Step 1: Total=${totalAmount} VCN, Fee=${fee}, Permit=${totalVcn} VCN, Recipients=${recipients.length}`);
+    const results: TransferResult[] = [];
+    let successCount = 0;
+    let failedCount = 0;
 
-        // Sign a single permit for the total
-        console.log('[BatchTransfer] Step 2: Signing permit...');
-        const permit = await signPermit(activeSigner, totalVcn);
-        const fromAddress = await activeSigner.getAddress();
-        console.log(`[BatchTransfer] Step 3: Permit signed. From=${fromAddress}, Deadline=${permit.deadline}`);
+    console.log(`[BatchTransfer] Starting ${recipients.length} sequential transfers...`);
 
-        // Call Agent Gateway batch endpoint (1 permit, server distributes)
-        console.log('[BatchTransfer] Step 4: Calling gateway transfer.batch...');
-        const result = await callGateway('transfer.batch', {
-            transactions: recipients.map(r => ({ to: r.to, amount: r.amount })),
-            from: fromAddress,
-            signature: permit.signature,
-            deadline: permit.deadline,
-            fee: ethers.parseUnits(fee.toString(), 18).toString(),
-        });
-        console.log('[BatchTransfer] Step 5: Gateway response:', JSON.stringify(result).slice(0, 500));
+    for (let i = 0; i < recipients.length; i++) {
+        const r = recipients[i];
+        console.log(`[BatchTransfer] Transfer ${i + 1}/${recipients.length}: ${r.amount} VCN -> ${r.to.slice(0, 10)}...`);
 
-        const results: TransferResult[] = (result.results || []).map((r: any) => ({
-            success: r.status === 'success',
-            txHash: r.tx_hash || r.txHash,
-            to: r.to || r.recipient,
-            amount: r.amount,
-            error: r.error,
-        }));
+        try {
+            // Use the same proven sendTransfer path (individual permit per transfer)
+            const result = await sendTransfer(r.to, r.amount, activeSigner);
+            console.log(`[BatchTransfer] Transfer ${i + 1} ${result.success ? 'SUCCESS' : 'FAILED'}: ${result.txHash || result.error}`);
 
-        const successCount = results.filter(r => r.success).length;
-        const failedCount = results.length - successCount;
-
-        // Notify progress for completion
-        if (onProgress && results.length > 0) {
-            onProgress(results.length, recipients.length, results[results.length - 1]);
-        }
-
-        console.log(`[BatchTransfer] Complete: ${successCount} success, ${failedCount} failed`);
-        return {
-            results,
-            summary: { total: recipients.length, success: successCount, failed: failedCount },
-        };
-    } catch (error: any) {
-        console.error('[BatchTransfer] FAILED at:', error.message);
-        console.error('[BatchTransfer] Stack:', error.stack);
-        // Return all-failed result
-        return {
-            results: recipients.map(r => ({
+            results.push(result);
+            if (result.success) {
+                successCount++;
+            } else {
+                failedCount++;
+            }
+        } catch (error: any) {
+            console.error(`[BatchTransfer] Transfer ${i + 1} ERROR:`, error.message);
+            results.push({
                 success: false,
                 to: r.to,
                 amount: r.amount,
-                error: error.message || 'Batch transfer failed',
-            })),
-            summary: { total: recipients.length, success: 0, failed: recipients.length },
-        };
+                error: error.message || 'Transfer failed',
+            });
+            failedCount++;
+        }
+
+        // Notify progress
+        if (onProgress) {
+            onProgress(i + 1, recipients.length, results[results.length - 1]);
+        }
+
+        // Wait 3 seconds between transfers for nonce propagation
+        if (i < recipients.length - 1) {
+            console.log(`[BatchTransfer] Waiting 3s for chain state...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
     }
+
+    console.log(`[BatchTransfer] Complete: ${successCount} success, ${failedCount} failed`);
+    return {
+        results,
+        summary: { total: recipients.length, success: successCount, failed: failedCount },
+    };
 }
 
 /**
