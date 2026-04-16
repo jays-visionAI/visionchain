@@ -11667,21 +11667,27 @@ exports.agentGateway = onRequest({
 
     // --- SCHEDULED TRANSFER (alias -> conditional with time_after) --- T3
     if (action === "scheduled_transfer" || action === "transfer.scheduled") {
-      const { to, amount, execute_at: executeAt } = req.body;
-      if (!to || !amount || !executeAt) {
-        return res.status(400).json({ error: "Missing required fields: to, amount, execute_at (ISO 8601 or unix timestamp)" });
-      }
+      const { to, amount, condition: existingCondition, execute_at: executeAt } = req.body;
 
-      const executeTime = typeof executeAt === "number" ? new Date(executeAt * 1000) : new Date(executeAt);
-      if (isNaN(executeTime.getTime()) || executeTime.getTime() <= Date.now()) {
-        return res.status(400).json({ error: "execute_at must be a future timestamp" });
+      // If client already provided condition object (new format), skip legacy parsing
+      if (existingCondition && existingCondition.type) {
+        // Already in conditional format, fall through to conditional handler below
+      } else if (executeAt) {
+        // Legacy format: convert execute_at to condition object
+        if (!to || !amount) {
+          return res.status(400).json({ error: "Missing required fields: to, amount" });
+        }
+        const executeTime = typeof executeAt === "number" ? new Date(executeAt * 1000) : new Date(executeAt);
+        if (isNaN(executeTime.getTime()) || executeTime.getTime() <= Date.now()) {
+          return res.status(400).json({ error: "execute_at must be a future timestamp" });
+        }
+        if (executeTime.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000) {
+          return res.status(400).json({ error: "execute_at cannot be more than 30 days in the future" });
+        }
+        req.body.condition = { type: "time_after", value: executeTime.toISOString() };
+      } else {
+        return res.status(400).json({ error: "Missing required fields: provide either condition ({type, value}) or execute_at" });
       }
-      if (executeTime.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000) {
-        return res.status(400).json({ error: "execute_at cannot be more than 30 days in the future" });
-      }
-
-      // Convert to conditional format with time_after condition
-      req.body.condition = { type: "time_after", value: executeTime.toISOString() };
       // Fall through to conditional handler below
     }
 
