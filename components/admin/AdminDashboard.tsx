@@ -41,8 +41,6 @@ import { Coins } from 'lucide-solid';
 // Use a mock provider or dynamic provider to avoid blocking on load
 const RPC_NODES = [
     "https://api.visionchain.co/rpc-proxy",
-    "https://rpc.visionchain.co",
-    "https://api.visionchain.co"
 ];
 
 let dashboardProvider: ethers.JsonRpcProvider | null = null;

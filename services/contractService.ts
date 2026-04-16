@@ -42,8 +42,7 @@ const ADDRESSES = {
 
     // Vision Chain RPC Resource Pool (High Availability)
     RPC_NODES: [
-        "https://api.visionchain.co/rpc-proxy", // Resilient Proxy (Primary)
-        "https://rpc.visionchain.co",           // Primary Domain (Fallback)
+        "https://api.visionchain.co/rpc-proxy", // Resilient Proxy (Primary, handles failover internally)
     ],
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
