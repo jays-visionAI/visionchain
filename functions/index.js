@@ -21984,10 +21984,48 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540,
     throw new HttpsError("invalid-argument", "fileName is required.");
   }
 
-  // Check subscription
-  const subDoc = await db.collection("disk_subscriptions").doc(email).get();
-  if (!subDoc.exists || !["active", "grace_period"].includes(subDoc.data().status)) {
-    throw new HttpsError("failed-precondition", "Active disk subscription required.");
+  // Check subscription - auto-provision free tier if none exists
+  let subDoc = await db.collection("disk_subscriptions").doc(email).get();
+  if (!subDoc.exists) {
+    // Auto-provision free 10GB tier for new users
+    const nowMs = Date.now();
+    await db.collection("disk_subscriptions").doc(email).set({
+      email,
+      status: "active",
+      subscribedGb: 10,
+      priceVcn: 0,
+      currentCycleStart: nowMs,
+      currentCycleEnd: nowMs + 365 * 24 * 60 * 60 * 1000, // 1 year
+      autoRenew: true,
+      cancelAtPeriodEnd: false,
+      overdueSince: null,
+      updatedAt: nowMs,
+      tier: "free",
+    });
+    console.log(`[Disk] Auto-provisioned free 10GB tier for ${email}`);
+    subDoc = await db.collection("disk_subscriptions").doc(email).get();
+  }
+
+  const subData = subDoc.data();
+  const subStatus = subData.status;
+
+  // Auto-repair: free tier with expired/invalid status -> reset to active
+  if (!["active", "grace_period"].includes(subStatus)) {
+    const isFree = !subData.tier || subData.tier === "free" || subData.priceVcn === 0;
+    if (isFree) {
+      const nowMs = Date.now();
+      await db.collection("disk_subscriptions").doc(email).update({
+        status: "active",
+        currentCycleStart: nowMs,
+        currentCycleEnd: nowMs + 365 * 24 * 60 * 60 * 1000,
+        overdueSince: null,
+        updatedAt: nowMs,
+      });
+      console.log(`[Disk] Auto-repaired free tier subscription for ${email} (was: ${subStatus})`);
+    } else {
+      console.warn(`[Disk] Upload blocked: ${email} subscription status=${subStatus}, tier=${subData.tier}`);
+      throw new HttpsError("failed-precondition", "Active disk subscription required.");
+    }
   }
 
   // Get file buffer from one of three sources
