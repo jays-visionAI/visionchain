@@ -1652,7 +1652,7 @@ const Wallet = (): JSX.Element => {
                                     type: 'transfer_received',
                                     title: 'Coins Received',
                                     content: `You received ${r.tx.amount} ${r.tx.symbol || 'VCN'} from ${senderDisplayName} (${senderAddress?.slice(0, 6)}...${senderAddress?.slice(-4)}).`,
-                                    data: { amount: r.tx.amount, symbol: r.tx.symbol || 'VCN', sender: userProfile().email, senderAddress, txHash: r.hash }
+                                    data: { amount: r.tx.amount, symbol: r.tx.symbol || 'VCN', sender: userProfile().email, senderAddress, txHash: r.hash || null }
                                 });
                             }
                         } catch (notiErr) {
@@ -1722,7 +1722,7 @@ const Wallet = (): JSX.Element => {
                             agentId,
                             successCount: successMsg,
                             failedCount: failMsg,
-                            txHash: firstSuccess?.hash
+                            txHash: firstSuccess?.hash || null
                         }
                     });
                 } catch (notifyErr) {

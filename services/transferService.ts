@@ -426,6 +426,7 @@ export async function sendBatchTransfer(
 ): Promise<{ results: TransferResult[]; summary: { total: number; success: number; failed: number } }> {
     const activeSigner = signer || contractService.getSigner();
     if (!activeSigner) {
+        console.error('[BatchTransfer] No signer available');
         throw new Error('Wallet not connected.');
     }
 
@@ -434,12 +435,16 @@ export async function sendBatchTransfer(
         const totalAmount = recipients.reduce((sum, r) => sum + parseFloat(r.amount), 0);
         const fee = 1.0;
         const totalVcn = (totalAmount + fee).toString();
+        console.log(`[BatchTransfer] Step 1: Total=${totalAmount} VCN, Fee=${fee}, Permit=${totalVcn} VCN, Recipients=${recipients.length}`);
 
         // Sign a single permit for the total
+        console.log('[BatchTransfer] Step 2: Signing permit...');
         const permit = await signPermit(activeSigner, totalVcn);
         const fromAddress = await activeSigner.getAddress();
+        console.log(`[BatchTransfer] Step 3: Permit signed. From=${fromAddress}, Deadline=${permit.deadline}`);
 
         // Call Agent Gateway batch endpoint (1 permit, server distributes)
+        console.log('[BatchTransfer] Step 4: Calling gateway transfer.batch...');
         const result = await callGateway('transfer.batch', {
             transactions: recipients.map(r => ({ to: r.to, amount: r.amount })),
             from: fromAddress,
@@ -447,6 +452,7 @@ export async function sendBatchTransfer(
             deadline: permit.deadline,
             fee: ethers.parseUnits(fee.toString(), 18).toString(),
         });
+        console.log('[BatchTransfer] Step 5: Gateway response:', JSON.stringify(result).slice(0, 500));
 
         const results: TransferResult[] = (result.results || []).map((r: any) => ({
             success: r.status === 'success',
@@ -464,12 +470,14 @@ export async function sendBatchTransfer(
             onProgress(results.length, recipients.length, results[results.length - 1]);
         }
 
+        console.log(`[BatchTransfer] Complete: ${successCount} success, ${failedCount} failed`);
         return {
             results,
             summary: { total: recipients.length, success: successCount, failed: failedCount },
         };
     } catch (error: any) {
-        console.error('[TransferService] sendBatchTransfer failed:', error);
+        console.error('[BatchTransfer] FAILED at:', error.message);
+        console.error('[BatchTransfer] Stack:', error.stack);
         // Return all-failed result
         return {
             results: recipients.map(r => ({
