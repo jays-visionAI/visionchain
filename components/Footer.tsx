@@ -95,7 +95,7 @@ const Footer = (): JSX.Element => {
               <A href="/api" class="text-[#86868b] hover:text-white transition-colors">API Docs</A>
               <A href="/docs/user-guide" class="text-[#86868b] hover:text-white transition-colors">User Guide</A>
               <A href="/agent" class="text-[#86868b] hover:text-white transition-colors">Agent Gateway</A>
-              <A href="/secretorage" class="text-[#86868b] hover:text-white transition-colors">Secretorage</A>
+              <a href="https://secretorage.forgedb.app" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Secretorage</a>
               <A href="/contact" class="text-[#86868b] hover:text-white transition-colors">Contact Us</A>
             </div>
           </div>
@@ -134,6 +134,7 @@ const Footer = (): JSX.Element => {
             <A href="/privacy" class="text-[#86868b] hover:text-white transition-colors">Privacy Policy</A>
             <A href="/terms" class="text-[#86868b] hover:text-white transition-colors">Terms of Service</A>
             <A href="/cookies" class="text-[#86868b] hover:text-white transition-colors">Cookie Policy</A>
+            <A href="/security" class="text-[#86868b] hover:text-white transition-colors">Security</A>
           </div>
         </div>
 

@@ -21,12 +21,13 @@ import {
     Shield,
     BarChart3,
     HardDrive,
-    ShoppingBag
+    ShoppingBag,
+    Target
 } from 'lucide-solid';
 import { VisionLogo } from './VisionLogo';
 import { VisionFullLogo } from './VisionFullLogo';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'quant' | 'insight' | 'disk' | 'market' | 'game';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'quant' | 'insight' | 'disk' | 'market' | 'game' | 'predict';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -56,6 +57,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'chat' as ViewType, label: 'Chat', icon: AiChatIcon },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
         { id: 'cex' as ViewType, label: 'Quant', icon: BarChart3 },
+        { id: 'predict' as ViewType, label: 'Predict (Beta)', icon: Target },
         { id: 'bridge' as ViewType, label: 'Bridge', icon: ArrowLeftRight },
         { id: 'staking' as ViewType, label: 'Earn', icon: Shield },
         {

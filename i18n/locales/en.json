@@ -527,6 +527,187 @@
             "titleAccent": "DISK",
             "tag": "Decentralized",
             "description": "Decentralized storage powered by Vision Nodes"
+        },
+        "predict": {
+            "title": "VISION",
+            "titleAccent": "PREDICT",
+            "tag": "Beta · Sandbox",
+            "description": "Configurable autonomous AI agent for prediction markets. Non-custodial. No guaranteed profit."
+        }
+    },
+    "predict": {
+        "navLabel": "Vision Predict (Beta)",
+        "hero": {
+            "badge": "EXPERIMENTAL · BETA · SANDBOX",
+            "title": "Vision Predict",
+            "subtitle": "Configurable autonomous AI agent for prediction markets. Your wallet, your rules, your risk. Non-custodial. No guaranteed profit."
+        },
+        "steps": {
+            "gate": "1. Eligibility",
+            "rules": "2. Risk Rules",
+            "strategy": "3. Strategy",
+            "authority": "4. Activate"
+        },
+        "gate": {
+            "heading": "Eligibility check",
+            "intro": "Polymarket prohibits US persons and several other jurisdictions. Some countries classify prediction markets as gambling. You must confirm you are not in a restricted jurisdiction and you understand the legal and financial risks.",
+            "needAgent": "You need a VisionChain agent api_key.",
+            "needAgentLink": "Register an agent first →",
+            "countryLabel": "Country (ISO-3166-1 alpha-2)",
+            "ageStatement": "I am at least 18 years old (or the age of majority in my jurisdiction, whichever is higher).",
+            "notUsStatement": "I am NOT a US person and I am NOT accessing this service from the United States.",
+            "ackStatement": "I understand Vision Predict is an experimental sandbox, that prediction-market positions can lose 100% of capital, and that past peak returns are not predictive. I am solely responsible for legal compliance in my jurisdiction."
+        },
+        "rules": {
+            "heading": "Set your guardrails",
+            "intro": "All rules enforced server-side and (in Phase 3) on-chain via authority.grant.",
+            "maxBet": "Max single bet (USDC)",
+            "dailyLoss": "Daily loss cap (USDC)",
+            "dailyCount": "Daily bet count",
+            "categories": "Allowed market categories",
+            "forbidden": "Forbidden keywords (comma-separated)",
+            "startHour": "Active from (hour, UTC)",
+            "endHour": "Active until (hour, UTC)"
+        },
+        "strategy": {
+            "heading": "Pick a strategy",
+            "presetTitle": "News-Edge (preset)",
+            "presetDesc": "LLM monitors news + market mispricing within your allowed categories. Conservative position sizing.",
+            "customTitle": "Custom prompt (advanced)",
+            "customDesc": "Bring your own decision prompt. You define the edge. (Phase 3 will expose prompt editor.)"
+        },
+        "authority": {
+            "heading": "Activate enrollment",
+            "intro": "Vision Predict is non-custodial. You keep your own wallet. Enrollment records your risk rules and creates an authority.grant scoped to polymarket.bet. Live betting will not start until Phase 3 ships — you can pause or update rules at any time.",
+            "walletLabel": "Your Polygon wallet address",
+            "walletNote": "USDC on Polygon (chainId 137). Vision Predict will never request your private key.",
+            "summary": "Summary",
+            "activateButton": "Enroll & Activate"
+        },
+        "console": {
+            "status": "Status",
+            "pause": "Pause",
+            "resume": "Resume",
+            "editRules": "Edit risk rules",
+            "save": "Save",
+            "betaWarning": "Live betting (polymarket.place_bet) is not yet enabled. Phase 3 will activate order placement against Polymarket's CLOB on Polygon. Phase 1 captures your risk rules and authority scope so you are ready when Phase 3 ships.",
+            "tabs": {
+                "config": "Config",
+                "intel": "Market Intelligence",
+                "trace": "Decision Trace"
+            }
+        },
+        "intel": {
+            "tab": "Market Intelligence",
+            "filter": {
+                "category": "Category",
+                "categories": "Categories",
+                "order": "Order by",
+                "order_label": "Order",
+                "order_volume": "24h volume",
+                "order_liquidity": "Liquidity",
+                "order_competitive": "Competitive",
+                "no_allowed_categories": "No allowed categories — update rules."
+            },
+            "list": {
+                "button": "List markets",
+                "loading": "Loading…",
+                "empty": "No markets match your filters."
+            },
+            "empty": {
+                "title": "Start by listing markets",
+                "subtitle": "Use the filters above to narrow by category or sort order, then click List markets to fetch live Polymarket prices."
+            },
+            "card": {
+                "rules_ok": "Rules OK",
+                "rules_filtered": "Filtered: {{reason}}",
+                "outside_rules": "Outside your rules",
+                "ends_in": "Ends in",
+                "ended": "ended",
+                "ends_in_dh": "ends in {{d}}d {{h}}h",
+                "ends_in_hm": "ends in {{h}}h {{m}}m",
+                "ends_in_m": "ends in {{m}}m",
+                "volume_24h": "24h volume",
+                "vol_24h": "Vol 24h",
+                "na": "n/a",
+                "multi_outcome": "Multi-outcome ({{count}} options) — yes/no prices n/a",
+                "simulate": "Simulate",
+                "simulate_tooltip_ok": "Run a 0.5 VCN paper simulation"
+            },
+            "simulate": {
+                "title": "Simulate market",
+                "close": "Close",
+                "button": "Run simulation (0.5 VCN)",
+                "running": "Running…",
+                "cooldown_short": "Just submitted, wait {{seconds}}s…",
+                "cooldown": "Wait {{seconds}}s before another simulate",
+                "model": "Model",
+                "max_size": "Max size hint (USDC)",
+                "note": "Note (optional)",
+                "note_placeholder": "Free-form context for the LLM (low-trust)",
+                "note_warning": "Do not paste personal data; sent to Google Gemini.",
+                "rationale": "Rationale",
+                "evidence": "Evidence",
+                "confidence": "Confidence",
+                "fair_price": "Fair price (YES)",
+                "market_vs_fair": "Market YES vs Fair",
+                "market_price_unavail": "Market price unavailable — fair price not comparable.",
+                "rule_check_overrides": "Rule check overrides",
+                "llm_said_rules_overrode": "LLM said {{label}}, rules overrode.",
+                "skip_reasons_inline": "LLM skip reasons: {{list}}",
+                "skip_reasons": "Skip reasons",
+                "show_raw": "Show raw LLM output",
+                "hide_raw": "Hide raw LLM output",
+                "raw_empty": "(no raw response)",
+                "charged_warning": "You were charged {{amount}} VCN despite this error.",
+                "not_charged": "No VCN was charged. {{note}}",
+                "disclaimer": "Paper outcome only. No funds were committed. Past simulated returns do not predict future real returns.",
+                "chip_bet_yes": "BET YES",
+                "chip_bet_no": "BET NO",
+                "chip_skip": "SKIP"
+            },
+            "trace": {
+                "title": "Decision Trace",
+                "filter": {
+                    "all": "All",
+                    "pending": "Pending",
+                    "resolved": "Resolved",
+                    "skip": "Skip"
+                },
+                "col": {
+                    "time": "Time",
+                    "market": "Market",
+                    "llm_decision": "LLM",
+                    "final_decision": "Final",
+                    "size": "Size",
+                    "status": "Status",
+                    "paper_pnl": "Paper PnL"
+                },
+                "loading": "Loading…",
+                "load_more": "Load more",
+                "loading_more": "Loading…",
+                "empty": "No simulations yet. Try Market Intelligence above.",
+                "paper_pnl_tooltip": "This is a simulated outcome. No funds were committed. Past simulated returns do not predict future real returns.",
+                "paper_pnl_prefix": "paper:",
+                "status_pending": "pending",
+                "market_unknown": "(unknown market)",
+                "chip_yes": "YES",
+                "chip_no": "NO",
+                "chip_skip": "SKIP"
+            },
+            "fail": {
+                "allowed_categories_no_overlap": "Not in your allowed categories",
+                "categories_filter_no_overlap": "Outside selected categories",
+                "forbidden_keyword": "Contains keyword \"{{keyword}}\"",
+                "outside_time_window": "Outside your active hours",
+                "daily_loss_cap_exceeded": "Would exceed daily loss cap",
+                "market_resolves_within_1h": "Resolves within 1 hour",
+                "market_end_date_missing_or_invalid": "Missing end date",
+                "edge_below_5_cents": "Edge below 5¢ — too thin",
+                "near_resolution_size_cap_exceeded": "Size > $1 cap near resolution",
+                "suggested_size_exceeds_max_bet": "Exceeds max bet",
+                "llm_parse_error": "LLM output unparseable"
+            }
         }
     },
     "staking": {

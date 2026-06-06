@@ -157,6 +157,7 @@ const WalletCexPortfolio = lazyWithRetry(() => import('./wallet/WalletCexPortfol
 const VisionQuantEngine = lazyWithRetry(() => import('./quant/VisionQuantEngine'));
 const AgentHosting = lazyWithRetry(() => import('./wallet/AgentHosting')); // kept for potential future use
 const VisionInsight = lazyWithRetry(() => import('./wallet/VisionInsight'));
+const VisionPredict = lazyWithRetry(() => import('./predict/VisionPredict'));
 const VCNGameCenter = lazyWithRetry(() => import('./wallet/VCNGameCenter'));
 const VisionMarket = lazyWithRetry(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
 const WalletDisk = lazyWithRetry(() => import('./wallet/WalletDisk')) as Component<{
@@ -170,7 +171,7 @@ const PhoneAccountResolver = lazyWithRetry(() => import('./auth/PhoneAccountReso
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'quant' | 'insight' | 'disk' | 'market' | 'game';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'quant' | 'insight' | 'disk' | 'market' | 'game' | 'predict';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -4626,6 +4627,15 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                                     <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
                                         <WalletCexPortfolio />
+                                    </Suspense>
+                                </div>
+                            </Show>
+
+                            {/* Vision Predict — Polymarket sandbox (Beta) */}
+                            <Show when={activeView() === 'predict'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                        <VisionPredict />
                                     </Suspense>
                                 </div>
                             </Show>

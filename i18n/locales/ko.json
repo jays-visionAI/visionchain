@@ -527,6 +527,187 @@
             "titleAccent": "디스크",
             "tag": "탈중앙화",
             "description": "비전 노드 기반 탈중앙화 스토리지"
+        },
+        "predict": {
+            "title": "비전",
+            "titleAccent": "프리딕트",
+            "tag": "베타 · 샌드박스",
+            "description": "예측시장용 설정형 자율 AI 에이전트. 비커스터디얼. 수익 보장 없음."
+        }
+    },
+    "predict": {
+        "navLabel": "Vision Predict (베타)",
+        "hero": {
+            "badge": "EXPERIMENTAL · BETA · SANDBOX",
+            "title": "Vision Predict",
+            "subtitle": "예측시장용 설정형 자율 AI 에이전트. 당신의 지갑, 당신의 룰, 당신의 리스크. 비커스터디얼. 수익 보장 없음."
+        },
+        "steps": {
+            "gate": "1. 자격 확인",
+            "rules": "2. 리스크 룰",
+            "strategy": "3. 전략",
+            "authority": "4. 활성화"
+        },
+        "gate": {
+            "heading": "자격 확인",
+            "intro": "Polymarket은 미국인 및 일부 관할권의 사용자를 금지합니다. 예측시장을 도박으로 분류하는 국가도 있습니다. 본인이 제한 관할권에 속하지 않음과 법적·재무적 리스크를 이해함을 확인해야 합니다.",
+            "needAgent": "VisionChain 에이전트 api_key가 필요합니다.",
+            "needAgentLink": "먼저 에이전트를 등록하세요 →",
+            "countryLabel": "국가 (ISO-3166-1 alpha-2)",
+            "ageStatement": "본인은 만 18세 이상이며 (관할권의 성년 연령이 그보다 높다면 그 연령 이상).",
+            "notUsStatement": "본인은 미국인이 아니며 미국에서 이 서비스에 접근하고 있지 않습니다.",
+            "ackStatement": "Vision Predict가 실험적 샌드박스이며, 예측시장 포지션은 자본금 전액 손실이 가능하고, 과거 단일 최고 수익률은 미래 수익을 예측하지 못함을 이해합니다. 관할권 내 법적 컴플라이언스는 전적으로 본인의 책임임에 동의합니다."
+        },
+        "rules": {
+            "heading": "가드레일 설정",
+            "intro": "모든 룰은 서버에서 강제되며 (Phase 3부터는) authority.grant를 통해 온체인에서도 강제됩니다.",
+            "maxBet": "단일 최대 베팅 (USDC)",
+            "dailyLoss": "일일 손실 한도 (USDC)",
+            "dailyCount": "일일 베팅 횟수",
+            "categories": "허용 카테고리",
+            "forbidden": "금지 키워드 (콤마 구분)",
+            "startHour": "시작 시각 (UTC)",
+            "endHour": "종료 시각 (UTC)"
+        },
+        "strategy": {
+            "heading": "전략 선택",
+            "presetTitle": "News-Edge (프리셋)",
+            "presetDesc": "허용 카테고리 내에서 LLM이 뉴스와 시장 미스프라이싱을 모니터링. 보수적 포지션 사이징.",
+            "customTitle": "커스텀 프롬프트 (고급)",
+            "customDesc": "본인 의사결정 프롬프트 사용. Edge는 본인이 정의. (Phase 3에서 프롬프트 에디터 제공.)"
+        },
+        "authority": {
+            "heading": "가입 활성화",
+            "intro": "Vision Predict는 비커스터디얼입니다. 지갑은 본인 소유입니다. 가입 시 리스크 룰이 기록되고 polymarket.bet 스코프로 authority.grant가 생성됩니다. 실거래 베팅은 Phase 3 출시 후에 시작되며, 룰 수정·일시정지는 언제든 가능합니다.",
+            "walletLabel": "Polygon 지갑 주소",
+            "walletNote": "Polygon (chainId 137) 상의 USDC. Vision Predict는 개인키를 요구하지 않습니다.",
+            "summary": "요약",
+            "activateButton": "가입 및 활성화"
+        },
+        "console": {
+            "status": "상태",
+            "pause": "일시정지",
+            "resume": "재개",
+            "editRules": "리스크 룰 수정",
+            "save": "저장",
+            "betaWarning": "실거래 베팅 (polymarket.place_bet)은 아직 활성화되지 않았습니다. Phase 3에서 Polygon CLOB에 주문 송신이 활성화됩니다. Phase 1은 룰과 권한 스코프만 기록하여 Phase 3 출시 시 즉시 사용할 수 있도록 합니다.",
+            "tabs": {
+                "config": "설정",
+                "intel": "마켓 인텔리전스",
+                "trace": "결정 이력"
+            }
+        },
+        "intel": {
+            "tab": "마켓 인텔리전스",
+            "filter": {
+                "category": "카테고리",
+                "categories": "카테고리",
+                "order": "정렬 기준",
+                "order_label": "정렬",
+                "order_volume": "24시간 거래량",
+                "order_liquidity": "유동성",
+                "order_competitive": "경쟁적",
+                "no_allowed_categories": "허용 카테고리가 없습니다 — 룰을 수정하세요."
+            },
+            "list": {
+                "button": "마켓 조회",
+                "loading": "로딩 중…",
+                "empty": "필터에 맞는 마켓이 없습니다."
+            },
+            "empty": {
+                "title": "마켓 조회로 시작하세요",
+                "subtitle": "위 필터로 카테고리/정렬을 좁힌 뒤 마켓 조회를 누르면 실시간 Polymarket 가격을 가져옵니다."
+            },
+            "card": {
+                "rules_ok": "룰 통과",
+                "rules_filtered": "필터됨: {{reason}}",
+                "outside_rules": "룰 위반",
+                "ends_in": "종료까지",
+                "ended": "종료됨",
+                "ends_in_dh": "{{d}}일 {{h}}시간 후 종료",
+                "ends_in_hm": "{{h}}시간 {{m}}분 후 종료",
+                "ends_in_m": "{{m}}분 후 종료",
+                "volume_24h": "24시간 거래량",
+                "vol_24h": "24h 거래량",
+                "na": "정보 없음",
+                "multi_outcome": "다중 결과 ({{count}}개) — yes/no 가격 없음",
+                "simulate": "시뮬레이션",
+                "simulate_tooltip_ok": "0.5 VCN 페이퍼 시뮬레이션 실행"
+            },
+            "simulate": {
+                "title": "마켓 시뮬레이션",
+                "close": "닫기",
+                "button": "시뮬레이션 실행 (0.5 VCN)",
+                "running": "실행 중…",
+                "cooldown_short": "방금 제출했습니다. {{seconds}}초 대기…",
+                "cooldown": "다음 시뮬레이션까지 {{seconds}}초 대기",
+                "model": "모델",
+                "max_size": "최대 베팅 크기 힌트 (USDC)",
+                "note": "메모 (선택)",
+                "note_placeholder": "LLM에 전달할 자유 형식 컨텍스트 (저신뢰)",
+                "note_warning": "개인정보 입력 금지. Google Gemini로 전송됩니다.",
+                "rationale": "근거",
+                "evidence": "증거",
+                "confidence": "신뢰도",
+                "fair_price": "공정 가격 (YES)",
+                "market_vs_fair": "마켓 YES vs 공정 가격",
+                "market_price_unavail": "마켓 가격 정보 없음 — 공정 가격 비교 불가",
+                "rule_check_overrides": "룰 체크 오버라이드",
+                "llm_said_rules_overrode": "LLM은 {{label}}이라 했으나 룰이 오버라이드함.",
+                "skip_reasons_inline": "LLM 스킵 사유: {{list}}",
+                "skip_reasons": "스킵 사유",
+                "show_raw": "원시 LLM 출력 보기",
+                "hide_raw": "원시 LLM 출력 숨기기",
+                "raw_empty": "(원시 응답 없음)",
+                "charged_warning": "오류에도 불구하고 {{amount}} VCN이 차감되었습니다.",
+                "not_charged": "VCN 차감 없음. {{note}}",
+                "disclaimer": "페이퍼 결과입니다. 실제 자금은 사용되지 않았습니다. 과거 시뮬레이션 수익률은 미래 실제 수익률을 예측하지 못합니다.",
+                "chip_bet_yes": "YES 베팅",
+                "chip_bet_no": "NO 베팅",
+                "chip_skip": "스킵"
+            },
+            "trace": {
+                "title": "결정 이력",
+                "filter": {
+                    "all": "전체",
+                    "pending": "대기",
+                    "resolved": "결산",
+                    "skip": "스킵"
+                },
+                "col": {
+                    "time": "시각",
+                    "market": "마켓",
+                    "llm_decision": "LLM",
+                    "final_decision": "최종",
+                    "size": "크기",
+                    "status": "상태",
+                    "paper_pnl": "페이퍼 PnL"
+                },
+                "loading": "로딩 중…",
+                "load_more": "더 보기",
+                "loading_more": "로딩 중…",
+                "empty": "아직 시뮬레이션 이력이 없습니다. 위의 마켓 인텔리전스에서 시도해 보세요.",
+                "paper_pnl_tooltip": "시뮬레이션 결과이며 실제 자금은 사용되지 않았습니다. 과거 시뮬레이션 수익률은 미래 실제 수익률을 예측하지 못합니다.",
+                "paper_pnl_prefix": "페이퍼:",
+                "status_pending": "대기",
+                "market_unknown": "(알 수 없는 마켓)",
+                "chip_yes": "YES",
+                "chip_no": "NO",
+                "chip_skip": "스킵"
+            },
+            "fail": {
+                "allowed_categories_no_overlap": "허용 카테고리에 포함되지 않음",
+                "categories_filter_no_overlap": "선택한 카테고리 범위 밖",
+                "forbidden_keyword": "금지 키워드 포함 \"{{keyword}}\"",
+                "outside_time_window": "활성 시간대 밖",
+                "daily_loss_cap_exceeded": "일일 손실 한도 초과 위험",
+                "market_resolves_within_1h": "1시간 이내 결산",
+                "market_end_date_missing_or_invalid": "종료일 정보 없음",
+                "edge_below_5_cents": "엣지 5¢ 미만 — 너무 좁음",
+                "near_resolution_size_cap_exceeded": "결산 직전 $1 한도 초과",
+                "suggested_size_exceeds_max_bet": "최대 베팅 초과",
+                "llm_parse_error": "LLM 출력 파싱 불가"
+            }
         }
     },
     "staking": {

@@ -10,6 +10,7 @@ export const ContactUs = lazy(() => import('../components/ContactUs'));
 export const PrivacyPolicy = lazy(() => import('../components/PrivacyPolicy'));
 export const TermsOfService = lazy(() => import('../components/TermsOfService'));
 export const CookiePolicy = lazy(() => import('../components/CookiePolicy'));
+export const SecurityPolicy = lazy(() => import('../components/SecurityPolicy'));
 export const Wallet = lazy(() => import('../components/Wallet'));
 export const VisionScan = lazy(() => import('../components/VisionScan'));
 export const TrafficSimulator = lazy(() => import('../components/TrafficSimulator'));
@@ -17,6 +18,7 @@ export const Testnet = lazy(() => import('../components/Testnet'));
 export const Bridge = lazy(() => import('../components/Bridge'));
 export const Paymaster = lazy(() => import('../components/Paymaster'));
 export const AgentGateway = lazy(() => import('../components/AgentGateway'));
+export const VisionPredict = lazy(() => import('../components/predict/VisionPredict'));
 export const ApiHub = lazy(() => import('../components/ApiHub'));
 export const MintStudio = lazy(() => import('../components/mint/MintStudio'));
 
@@ -66,6 +68,11 @@ export const CookiesPage = () => {
     return <div id="cookies"><CookiePolicy /></div>;
 };
 
+export const SecurityPolicyPage = () => {
+    document.title = 'Security Policy | Vision Chain';
+    return <div id="security"><SecurityPolicy /></div>;
+};
+
 export const WalletPage = () => {
     document.title = 'Wallet | Vision Chain';
     return <div id="wallet"><Wallet /></div>;
@@ -99,6 +106,11 @@ export const PaymasterPage = () => {
 export const AgentGatewayPage = () => {
     document.title = 'Agent Gateway | Vision Chain';
     return <div id="agent-gateway"><AgentGateway /></div>;
+};
+
+export const VisionPredictPage = () => {
+    document.title = 'Vision Predict (Beta) | Vision Chain';
+    return <div id="vision-predict"><VisionPredict /></div>;
 };
 
 export const AgentApiDocs = lazy(() => import('../components/DevDocs'));

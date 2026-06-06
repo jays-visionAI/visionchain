@@ -89,6 +89,7 @@ render(() => (
         <Route path="/privacy" component={Public.PrivacyPage} />
         <Route path="/terms" component={Public.TermsPage} />
         <Route path="/cookies" component={Public.CookiesPage} />
+        <Route path="/security" component={Public.SecurityPolicyPage} />
         <Route path="/wallet/*" component={Public.WalletPage} />
         <Route path="/trafficsim" component={Public.TrafficSimulatorPage} />
         <Route path="/visionscan" component={Public.VisionScanPage} />
@@ -98,6 +99,8 @@ render(() => (
         <Route path="/paymaster" component={Public.PaymasterPage} />
         <Route path="/agent" component={Public.AgentGatewayPage} />
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
+        <Route path="/predict" component={Public.VisionPredictPage} />
+        <Route path="/predict/*" component={Public.VisionPredictPage} />
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
         <Route path="/docs/user-guide" component={Public.UserManualPage} />
