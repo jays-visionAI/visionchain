@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vision Wallet · Solvent 연결</title>
+<style>
+  :root{--bg:#0a0a0c;--card:#121216;--bd:#23232b;--fg:#e8e8ee;--mut:#8a8a92;--ac:#00E5C7}
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,sans-serif;
+    background:transparent;color:var(--fg);display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:16px}
+  .card{width:340px;max-width:100%;background:var(--card);border:1px solid var(--bd);border-radius:16px;
+    padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .ttl{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:4px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ac);box-shadow:0 0 8px var(--ac)}
+  .sub{color:var(--mut);font-size:12px;margin-bottom:14px}
+  .addr{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;background:#0e0e12;
+    border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:12px;word-break:break-all}
+  label{display:block;font-size:11px;color:var(--mut);margin-bottom:5px}
+  input{width:100%;background:#0e0e12;border:1px solid var(--bd);border-radius:9px;color:var(--fg);
+    padding:10px;font-size:13px;margin-bottom:12px}
+  input:focus{outline:none;border-color:var(--ac)}
+  button{width:100%;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700;
+    background:var(--ac);color:#04110e;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .err{color:#FF4D6D;font-size:12px;min-height:16px;margin-top:8px}
+  .muted{color:var(--mut);font-size:11px;text-align:center;margin-top:12px}
+  a{color:var(--ac);text-decoration:none}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="ttl"><span class="dot"></span>Vision 지갑으로 서명</div>
+  <div class="sub">Solvent가 로그인 서명을 요청했습니다. 비밀번호로 지갑을 잠금 해제하세요.</div>
+  <div id="noWallet" class="hidden">
+    <div class="sub">이 브라우저에 Vision Chain 지갑이 없습니다.</div>
+    <a href="https://visionchain.co" target="_blank" rel="noopener">visionchain.co에서 지갑 만들기 →</a>
+  </div>
+  <div id="signBox" class="hidden">
+    <div class="addr" id="addr">—</div>
+    <label>지갑 비밀번호</label>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="비밀번호">
+    <button id="go">서명하고 로그인</button>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="muted">키는 이 기기를 떠나지 않습니다 · Vision Chain</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.16.0/dist/ethers.umd.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NS = 'solvent-wallet';
+  var SALT = 'vcn-platform-v1'; // must match Vision-Chain services/walletService.ts
+
+  // Parent (Solvent) origins allowed to talk to this bridge.
+  var ALLOWED = [
+    'https://solvent.exchange', 'https://www.solvent.exchange',
+    'https://solvent-cmg.pages.dev',
+    'https://mazinga84.github.io',
+    'http://localhost:8000', 'http://127.0.0.1:8000', 'http://localhost:5173',
+  ];
+  // Optionally widen via ?allow=origin (e.g., a custom Solvent domain).
+  try {
+    var qp = new URLSearchParams(location.search).get('allow');
+    if (qp) qp.split(',').forEach(function (o) { ALLOWED.push(o.trim()); });
+  } catch (e) {}
+
+  var parentOrigin = null;       // resolved on first valid message
+  var cachedWallet = null;       // ethers.Wallet kept in memory after unlock
+  var pendingSign = null;        // { id, message } awaiting password
+
+  var subtle = window.crypto.subtle;
+  function b64ToBytes(b64) {
+    var bin = atob(b64), a = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return a;
+  }
+  async function deriveKey(password) {
+    var enc = new TextEncoder();
+    var base = await subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    return subtle.deriveKey(
+      { name: 'PBKDF2', salt: enc.encode(SALT), iterations: 100000, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  }
+  async function decryptMnemonic(b64, password) {
+    var combined = b64ToBytes(b64);
+    var iv = combined.slice(0, 12), body = combined.slice(12);
+    var key = await deriveKey(password);
+    var pt = await subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, body);
+    return new TextDecoder().decode(pt);
+  }
+
+  // Locate the stored VC wallet in localStorage (scoped per email).
+  function findWallet() {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('vcn_wallet_') === 0 && k.indexOf('_id_active') === -1) {
+        var suffix = k.slice('vcn_wallet_'.length);
+        var addr = localStorage.getItem('vcn_addr_' + suffix);
+        return { enc: localStorage.getItem(k), address: addr };
+      }
+    }
+    return null;
+  }
+
+  function reply(id, ok, payload) {
+    if (!parentOrigin) return;
+    var msg = { ns: NS, id: id, ok: ok };
+    if (ok) msg.result = payload; else msg.error = payload;
+    window.parent.postMessage(msg, parentOrigin);
+  }
+  function notify(type, extra) {
+    if (!parentOrigin) return;
+    window.parent.postMessage(Object.assign({ ns: NS, type: type }, extra || {}), parentOrigin);
+  }
+
+  var addrEl = document.getElementById('addr');
+  var signBox = document.getElementById('signBox');
+  var noWallet = document.getElementById('noWallet');
+  var pwEl = document.getElementById('pw');
+  var goEl = document.getElementById('go');
+  var errEl = document.getElementById('err');
+
+  async function doSign() {
+    errEl.textContent = '';
+    if (!pendingSign) return;
+    try {
+      goEl.disabled = true;
+      if (!cachedWallet) {
+        var w = findWallet();
+        if (!w || !w.enc) { errEl.textContent = '지갑을 찾을 수 없습니다'; goEl.disabled = false; return; }
+        var mnemonic = await decryptMnemonic(w.enc, pwEl.value);
+        cachedWallet = window.ethers.Wallet.fromPhrase(mnemonic.trim());
+        mnemonic = null; pwEl.value = '';
+      }
+      var sig = await cachedWallet.signMessage(pendingSign.message);
+      reply(pendingSign.id, true, { address: cachedWallet.address, signature: sig });
+      pendingSign = null;
+      notify('unlocked');
+    } catch (e) {
+      errEl.textContent = '비밀번호가 틀렸거나 서명 실패';
+    } finally {
+      goEl.disabled = false;
+    }
+  }
+  goEl.addEventListener('click', doSign);
+  pwEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSign(); });
+
+  window.addEventListener('message', function (ev) {
+    if (ALLOWED.indexOf(ev.origin) === -1) return;          // strict origin allowlist
+    var d = ev.data;
+    if (!d || d.ns !== NS || !d.action) return;
+    parentOrigin = ev.origin;
+
+    if (d.action === 'getAddress') {
+      var w = findWallet();
+      if (!w || !w.address) {
+        noWallet.classList.remove('hidden');
+        reply(d.id, false, 'no-wallet');
+      } else {
+        reply(d.id, true, { address: w.address });
+      }
+      return;
+    }
+
+    if (d.action === 'signMessage') {
+      var wallet = findWallet();
+      if (!wallet || !wallet.enc) { reply(d.id, false, 'no-wallet'); return; }
+      pendingSign = { id: d.id, message: d.message };
+      addrEl.textContent = wallet.address || '—';
+      noWallet.classList.add('hidden');
+      signBox.classList.remove('hidden');
+      if (cachedWallet) { doSign(); }              // already unlocked → sign silently
+      else { notify('need-unlock'); pwEl.focus(); } // ask Solvent to reveal the modal
+      return;
+    }
+  });
+
+  // Announce readiness to whoever embedded us.
+  if (window.parent !== window) {
+    window.parent.postMessage({ ns: NS, type: 'ready' }, '*');
+  }
+})();
+</script>
+</body>
+</html>

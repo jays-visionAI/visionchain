@@ -4,5 +4,11 @@
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
+# Solvent wallet bridge — only Solvent origins may frame it (anti-clickjacking
+# for the password prompt). Add your custom Solvent domain here if any.
+/solvent-wallet-bridge.html
+  Content-Security-Policy: frame-ancestors https://solvent.exchange https://www.solvent.exchange https://solvent-cmg.pages.dev https://mazinga84.github.io http://localhost:8000 http://127.0.0.1:8000 http://localhost:5173
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /*
   X-Content-Type-Options: nosniff
