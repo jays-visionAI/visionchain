@@ -32,17 +32,20 @@
 </head>
 <body>
 <div class="card">
-  <div class="ttl"><span class="dot"></span>Vision 지갑으로 서명</div>
-  <div class="sub">Solvent가 로그인 서명을 요청했습니다. 비밀번호로 지갑을 잠금 해제하세요.</div>
+  <div class="ttl"><span class="dot"></span>Vision 지갑</div>
+  <div class="sub" id="subTitle">Solvent가 서명을 요청했습니다. 비밀번호로 지갑을 잠금 해제하세요.</div>
   <div id="noWallet" class="hidden">
     <div class="sub">이 브라우저에 Vision Chain 지갑이 없습니다.</div>
     <a href="https://visionchain.co" target="_blank" rel="noopener">visionchain.co에서 지갑 만들기 →</a>
   </div>
   <div id="signBox" class="hidden">
     <div class="addr" id="addr">—</div>
-    <label>지갑 비밀번호</label>
-    <input id="pw" type="password" autocomplete="current-password" placeholder="비밀번호">
-    <button id="go">서명하고 로그인</button>
+    <div class="addr hidden" id="opDetails" style="background:#0c0c0f;white-space:pre-line"></div>
+    <div id="pwWrap">
+      <label>지갑 비밀번호</label>
+      <input id="pw" type="password" autocomplete="current-password" placeholder="비밀번호">
+    </div>
+    <button id="go">서명</button>
     <div class="err" id="err"></div>
   </div>
   <div class="muted">키는 이 기기를 떠나지 않습니다 · Vision Chain</div>
@@ -70,7 +73,13 @@
 
   var parentOrigin = null;       // resolved on first valid message
   var cachedWallet = null;       // ethers.Wallet kept in memory after unlock
-  var pendingSign = null;        // { id, message } awaiting password
+  var pendingOp = null;          // { id, kind, ... } awaiting password/confirm
+  var provider = null;
+  var RPC = 'https://api.visionchain.co/rpc-proxy';
+  function getProvider() {
+    if (!provider) provider = new window.ethers.JsonRpcProvider(RPC, 3151909);
+    return provider;
+  }
 
   var subtle = window.crypto.subtle;
   function b64ToBytes(b64) {
@@ -123,31 +132,103 @@
   var pwEl = document.getElementById('pw');
   var goEl = document.getElementById('go');
   var errEl = document.getElementById('err');
+  var detailsEl = document.getElementById('opDetails');
+  var pwWrap = document.getElementById('pwWrap');
 
-  async function doSign() {
+  // Auto-lock: clear the decrypted key after inactivity so a left-open page can't
+  // be reused by someone else to sign/send.
+  var IDLE_MS = 10 * 60 * 1000;
+  var idleTimer = null;
+  function armIdle() {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () { cachedWallet = null; notify('locked'); }, IDLE_MS);
+  }
+
+  function fmt18(x) { try { return (Number(BigInt(x) / 10n ** 14n) / 1e4).toString(); } catch (e) { return String(x); } }
+  // Show exactly what is being approved/sent so the user isn't blind-signing.
+  function renderDetails(op) {
+    if (op.kind === 'typedData' && op.value && op.value.spender !== undefined) {
+      detailsEl.textContent = '⚠ 토큰 사용 승인(permit)\nspender: ' + op.value.spender + '\n금액: ' + fmt18(op.value.value) + ' vUSD';
+      detailsEl.classList.remove('hidden');
+    } else if (op.kind === 'sendTransaction' && op.tx) {
+      var val = op.tx.value ? fmt18(op.tx.value) : '0';
+      var data = op.tx.data ? (String(op.tx.data).slice(0, 10) + '…') : '없음';
+      detailsEl.textContent = '⚠ 트랜잭션 전송\n받는 곳: ' + (op.tx.to || '—') + '\n금액: ' + val + ' VCN\ndata: ' + data;
+      detailsEl.classList.remove('hidden');
+    } else {
+      detailsEl.classList.add('hidden'); detailsEl.textContent = '';
+    }
+  }
+
+  async function ensureUnlocked() {
+    if (cachedWallet) return cachedWallet;
+    var w = findWallet();
+    if (!w || !w.enc) throw new Error('no-wallet');
+    var mnemonic = await decryptMnemonic(w.enc, pwEl.value);
+    cachedWallet = window.ethers.Wallet.fromPhrase(mnemonic.trim());
+    mnemonic = null; pwEl.value = '';
+    return cachedWallet;
+  }
+
+  // Run the queued op once the wallet is unlocked. Handles three kinds:
+  //   message         -> EIP-191 personal_sign (login / SIWE)
+  //   typedData       -> EIP-712 signTypedData (e.g. EIP-2612 permit, gasless approve)
+  //   sendTransaction -> sign + broadcast a tx via the Vision Chain RPC (pays VCN gas)
+  async function runOp() {
     errEl.textContent = '';
-    if (!pendingSign) return;
+    if (!pendingOp) return;
     try {
       goEl.disabled = true;
-      if (!cachedWallet) {
-        var w = findWallet();
-        if (!w || !w.enc) { errEl.textContent = '지갑을 찾을 수 없습니다'; goEl.disabled = false; return; }
-        var mnemonic = await decryptMnemonic(w.enc, pwEl.value);
-        cachedWallet = window.ethers.Wallet.fromPhrase(mnemonic.trim());
-        mnemonic = null; pwEl.value = '';
+      var wallet = await ensureUnlocked();
+      armIdle();
+      var op = pendingOp, res;
+      if (op.kind === 'message') {
+        res = { address: wallet.address, signature: await wallet.signMessage(op.message) };
+      } else if (op.kind === 'typedData') {
+        // ethers v6 EIP-712: types must NOT include the EIP712Domain entry.
+        res = { address: wallet.address, signature: await wallet.signTypedData(op.domain, op.types, op.value) };
+      } else if (op.kind === 'sendTransaction') {
+        var sent = await wallet.connect(getProvider()).sendTransaction(op.tx);
+        res = { address: wallet.address, hash: sent.hash };
+      } else {
+        throw new Error('unknown-op');
       }
-      var sig = await cachedWallet.signMessage(pendingSign.message);
-      reply(pendingSign.id, true, { address: cachedWallet.address, signature: sig });
-      pendingSign = null;
+      reply(op.id, true, res);
+      pendingOp = null;
       notify('unlocked');
     } catch (e) {
-      errEl.textContent = '비밀번호가 틀렸거나 서명 실패';
+      errEl.textContent = (String(e && e.message).indexOf('no-wallet') !== -1)
+        ? '지갑을 찾을 수 없습니다' : '비밀번호가 틀렸거나 처리에 실패했습니다';
     } finally {
       goEl.disabled = false;
     }
   }
-  goEl.addEventListener('click', doSign);
-  pwEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSign(); });
+  goEl.addEventListener('click', runOp);
+  pwEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') runOp(); });
+
+  // Queue an op. Login signatures (kind 'message') may proceed silently once unlocked,
+  // but permit approvals and transactions ALWAYS require an explicit on-screen confirm
+  // showing what's being signed/sent — never silent, even when already unlocked.
+  function enqueue(op, prompt, btnLabel) {
+    var wallet = findWallet();
+    if (!wallet || !wallet.enc) { reply(op.id, false, 'no-wallet'); return; }
+    pendingOp = op;
+    addrEl.textContent = wallet.address || '—';
+    document.getElementById('subTitle').textContent = prompt;
+    goEl.textContent = btnLabel;
+    errEl.textContent = '';
+    noWallet.classList.add('hidden');
+    signBox.classList.remove('hidden');
+    renderDetails(op);
+
+    var needsConfirm = (op.kind !== 'message');     // permit/tx require explicit confirm
+    var unlocked = !!cachedWallet;
+    pwWrap.style.display = unlocked ? 'none' : 'block';
+
+    if (unlocked && !needsConfirm) { runOp(); return; }  // silent only for login
+    notify('need-unlock');                               // reveal the modal for confirm/unlock
+    if (!unlocked) pwEl.focus(); else goEl.focus();
+  }
 
   window.addEventListener('message', function (ev) {
     if (ALLOWED.indexOf(ev.origin) === -1) return;          // strict origin allowlist
@@ -167,14 +248,23 @@
     }
 
     if (d.action === 'signMessage') {
-      var wallet = findWallet();
-      if (!wallet || !wallet.enc) { reply(d.id, false, 'no-wallet'); return; }
-      pendingSign = { id: d.id, message: d.message };
-      addrEl.textContent = wallet.address || '—';
-      noWallet.classList.add('hidden');
-      signBox.classList.remove('hidden');
-      if (cachedWallet) { doSign(); }              // already unlocked → sign silently
-      else { notify('need-unlock'); pwEl.focus(); } // ask Solvent to reveal the modal
+      enqueue({ id: d.id, kind: 'message', message: d.message },
+        'Solvent 로그인 서명을 요청했습니다.', '서명하고 로그인');
+      return;
+    }
+
+    if (d.action === 'signTypedData') {
+      // EIP-712 typed-data signature (e.g. EIP-2612 permit for a gasless deposit).
+      enqueue({ id: d.id, kind: 'typedData', domain: d.domain, types: d.types, value: d.value },
+        'Solvent 거래 승인(permit) 서명을 요청했습니다. 가스는 들지 않습니다.', '서명 승인');
+      return;
+    }
+
+    if (d.action === 'sendTransaction') {
+      // Sign + broadcast a transaction (pays VCN gas from this wallet).
+      var to = (d.tx && d.tx.to) ? String(d.tx.to) : '';
+      enqueue({ id: d.id, kind: 'sendTransaction', tx: d.tx },
+        '트랜잭션 전송 요청' + (to ? ' → ' + to.slice(0, 10) + '…' : '') + ' (가스: VCN)', '전송하고 서명');
       return;
     }
   });
