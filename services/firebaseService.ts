@@ -25,46 +25,8 @@ import {
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
+import { getFunctions as getFns, httpsCallable as httpsCallableFn } from 'firebase/functions';
 import { firebaseConfig } from '../config/firebase.config';
-
-// Helper to send email via Resend API
-const sendEmailViaResend = async (options: {
-    to: string;
-    subject: string;
-    html: string;
-}) => {
-    const API_KEY = (firebaseConfig as any).resendApiKey;
-    if (!API_KEY) {
-        console.warn('[Email] Resend API Key is missing. Email not sent.');
-        return;
-    }
-
-    try {
-        const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                from: 'visionchain <onboarding@resend.dev>', // Default Resend test domain
-                to: options.to,
-                subject: options.subject,
-                html: options.html
-            })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(`Resend API Error: ${JSON.stringify(error)}`);
-        }
-
-        console.log(`[Email] Successfully sent to ${options.to}`);
-    } catch (err) {
-        console.error('[Email] Failed to send email:', err);
-        throw err;
-    }
-};
 
 // --- User Presets (Intent Optimization) ---
 export interface PaymentPreset {
@@ -3814,7 +3776,7 @@ export const getTokenSaleParticipants = async (limitCount = 500): Promise<TokenS
 export interface ApiKeyData {
     id: string;
     name: string;
-    provider: 'gemini' | 'openai' | 'anthropic' | 'deepseek';
+    provider: 'gemini' | 'openai' | 'anthropic' | 'deepseek' | 'minimax';
     key: string;
     isActive: boolean;
     isValid: boolean;
@@ -3853,8 +3815,34 @@ export const deleteApiKey = async (id: string): Promise<void> => {
 };
 
 /**
+ * Environment-variable fallback for an LLM provider key. Used when the Firestore
+ * read is denied (e.g. non-admin wallet users can't read settings/api_keys/keys)
+ * or when no matching active key is stored. Only populated if the corresponding
+ * VITE_* var is present in the deployed build.
+ */
+const getEnvFallbackApiKey = (provider: string): string | null => {
+    const envKeyMap: Record<string, string | undefined> = {
+        'deepseek': import.meta.env.VITE_DEEPSEEK_API_KEY,
+        'minimax': import.meta.env.VITE_MINIMAX_API_KEY,
+        'gemini': import.meta.env.VITE_GEMINI_API_KEY,
+        'openai': import.meta.env.VITE_OPENAI_API_KEY,
+        'anthropic': import.meta.env.VITE_ANTHROPIC_API_KEY
+    };
+    const envKey = envKeyMap[provider];
+    if (envKey) {
+        console.log(`[Firebase] Using environment variable fallback for ${provider}`);
+        return envKey;
+    }
+    return null;
+};
+
+/**
  * Fetches the active API key for a given provider from the global settings.
- * Priority: isActive=true, isValid=true, deleted=false
+ * Match rule: isActive=true, provider matches, not deleted, and not explicitly
+ * marked invalid (isValid !== false — a missing isValid is treated as valid so
+ * that keys created before the field existed remain usable).
+ * Falls back to the VITE_* env key whenever no usable key is resolved from
+ * Firestore (read denied, empty collection, or no match).
  */
 export const getActiveGlobalApiKey = async (provider: string = 'gemini'): Promise<string | null> => {
     try {
@@ -3862,46 +3850,32 @@ export const getActiveGlobalApiKey = async (provider: string = 'gemini'): Promis
         const keysCollection = collection(db, 'settings', 'api_keys', 'keys');
         const snapshot = await getDocs(keysCollection);
 
-        if (snapshot.empty) {
-            console.warn(`[Firebase] No API keys found in settings/api_keys/keys for provider: ${provider}`);
-            return null;
+        if (!snapshot.empty) {
+            const keys = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ApiKeyData));
+
+            // First matching active, non-deleted, non-invalidated key for this provider
+            const activeKey = keys.find(k =>
+                k.isActive &&
+                k.isValid !== false &&
+                k.provider === provider &&
+                !(k as any).deleted
+            );
+
+            if (activeKey) {
+                console.log(`[Firebase] Resolved active global key for ${provider}: ${activeKey.id}`);
+                return activeKey.key;
+            }
+            console.warn(`[Firebase] No active key found for provider "${provider}" among ${keys.length} stored keys; trying env fallback.`);
+        } else {
+            console.warn(`[Firebase] No API keys found in settings/api_keys/keys; trying env fallback for ${provider}.`);
         }
 
-        const keys = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ApiKeyData));
-
-        // Find the first matching active, valid, and non-deleted key
-        const activeKey = keys.find(k =>
-            k.isActive &&
-            k.isValid &&
-            k.provider === provider &&
-            !(k as any).deleted
-        );
-
-        if (activeKey) {
-            console.log(`[Firebase] Resolved active global key for ${provider}: ${activeKey.id}`);
-            return activeKey.key;
-        }
-
-        console.warn(`[Firebase] No active/valid key found for provider: ${provider}`);
-        return null;
+        return getEnvFallbackApiKey(provider);
     } catch (error) {
-        console.error(`[Firebase] Error fetching active global key for ${provider}:`, error);
-
-        // Environment variable fallback when Firebase permissions fail
-        const envKeyMap: Record<string, string | undefined> = {
-            'deepseek': import.meta.env.VITE_DEEPSEEK_API_KEY,
-            'gemini': import.meta.env.VITE_GEMINI_API_KEY,
-            'openai': import.meta.env.VITE_OPENAI_API_KEY,
-            'anthropic': import.meta.env.VITE_ANTHROPIC_API_KEY
-        };
-
-        const envKey = envKeyMap[provider];
-        if (envKey) {
-            console.log(`[Firebase] Using environment variable fallback for ${provider}`);
-            return envKey;
-        }
-
-        return null;
+        // Most common on the client for non-admin users: Firestore read of the
+        // secret key collection is denied. Fall back to the env key if present.
+        console.error(`[Firebase] Error fetching active global key for ${provider} (read likely denied):`, error);
+        return getEnvFallbackApiKey(provider);
     }
 };
 
@@ -3949,6 +3923,7 @@ export interface SystemSettings {
 export const getProviderFromModel = (modelName: string = ''): string => {
     const lower = modelName.toLowerCase();
     if (lower.includes('deepseek')) return 'deepseek';
+    if (lower.includes('minimax')) return 'minimax';
     if (lower.includes('gpt')) return 'openai';
     if (lower.includes('claude')) return 'anthropic';
     if (lower.includes('gemini')) return 'gemini';
@@ -3965,15 +3940,15 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
             knowledgeBase: '',
             intentBot: {
                 systemPrompt: 'You are Vision AI, an advanced financial and blockchain assistant. You can execute on-chain transactions, analyze chain data, AND analyze CEX (centralized exchange) portfolio data when provided. Never say CEX analysis is unavailable.',
-                model: 'deepseek-chat',
-                visionModel: 'gemini-2.5-flash',
+                model: 'deepseek-v4-flash',
+                visionModel: 'gemini-3.5-flash',
                 temperature: 0.7,
                 maxTokens: 2048
             },
             helpdeskBot: {
                 systemPrompt: 'You are a helpful support agent for Vision Chain.',
-                model: 'deepseek-chat',
-                visionModel: 'gemini-2.5-flash',
+                model: 'deepseek-v4-flash',
+                visionModel: 'gemini-3.5-flash',
                 temperature: 0.7,
                 maxTokens: 2048
             },
@@ -4286,14 +4261,11 @@ export const checkUserAndRegister = async (email: string, partnerCode: string): 
 };
 
 export const requestPasswordChange = async (email: string): Promise<string> => {
-    const db = getFirebaseDb();
     const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
-    // Send email via Resend instead of Firestore queue
-    await sendEmailViaResend({
-        to: email,
-        subject: '[Vision Chain] Password Change Verification Code',
-        html: `Your verification code is: <b>${code}</b>. It stays valid for 30 minutes.`
-    });
+
+    const functions = getFns();
+    const sendFn = httpsCallableFn(functions, 'sendPasswordChangeCodeEmail');
+    await sendFn({ email, code });
 
     return code;
 };
@@ -4335,27 +4307,13 @@ export const sendInvitationEmail = async (email: string, partnerCode: string, ba
         createdAt: new Date().toISOString()
     });
 
-    // Send invitation email via Resend
-    await sendEmailViaResend({
-        to: email,
-        subject: '[Vision Chain] Welcome! Set up your account',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h1 style="color: #06b6d4;">Welcome to Vision Chain</h1>
-                <p>Your account has been created. Click the button below to set your password and activate your account:</p>
-                <a href="${baseUrl}/activate?token=${token}" 
-                   style="display: inline-block; background: linear-gradient(to right, #06b6d4, #3b82f6); 
-                          color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; 
-                          font-weight: bold; margin: 20px 0;">
-                    Activate Account
-                </a>
-                <p style="color: #666; font-size: 14px;">This link expires in 72 hours.</p>
-                <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
-            </div>
-        `
-    });
+    // Send invitation email via Gmail (Cloud Function)
+    const activationUrl = `${baseUrl}/activate?token=${token}`;
+    const functions = getFns();
+    const sendFn = httpsCallableFn(functions, 'sendActivationInvitationEmail');
+    await sendFn({ email, activationUrl });
 
-    console.log(`[Email] Sent invitation email to ${email} via Resend`);
+    console.log(`[Email] Sent invitation email to ${email} via Gmail`);
     return token;
 };
 

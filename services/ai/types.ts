@@ -1,6 +1,6 @@
 import { AspectRatio } from '../../types';
 
-export type AIProviderID = 'gemini' | 'deepseek' | 'openai' | 'anthropic';
+export type AIProviderID = 'gemini' | 'deepseek' | 'openai' | 'anthropic' | 'minimax';
 
 export interface TextGenerationOptions {
     systemPrompt?: string;

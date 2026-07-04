@@ -60,20 +60,36 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                                 onChange={(e) => props.setIntentBot({ ...props.intentBot(), model: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50"
                             >
-                                <option value="deepseek-chat">DeepSeek Chat (V3)</option>
-                                <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+                                <optgroup label="DeepSeek">
+                                    <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                                    <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+                                    <option value="deepseek-chat">DeepSeek Chat (legacy)</option>
+                                    <option value="deepseek-reasoner">DeepSeek Reasoner (legacy)</option>
+                                </optgroup>
+                                <optgroup label="MiniMax">
+                                    <option value="MiniMax-M3">MiniMax M3 (Flagship)</option>
+                                    <option value="MiniMax-M2.5">MiniMax M2.5</option>
+                                    <option value="MiniMax-M2.1">MiniMax M2.1</option>
+                                    <option value="MiniMax-M2">MiniMax M2</option>
+                                </optgroup>
+                                <optgroup label="Google Gemini">
+                                    <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                                </optgroup>
                             </select>
                         </div>
                         {/* Vision Model - Gemini Nano Banana */}
                         <div class="space-y-1.5">
                             <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Vision / Image Analysis</label>
                             <select
-                                value={props.intentBot().visionModel || 'gemini-2.5-flash'}
+                                value={props.intentBot().visionModel || 'gemini-3.5-flash'}
                                 onChange={(e) => props.setIntentBot({ ...props.intentBot(), visionModel: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                             >
-                                <option value="gemini-2.5-flash">Nano Banana (gemini-2.5-flash)</option>
-                                <option value="gemini-2.5-pro-preview-06-05">Nano Banana Pro (gemini-2.5-pro)</option>
+                                <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
                             </select>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl">
@@ -105,20 +121,36 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                                 onChange={(e) => props.setHelpdeskBot({ ...props.helpdeskBot(), model: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                             >
-                                <option value="deepseek-chat">DeepSeek Chat (V3)</option>
-                                <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+                                <optgroup label="DeepSeek">
+                                    <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                                    <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+                                    <option value="deepseek-chat">DeepSeek Chat (legacy)</option>
+                                    <option value="deepseek-reasoner">DeepSeek Reasoner (legacy)</option>
+                                </optgroup>
+                                <optgroup label="MiniMax">
+                                    <option value="MiniMax-M3">MiniMax M3 (Flagship)</option>
+                                    <option value="MiniMax-M2.5">MiniMax M2.5</option>
+                                    <option value="MiniMax-M2.1">MiniMax M2.1</option>
+                                    <option value="MiniMax-M2">MiniMax M2</option>
+                                </optgroup>
+                                <optgroup label="Google Gemini">
+                                    <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                                </optgroup>
                             </select>
                         </div>
                         {/* Vision Model - Gemini Nano Banana */}
                         <div class="space-y-1.5">
                             <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Vision / Image Analysis</label>
                             <select
-                                value={props.helpdeskBot().visionModel || 'gemini-2.5-flash'}
+                                value={props.helpdeskBot().visionModel || 'gemini-3.5-flash'}
                                 onChange={(e) => props.setHelpdeskBot({ ...props.helpdeskBot(), visionModel: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                             >
-                                <option value="gemini-2.5-flash">Nano Banana (gemini-2.5-flash)</option>
-                                <option value="gemini-2.5-pro-preview-06-05">Nano Banana Pro (gemini-2.5-pro)</option>
+                                <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
                             </select>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl">
@@ -145,7 +177,8 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                             onChange={(e) => props.setImageSettings({ ...props.imageSettings(), model: e.currentTarget.value })}
                             class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                         >
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Image Gen)</option>
+                            <option value="gemini-3.1-flash-image">Nano Banana 2 (gemini-3.1-flash-image)</option>
+                            <option value="gemini-3-pro-image">Nano Banana Pro (gemini-3-pro-image)</option>
                             <option value="imagen-3.0-generate-002">Imagen 3 (High Quality)</option>
                         </select>
                         <select
@@ -176,8 +209,8 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                             onChange={(e) => props.setVoiceSettings({ ...props.voiceSettings(), model: e.currentTarget.value })}
                             class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-amber-500/50"
                         >
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (STT)</option>
-                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                            <option value="gemini-3.5-flash">Gemini 3.5 Flash (STT)</option>
+                            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
                         </select>
                         <select
                             value={props.voiceSettings().ttsVoice}

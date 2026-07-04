@@ -3,6 +3,7 @@ import { AspectRatio } from '../../types';
 import { AIProvider, AIProviderID, TextGenerationOptions } from './types';
 import { GeminiProvider } from './providers/geminiProvider';
 import { DeepSeekProvider } from './providers/deepseekProvider';
+import { MinimaxProvider } from './providers/minimaxProvider';
 import { LLMRouter } from './router';
 import { VisionInsightService } from '../visionInsightService';
 import type { InsightSnapshot } from '../visionInsightService';
@@ -91,6 +92,35 @@ function formatInsightBlock(s: InsightSnapshot): string {
     return lines.join('\n');
 }
 
+/**
+ * Blueforge-style server proxy. When the client cannot resolve a provider key
+ * itself (e.g. non-admin wallet users can't read the secret key collection),
+ * the LLM call is made server-side by the `walletAiChat` Cloud Function: the
+ * client sends only the prompt + model (+ optional image) and its Firebase Auth
+ * token; the raw API key never reaches the browser. Returns the assistant text.
+ */
+export async function cloudGenerateText(params: {
+    prompt: string;
+    system?: string;
+    model: string;
+    temperature?: number;
+    maxTokens?: number;
+    imageBase64?: string;
+}): Promise<string> {
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const functions = getFunctions();
+    const fn = httpsCallable<any, { text: string }>(functions, 'walletAiChat');
+    const res = await fn({
+        prompt: params.prompt,
+        system: params.system || '',
+        model: params.model,
+        temperature: params.temperature,
+        maxTokens: params.maxTokens,
+        imageBase64: params.imageBase64 || null,
+    });
+    return (res.data as any)?.text || '';
+}
+
 class ProviderFactory {
     private providers: Map<AIProviderID, AIProvider> = new Map();
 
@@ -99,6 +129,7 @@ class ProviderFactory {
     constructor() {
         this.providers.set('gemini', new GeminiProvider());
         this.providers.set('deepseek', new DeepSeekProvider());
+        this.providers.set('minimax', new MinimaxProvider());
         this.router = new LLMRouter(this);
     }
 
@@ -120,9 +151,16 @@ class ProviderFactory {
         const model = botConfig?.model || 'deepseek-chat';
         const visionModel = botConfig?.visionModel || 'gemini-2.5-flash';
         const providerId = getProviderFromModel(model) as AIProviderID;
-        const apiKey = await getActiveGlobalApiKey(providerId);
-
-        if (!apiKey) throw new Error(`API Key for ${providerId} not found.`);
+        // Client-side key is OPTIONAL. Non-admin wallet users cannot read the
+        // secret key collection, so no key is resolved here — the server-side
+        // proxy (walletAiChat) resolves and uses the key instead. Only when a
+        // key IS available (e.g. admin sessions) do we call providers directly.
+        let apiKey = '';
+        try {
+            apiKey = (await getActiveGlobalApiKey(providerId)) || '';
+        } catch {
+            apiKey = '';
+        }
 
         return {
             providerId,
@@ -665,18 +703,41 @@ ${localeInfo}
 ${await getMarketIntelligenceBlock()}
 `;
 
-        const router = factory.getRouter();
-        const { result, providerId: finalProviderId, apiKey: finalApiKey, model: finalModel } = await router.generateText(
-            fullPrompt,
-            { providerId: config.providerId, model: config.model, apiKey: config.apiKey, visionModel: config.visionModel },
-            {
-                systemPrompt: dynamicSystemPrompt,
+        let result: any;
+        let finalProviderId: AIProviderID = config.providerId;
+        let finalApiKey: string = config.apiKey;
+        let finalModel: string = config.model;
+
+        if (config.apiKey) {
+            // Direct provider path (client holds a key, e.g. admin sessions).
+            // Supports Gemini function-calling / tool execution below.
+            const router = factory.getRouter();
+            ({ result, providerId: finalProviderId, apiKey: finalApiKey, model: finalModel } = await router.generateText(
+                fullPrompt,
+                { providerId: config.providerId, model: config.model, apiKey: config.apiKey, visionModel: config.visionModel },
+                {
+                    systemPrompt: dynamicSystemPrompt,
+                    temperature: config.temperature,
+                    maxTokens: config.maxTokens,
+                    imageBase64,
+                    botType
+                }
+            ));
+        } else {
+            // Blueforge-style server proxy: no client key → the Cloud Function
+            // resolves the key and calls the LLM. Returns plain text (the Gemini
+            // tool-execution loop below is skipped for this path).
+            result = await cloudGenerateText({
+                prompt: fullPrompt,
+                system: dynamicSystemPrompt,
+                model: imageBase64 ? config.visionModel : config.model,
                 temperature: config.temperature,
                 maxTokens: config.maxTokens,
                 imageBase64,
-                botType
-            }
-        );
+            });
+            finalProviderId = (imageBase64 ? 'gemini' : config.providerId) as AIProviderID;
+            finalModel = imageBase64 ? config.visionModel : config.model;
+        }
 
         let finalResultText = "";
         let currentResult = result;
@@ -1176,6 +1237,24 @@ ${await getMarketIntelligenceBlock()}
 
         // Use streaming router
         let accumulatedText = '';
+
+        if (!config.apiKey) {
+            // Blueforge-style server proxy: no client key → the Cloud Function
+            // resolves the key and calls the LLM. onCall responses aren't
+            // streamable, so emit the full text as a single chunk.
+            const text = await cloudGenerateText({
+                prompt: fullPrompt,
+                system: dynamicSystemPrompt,
+                model: imageBase64 ? config.visionModel : config.model,
+                temperature: config.temperature,
+                maxTokens: config.maxTokens,
+                imageBase64,
+            });
+            accumulatedText = text;
+            onChunk(text, accumulatedText);
+            return text;
+        }
+
         const result = await factory.getRouter().generateTextStream(
             fullPrompt,
             config,

@@ -19501,6 +19501,131 @@ async function callLLM(model, systemPrompt, userPrompt, availableTools) {
   throw new Error(`Unsupported model: ${model}`);
 }
 
+// --- Wallet AI proxy (Blueforge-style: keys never reach the client) ---
+function providerFromModel(model) {
+  const m = String(model || "").toLowerCase();
+  if (m.includes("deepseek")) return "deepseek";
+  if (m.includes("minimax")) return "minimax";
+  if (m.includes("gpt") || m.includes("openai")) return "openai";
+  if (m.includes("claude")) return "anthropic";
+  if (m.includes("gemini")) return "gemini";
+  return "deepseek";
+}
+
+const _AI_PROXY_ENV_KEYS = {
+  deepseek: () => process.env.DEEPSEEK_API_KEY,
+  minimax: () => process.env.MINIMAX_API_KEY,
+  gemini: () => process.env.GEMINI_API_KEY,
+  openai: () => process.env.OPENAI_API_KEY,
+  anthropic: () => process.env.ANTHROPIC_API_KEY,
+};
+
+const _OPENAI_COMPAT_URL = {
+  deepseek: "https://api.deepseek.com/chat/completions",
+  minimax: "https://api.minimax.io/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+};
+
+/**
+ * Server-side LLM proxy for the wallet AI. The raw provider key never reaches
+ * the browser: an authenticated client sends prompt + model (+ optional image)
+ * and its Firebase Auth token; this function resolves the active key from
+ * Firestore (admin-managed, read via Admin SDK which bypasses client security
+ * rules) with an env-var fallback, calls the provider, and returns the text.
+ */
+exports.walletAiChat = onCall(
+  { cors: true, maxInstances: 20, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign-in required to use AI chat.");
+    }
+
+    const data = request.data || {};
+    const prompt = typeof data.prompt === "string" ? data.prompt : "";
+    if (!prompt) {
+      throw new HttpsError("invalid-argument", "A non-empty 'prompt' is required.");
+    }
+    const system = typeof data.system === "string" ? data.system : "";
+    const model = (typeof data.model === "string" && data.model) || "deepseek-chat";
+    const temperature = typeof data.temperature === "number" ? data.temperature : 0.7;
+    const maxTokens = typeof data.maxTokens === "number" ? data.maxTokens : 2048;
+    const imageBase64 = typeof data.imageBase64 === "string" ? data.imageBase64 : null;
+
+    const provider = providerFromModel(model);
+    const apiKey =
+      (await getApiKeyFromFirestore(provider)) ||
+      (_AI_PROXY_ENV_KEYS[provider] ? _AI_PROXY_ENV_KEYS[provider]() : null);
+
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        `No active API key configured for provider "${provider}". Add one in Admin → AI Management → API Keys.`,
+      );
+    }
+
+    if (!axios) axios = require("axios");
+
+    try {
+      if (provider === "gemini") {
+        const parts = [{ text: prompt }];
+        if (imageBase64) {
+          const b64 = imageBase64.replace(/^data:[^;]+;base64,/, "");
+          parts.unshift({ inlineData: { mimeType: "image/jpeg", data: b64 } });
+        }
+        const body = {
+          contents: [{ role: "user", parts }],
+          generationConfig: { temperature, maxOutputTokens: maxTokens },
+        };
+        if (system) body.systemInstruction = { parts: [{ text: system }] };
+        const resp = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          body,
+          { timeout: 60000 },
+        );
+        const text = (resp.data?.candidates?.[0]?.content?.parts || [])
+          .map((p) => p.text)
+          .filter(Boolean)
+          .join("");
+        return { text: text || "", provider, model };
+      }
+
+      // OpenAI-compatible providers (deepseek, minimax, openai)
+      const url = _OPENAI_COMPAT_URL[provider];
+      if (!url) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Provider "${provider}" is not supported by the AI proxy.`,
+        );
+      }
+      const messages = [];
+      if (system) messages.push({ role: "system", content: system });
+      messages.push({ role: "user", content: prompt });
+      const resp = await axios.post(
+        url,
+        { model, messages, temperature, max_tokens: maxTokens, stream: false },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 60000,
+        },
+      );
+      const text = resp.data?.choices?.[0]?.message?.content || "";
+      return { text, provider, model };
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      const detail =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.base_resp?.status_msg ||
+        err?.message ||
+        "Unknown error";
+      console.error(`[walletAiChat] ${provider} call failed:`, detail);
+      throw new HttpsError("internal", `AI provider error: ${detail}`);
+    }
+  },
+);
+
 // --- Agent Executor Scheduled Function ---
 exports.agentExecutor = onSchedule({
   schedule: "every 5 minutes",

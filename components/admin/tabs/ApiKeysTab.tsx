@@ -4,7 +4,7 @@ import { ApiKeyData } from '../../../services/firebaseService';
 
 interface ApiKeysTabProps {
     apiKeys: () => ApiKeyData[];
-    onAddKey: (name: string, value: string, provider: 'gemini' | 'openai' | 'anthropic' | 'deepseek') => Promise<void>;
+    onAddKey: (name: string, value: string, provider: 'gemini' | 'deepseek' | 'minimax' | 'openai' | 'anthropic') => Promise<void>;
     onDeleteKey: (id: string, provider: string) => Promise<void>;
     onToggleActive: (id: string, provider: string, active: boolean) => Promise<void>;
 }
@@ -19,6 +19,7 @@ function formatDate(iso?: string): string {
 const PROVIDER_COLOR: Record<string, string> = {
     gemini: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
     deepseek: 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
+    minimax: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
     openai: 'bg-green-500/10 text-green-400 border border-green-500/20',
     anthropic: 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
 };
@@ -80,7 +81,7 @@ function ConfirmModal(props: ConfirmModalProps) {
 export function ApiKeysTab(props: ApiKeysTabProps) {
     const [newKeyName, setNewKeyName] = createSignal('');
     const [newKeyValue, setNewKeyValue] = createSignal('');
-    const [newKeyProvider, setNewKeyProvider] = createSignal<'gemini' | 'openai' | 'anthropic' | 'deepseek'>('gemini');
+    const [newKeyProvider, setNewKeyProvider] = createSignal<'gemini' | 'deepseek' | 'minimax' | 'openai' | 'anthropic'>('gemini');
     const [showNewKeyValue, setShowNewKeyValue] = createSignal(false);
     const [isSaving, setIsSaving] = createSignal(false);
     const [isDeleting, setIsDeleting] = createSignal(false);
@@ -216,8 +217,7 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                     >
                         <option value="gemini">Google Gemini</option>
                         <option value="deepseek">DeepSeek AI</option>
-                        <option value="openai">OpenAI GPT</option>
-                        <option value="anthropic">Anthropic Claude</option>
+                        <option value="minimax">MiniMax</option>
                     </select>
                     <button
                         onClick={handleAdd}
