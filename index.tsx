@@ -128,8 +128,6 @@ render(() => (
         <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
         <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
         <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />
-        <Route path="/adminsystem/cex-portfolio" component={Admin.AdminCexPortfolioPage} />
-        <Route path="/adminsystem/quant-monitor" component={Admin.AdminQuantMonitorPage} />
         <Route path="/adminsystem/vision-insight" component={Admin.AdminVisionInsightPage} />
         <Route path="/adminsystem/social-media" component={Admin.AdminSocialMediaPage} />
         <Route path="/adminsystem/api-pricing" component={Admin.AdminApiPricingPage} />

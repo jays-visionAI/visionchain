@@ -115,19 +115,6 @@ export const AI_TOOLS = [
         }
     },
     {
-        name: "get_cex_portfolio",
-        description: "Get the user's cryptocurrency portfolio data from their connected centralized exchanges (CEX) like Upbit and Bithumb. Returns asset holdings, balances, current prices, profit/loss, and allocation percentages. Use this tool when the user asks about their exchange portfolio, CEX holdings, investment performance, portfolio analysis, or wants AI-driven portfolio advice. The data includes KRW and USD values.",
-        parameters: {
-            type: "object",
-            properties: {
-                exchange: {
-                    type: "string",
-                    description: "Optional. Filter by specific exchange: 'upbit' or 'bithumb'. If omitted, returns aggregated data from all connected exchanges."
-                }
-            }
-        }
-    },
-    {
         name: "create_agent",
         description: "Register a new AI agent on Vision Chain. Creates a wallet, funds it with 100 VCN, and returns the API key. Use this when the user wants to create/register an agent. Ask the user for agent_name and platform before calling. The agent_name must be unique, lowercase, alphanumeric with underscores.",
         parameters: {

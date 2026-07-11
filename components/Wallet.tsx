@@ -153,8 +153,6 @@ const WalletReceive = lazyWithRetry(() => import('./wallet/WalletReceive').then(
 const WalletReferralDocs = lazyWithRetry(() => import('./wallet/WalletReferralDocs').then(m => ({ default: m.WalletReferralDocs })));
 const Bridge = lazyWithRetry(() => import('./Bridge'));
 const ValidatorStaking = lazyWithRetry(() => import('./ValidatorStaking'));
-const WalletCexPortfolio = lazyWithRetry(() => import('./wallet/WalletCexPortfolio'));
-const VisionQuantEngine = lazyWithRetry(() => import('./quant/VisionQuantEngine'));
 const AgentHosting = lazyWithRetry(() => import('./wallet/AgentHosting')); // kept for potential future use
 const VisionInsight = lazyWithRetry(() => import('./wallet/VisionInsight'));
 const VisionPredict = lazyWithRetry(() => import('./predict/VisionPredict'));
@@ -4133,7 +4131,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 // FLOW ROUTING: Single vs Scheduled vs Multi vs Navigate
                 if (intentData.intent === 'navigate' && intentData.page) {
                     const targetPage = intentData.page.toLowerCase();
-                    const validPages = ['referral', 'assets', 'nodes', 'quest', 'campaign', 'mint', 'settings', 'profile', 'history', 'contacts', 'cex'];
+                    const validPages = ['referral', 'assets', 'nodes', 'quest', 'campaign', 'mint', 'settings', 'profile', 'history', 'contacts'];
 
                     if (validPages.includes(targetPage)) {
                         const displayPage = targetPage === 'campaign' ? 'quest' : targetPage;
@@ -4609,24 +4607,6 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                                     <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
                                         <VisionInsight />
-                                    </Suspense>
-                                </div>
-                            </Show>
-
-                            {/* CEX Portfolio View */}
-                            <Show when={activeView() === 'cex'}>
-                                <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                        <WalletCexPortfolio />
-                                    </Suspense>
-                                </div>
-                            </Show>
-
-                            {/* Vision Quant Engine - Now merged into CEX Portfolio */}
-                            <Show when={activeView() === 'quant'}>
-                                <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                        <WalletCexPortfolio />
                                     </Suspense>
                                 </div>
                             </Show>
