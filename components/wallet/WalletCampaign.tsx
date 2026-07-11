@@ -83,23 +83,6 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             footerIcon: Sparkles
         },
         {
-            id: 'quant_arena',
-            title: t('campaign.quantArenaTitle'),
-            tag: t('campaign.quantArenaTag'),
-            tagColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-            description: t('campaign.quantArenaDesc'),
-            icon: BarChart3,
-            accent: 'blue',
-            btnText: t('campaign.quantArenaBtn'),
-            stats: [
-                { label: t('campaign.quantArenaPrize'), value: '2,000 VCN' },
-                { label: t('campaign.quantArenaSeed'), value: '10M KRW' },
-                { label: t('campaign.quantArenaEnds'), value: 'Mar 20' }
-            ],
-            footerTag: 'Round 1',
-            footerIcon: Trophy
-        },
-        {
             id: 'game_daily',
             title: 'Daily Game Challenge',
             tag: 'Daily',
@@ -333,8 +316,6 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                             if ((quest as any).disabled) return;
                                             if (quest.id === 'staking' && props.onNavigate) {
                                                 props.onNavigate('staking');
-                                            } else if (quest.id === 'quant_arena' && props.onNavigate) {
-                                                props.onNavigate('quant');
                                             } else {
                                                 setSelectedQuest(quest.id);
                                             }
