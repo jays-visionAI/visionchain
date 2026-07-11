@@ -22480,29 +22480,59 @@ exports.conditionalTransferMonitor = onSchedule({
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
     const nowSec = Math.floor(Date.now() / 1000);
 
-    // Process both agents and users
-    const collections = [
-      { parent: "agents", isUser: false },
-      { parent: "users", isUser: true },
-    ];
+    // Collect all "watching" conditional transfers grouped by their parent entity
+    // (users/{id} or agents/{id}). Primary path is a single collection-group query,
+    // which reads ONLY the watching transfers instead of scanning every user/agent
+    // document each run — a large Firestore cost reduction with identical behavior.
+    // Fallback: if the collection-group index is not yet built, scan as before so
+    // conditional transfers never stop executing.
+    const entityGroups = new Map(); // parentRef.path -> { parentRef, isUser, conds: [] }
+    const addCond = (cDoc) => {
+      const parentRef = cDoc.ref.parent.parent; // the users/{id} or agents/{id} doc
+      if (!parentRef) return;
+      const collId = parentRef.parent.id; // "users" or "agents"
+      if (collId !== "users" && collId !== "agents") return;
+      const key = parentRef.path;
+      if (!entityGroups.has(key)) {
+        entityGroups.set(key, { parentRef, isUser: collId === "users", conds: [] });
+      }
+      const g = entityGroups.get(key);
+      if (g.conds.length < 20) g.conds.push(cDoc); // preserve original per-entity cap of 20
+    };
 
-    for (const { parent, isUser } of collections) {
-      const parentSnap = await db.collection(parent).get();
+    try {
+      const watchingSnap = await db.collectionGroup("conditional_transfers")
+        .where("status", "==", "watching")
+        .get();
+      watchingSnap.docs.forEach(addCond);
+    } catch (cgErr) {
+      console.warn("[ConditionalTx] collection-group query unavailable (index building?), falling back to full scan:", cgErr.message);
+      for (const parent of ["agents", "users"]) {
+        const parentSnap = await db.collection(parent).get();
+        for (const pDoc of parentSnap.docs) {
+          const cs = await pDoc.ref
+            .collection("conditional_transfers")
+            .where("status", "==", "watching")
+            .limit(20)
+            .get();
+          cs.docs.forEach(addCond);
+        }
+      }
+    }
 
-      for (const parentDoc of parentSnap.docs) {
+    for (const { parentRef, isUser, conds } of entityGroups.values()) {
+      const parentDoc = await parentRef.get();
+      if (!parentDoc.exists) continue;
+      {
         const entity = parentDoc.data();
         const walletAddress = entity.walletAddress;
         if (!walletAddress) continue;
         // Agents need privateKey, users use permit-based execution
         if (!isUser && !entity.privateKey) continue;
 
-        const condSnap = await parentDoc.ref
-          .collection("conditional_transfers")
-          .where("status", "==", "watching")
-          .limit(20)
-          .get();
+        const condSnap = { docs: conds };
 
-        if (condSnap.empty) continue;
+        if (condSnap.docs.length === 0) continue;
 
         // Get balance once per entity
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, [
