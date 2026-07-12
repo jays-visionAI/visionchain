@@ -9465,7 +9465,7 @@ exports.agentGateway = onRequest({
         mobile_node: {
           description: "Mobile Node (S-M Class) -- earn VCN by contributing network uptime from Android app or PWA.",
           actions: [
-            { action: "mobile_node.register", auth: false, tier: "T1", cost: "0", params: { email: "required", device_type: "required (android|pwa)", referral_code: "optional" }, response: ["node_id", "api_key", "wallet_address"], desc: "Register mobile node, get API key + wallet" },
+            { action: "mobile_node.register", auth: true, tier: "T1", cost: "0", params: { email: "required", device_type: "required (android|pwa)", firebase_id_token: "required (Firebase ID token; email must match)", referral_code: "optional" }, response: ["node_id", "api_key", "wallet_address"], desc: "Register mobile node (requires Firebase auth), get API key + wallet" },
             { action: "mobile_node.heartbeat", auth: true, tier: "T1", cost: "0", params: { mode: "required (wifi_full|cellular_min)", battery_pct: "optional", data_used_mb: "optional" }, response: ["accepted", "epoch", "uptime_today_sec", "pending_reward"], desc: "Send heartbeat (5min WiFi / 30min cellular)" },
             { action: "mobile_node.status", auth: true, tier: "T1", cost: "0", params: {}, response: ["node_id", "device_type", "status", "total_uptime_hours", "current_epoch", "pending_reward", "claimed_reward", "weight", "network_rank", "total_nodes"], desc: "Full node status + rewards" },
             { action: "mobile_node.claim_reward", auth: true, tier: "T1", cost: "0", params: {}, response: ["claimed_amount", "tx_hash", "new_balance"], desc: "Claim pending epoch rewards" },
@@ -13507,21 +13507,25 @@ exports.agentGateway = onRequest({
           return res.status(400).json({ error: "Invalid email format" });
         }
 
-        // Firebase Auth verification (required for app clients)
+        // Firebase Auth is REQUIRED — binds each node to a verified identity.
+        // Without it an unauthenticated caller could re-register by email and receive
+        // the existing node's api_key (account takeover), and anyone could mint
+        // unlimited Sybil nodes.
+        if (!firebaseIdToken) {
+          return res.status(401).json({ error: "Authentication required. Sign in and include firebase_id_token." });
+        }
         let firebaseUid = null;
-        if (firebaseIdToken) {
-          try {
-            const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
-            firebaseUid = decodedToken.uid;
-            // Verify email matches
-            if (decodedToken.email && decodedToken.email.toLowerCase() !== email.toLowerCase()) {
-              return res.status(400).json({ error: "Email mismatch with authenticated account" });
-            }
-            console.log(`[Mobile Node] Firebase auth verified: ${firebaseUid} (${email})`);
-          } catch (authErr) {
-            console.error("[Mobile Node] Firebase token verification failed:", authErr.message);
-            return res.status(401).json({ error: "Invalid authentication token. Please sign in again." });
+        try {
+          const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
+          firebaseUid = decodedToken.uid;
+          // The token's verified email MUST match the requested node email.
+          if (!decodedToken.email || decodedToken.email.toLowerCase() !== email.toLowerCase()) {
+            return res.status(403).json({ error: "Email does not match the authenticated account." });
           }
+          console.log(`[Mobile Node] Firebase auth verified: ${firebaseUid} (${email})`);
+        } catch (authErr) {
+          console.error("[Mobile Node] Firebase token verification failed:", authErr.message);
+          return res.status(401).json({ error: "Invalid authentication token. Please sign in again." });
         }
         // Check if already registered with this email
         const existingSnap = await db.collection("mobile_nodes")
@@ -13565,7 +13569,7 @@ exports.agentGateway = onRequest({
           firebase_uid: firebaseUid,
           device_type: deviceType,
           wallet_address: nodeWallet.address,
-          private_key_encrypted: nodeWallet.privateKey,
+          private_key_encrypted: serverEncrypt(nodeWallet.privateKey),
           api_key: nodeApiKey,
           referral_code: myReferralCode,
           referred_by: referredBy,
@@ -13676,6 +13680,23 @@ exports.agentGateway = onRequest({
         // Calculate time since last heartbeat
         const now = new Date();
         const lastHB = mnData.last_heartbeat?.toDate?.() || null;
+
+        // Server-side minimum-interval enforcement: reject heartbeats arriving faster
+        // than the mode's cadence (with jitter tolerance) so RP / heartbeat_count cannot
+        // be farmed by a client spamming the endpoint. Early-returns without any state change.
+        const minIntervalSec = mode === "wifi_full" ? 240 : 1440; // ~80% of 5min / 30min
+        if (lastHB) {
+          const sinceLastSec = Math.floor((now.getTime() - lastHB.getTime()) / 1000);
+          if (sinceLastSec < minIntervalSec) {
+            return res.status(429).json({
+              accepted: false,
+              reason: "rate_limited",
+              retry_after_sec: minIntervalSec - sinceLastSec,
+              message: `Heartbeat too frequent for mode ${mode}. Minimum interval ${minIntervalSec}s.`,
+            });
+          }
+        }
+
         let uptimeDelta = 0;
         if (lastHB) {
           const diffMs = now.getTime() - lastHB.getTime();
