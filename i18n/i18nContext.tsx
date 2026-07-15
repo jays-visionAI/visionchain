@@ -5,6 +5,11 @@ import en from './locales/en.json';
 import ko from './locales/ko.json';
 import jp from './locales/jp.json';
 import th from './locales/th.json';
+import vi from './locales/vi.json';
+import zh from './locales/zh.json';
+import fr from './locales/fr.json';
+import de from './locales/de.json';
+import it from './locales/it.json';
 
 // ============================================================
 // Types
@@ -31,6 +36,11 @@ const LOCALES: Record<LocaleCode, NestedRecord> = {
     ko: ko as NestedRecord,
     jp: jp as NestedRecord,
     th: th as NestedRecord,
+    vi: vi as NestedRecord,
+    zh: zh as NestedRecord,
+    fr: fr as NestedRecord,
+    de: de as NestedRecord,
+    it: it as NestedRecord,
 };
 
 const AVAILABLE_LOCALES = [
@@ -38,6 +48,11 @@ const AVAILABLE_LOCALES = [
     { code: 'ko', label: 'Korean', native: '한국어' },
     { code: 'jp', label: 'Japanese', native: '日本語' },
     { code: 'th', label: 'Thai', native: 'ไทย' },
+    { code: 'vi', label: 'Vietnamese', native: 'Tiếng Việt' },
+    { code: 'zh', label: 'Chinese', native: '简体中文' },
+    { code: 'fr', label: 'French', native: 'Français' },
+    { code: 'de', label: 'German', native: 'Deutsch' },
+    { code: 'it', label: 'Italian', native: 'Italiano' },
 ];
 
 const STORAGE_KEY = 'visionchain_locale';
