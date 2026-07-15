@@ -68,9 +68,13 @@ function detectLocale(): LocaleCode {
         if (stored && LOCALES[stored]) return stored;
     } catch { /* SSR or privacy mode */ }
 
-    // 2. Browser language
+    // 2. Browser language — map ISO 639-1 codes to our internal locale keys.
+    // Browsers report Japanese as 'ja', but our Japanese locale key is 'jp',
+    // so without this alias a Japanese browser would fall through to English.
     try {
-        const browserLang = navigator.language?.split('-')[0];
+        const raw = navigator.language?.split('-')[0]?.toLowerCase();
+        const alias: Record<string, string> = { ja: 'jp' };
+        const browserLang = raw ? (alias[raw] || raw) : undefined;
         if (browserLang && LOCALES[browserLang]) return browserLang;
     } catch { /* SSR */ }
 
