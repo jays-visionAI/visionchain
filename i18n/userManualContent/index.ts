@@ -6,8 +6,13 @@ import { en } from './en';
 import { ko } from './ko';
 import { jp } from './jp';
 import { th } from './th';
+import { vi } from './vi';
+import { zh } from './zh';
+import { fr } from './fr';
+import { de } from './de';
+import { it } from './it';
 
-const contentMap: Record<string, Record<string, any>> = { en, ko, jp, th };
+const contentMap: Record<string, Record<string, any>> = { en, ko, jp, th, vi, zh, fr, de, it };
 
 /**
  * Get content data for a section in the given locale.
