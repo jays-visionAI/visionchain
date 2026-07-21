@@ -174,7 +174,7 @@ export default function TrafficSimulator() {
 
         if (useCrossChain()) {
             metadata.bridgeContext = {
-                sourceChain: "Vision Testnet v2",
+                sourceChain: "Vision Mainnet v2",
                 destinationChain: "Ethereum Sepolia",
                 isCrossChain: true
             };

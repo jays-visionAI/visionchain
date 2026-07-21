@@ -74,7 +74,7 @@ const SecurityPolicy = (): JSX.Element => {
                             <li><strong>Vision Chain gateway API</strong> — the public agent gateway endpoint and its handlers (<code class="text-emerald-400">/agentGateway</code> and related Cloud Functions).</li>
                             <li><strong>Vision Predict (Beta)</strong> — <code class="text-emerald-400">/predict</code> and its server-side handlers (<code class="text-emerald-400">polymarket.*</code> actions).</li>
                             <li><strong>Vision Agent Gateway</strong> — <code class="text-emerald-400">/agent</code>, the developer-facing API surface, and its documentation pages.</li>
-                            <li><strong>Vision Chain RPC and explorer</strong> — the public RPC endpoints documented on the Testnet page and the Vision Scan explorer.</li>
+                            <li><strong>Vision Chain RPC and explorer</strong> — the public RPC endpoints documented on the Mainnet page and the Vision Scan explorer.</li>
                         </ul>
                     </Section>
 

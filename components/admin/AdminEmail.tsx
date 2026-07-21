@@ -356,7 +356,7 @@ const DEFAULT_TEMPLATES: TemplateDefinition[] = [
 </div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
   <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Account</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{email}}</td></tr>
-  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Network</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Vision Chain Testnet</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Network</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Vision Chain Mainnet</td></tr>
   <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Active</td></tr>
 </table>`,
         variables: [
@@ -376,7 +376,7 @@ const DEFAULT_TEMPLATES: TemplateDefinition[] = [
 </div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
   <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Wallet Address</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;font-family:'SF Mono',monospace;">{{walletAddress}}</td></tr>
-  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Network</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Vision Chain Testnet</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Network</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Vision Chain Mainnet</td></tr>
   <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Ready</td></tr>
 </table>`,
         variables: [
@@ -477,7 +477,7 @@ function wrapWithBaseLayout(bodyContent: string, previewText: string): string {
                 <span style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:0.5px;margin-left:10px;vertical-align:middle;">Vision Chain</span>
               </td>
               <td align="right">
-                <span style="font-size:10px;font-weight:700;color:#22d3ee;background:rgba(34,211,238,0.1);padding:4px 10px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;">Testnet</span>
+                <span style="font-size:10px;font-weight:700;color:#22d3ee;background:rgba(34,211,238,0.1);padding:4px 10px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;">Mainnet</span>
               </td>
             </tr>
           </table>

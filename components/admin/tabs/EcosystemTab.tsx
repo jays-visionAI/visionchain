@@ -88,7 +88,7 @@ export function EcosystemTab(props: EcosystemTabProps) {
                     class="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold hover:shadow-lg hover:shadow-amber-500/25 transition-all disabled:opacity-50"
                 >
                     <Send class={`w-4 h-4 ${props.isDistributing() ? 'animate-pulse' : ''}`} />
-                    {props.isDistributing() ? 'Distributing...' : 'Distribute Testnet VCN (10%)'}
+                    {props.isDistributing() ? 'Distributing...' : 'Distribute Mainnet VCN (10%)'}
                 </button>
             </div>
 
@@ -98,7 +98,7 @@ export function EcosystemTab(props: EcosystemTabProps) {
                         <tr class="border-b border-white/10 bg-white/5">
                             <th class="p-4 text-gray-400 font-medium text-[11px] uppercase tracking-wider">User Account</th>
                             <th class="p-4 text-gray-400 font-medium text-[11px] uppercase tracking-wider">Mainnet VCN</th>
-                            <th class="p-4 text-gray-400 font-medium text-[11px] uppercase tracking-wider">Testnet Allot.</th>
+                            <th class="p-4 text-gray-400 font-medium text-[11px] uppercase tracking-wider">Mainnet Allot.</th>
                             <th class="p-4 text-gray-400 font-medium text-[11px] uppercase tracking-wider">Status</th>
                             <th class="p-4 text-gray-400 font-medium text-[11px] uppercase tracking-wider">Last TxID</th>
                         </tr>

@@ -274,7 +274,7 @@ const Wallet = (): JSX.Element => {
             trackPageVisit(email, view).catch(() => { });
         }
     });
-    const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
+    const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('mainnet');
     const [pendingQuestSub, setPendingQuestSub] = createSignal<string | null>(null);
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');

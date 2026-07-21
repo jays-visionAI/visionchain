@@ -41,7 +41,7 @@ export default function AdminTraffic() {
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
                     <h1 class="text-3xl font-black text-white italic tracking-tighter uppercase">Traffic Simulation HQ</h1>
-                    <p class="text-gray-500 text-sm font-medium tracking-wide">Manage background traffic bots and testnet stress parameters.</p>
+                    <p class="text-gray-500 text-sm font-medium tracking-wide">Manage background traffic bots and mainnet stress parameters.</p>
                 </div>
 
                 <div class="flex items-center gap-4">

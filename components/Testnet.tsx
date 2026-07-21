@@ -114,7 +114,7 @@ const Testnet: Component = () => {
                     <h1 class="text-5xl md:text-7xl font-black mb-6 tracking-tight">
                         THE FUTURE OF VISION,<br />
                         <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-500">
-                            LIVE ON TESTNET V2
+                            LIVE ON MAINNET V2
                         </span>
                     </h1>
                     <p class="text-slate-400 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed font-light">
@@ -444,7 +444,7 @@ const Testnet: Component = () => {
                 <div class="p-12 rounded-[2rem] bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-blue-600/10 border border-white/5">
                     <h2 class="text-3xl font-black mb-6 italic tracking-tight uppercase">Ready for the Sovereign AI Web?</h2>
                     <p class="text-slate-400 mb-10 max-w-xl mx-auto leading-relaxed">
-                        The Testnet v2 is the foundation for our upcoming ZK-Autonomy transition. Start building with high-availability accounting today.
+                        The Mainnet v2 is the foundation for our upcoming ZK-Autonomy transition. Start building with high-availability accounting today.
                     </p>
                     <a href="/adminsystem" class="inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-black uppercase tracking-widest rounded-full hover:scale-105 active:scale-95 transition-all text-xs">
                         Admin Control Panel

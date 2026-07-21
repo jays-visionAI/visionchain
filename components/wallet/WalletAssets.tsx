@@ -172,8 +172,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             }
                         >
                             <p class="text-xs text-amber-200/80 leading-relaxed">
-                                <span class="text-amber-400 font-bold uppercase tracking-widest mr-2">Testnet Validation:</span>
-                                Based on the ecosystem policy, <span class="text-white font-bold">10% of purchased VCN</span> will be distributed as Testnet Tokens for node validation. Updates will be visible in your local wallet once sent by the administrator.
+                                <span class="text-amber-400 font-bold uppercase tracking-widest mr-2">Mainnet Validation:</span>
+                                Based on the ecosystem policy, <span class="text-white font-bold">10% of purchased VCN</span> will be distributed as Mainnet Tokens for node validation. Updates will be visible in your local wallet once sent by the administrator.
                             </p>
                         </Show>
                     </div>

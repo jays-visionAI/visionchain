@@ -475,14 +475,14 @@ export const UploadCSV = () => {
                             <button
                                 class="w-full py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl text-blue-400 text-xs font-bold uppercase tracking-widest transition-all"
                                 onClick={async () => {
-                                    if (!confirm("Distribute Testnet Tokens (10%) to all existing members with wallets? This cannot be undone.")) return;
+                                    if (!confirm("Distribute Mainnet Tokens (10%) to all existing members with wallets? This cannot be undone.")) return;
 
                                     const { contractService } = await import('../../services/contractService');
                                     // Normally we would iterate over updated members and check their wallet status in backend
                                     alert("Started batch distribution. Check console for progress.");
                                 }}
                             >
-                                Force Distribute Testnet Tokens
+                                Force Distribute Mainnet Tokens
                             </button>
                         </div>
                     </Show>

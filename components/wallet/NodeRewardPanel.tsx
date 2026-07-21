@@ -81,7 +81,7 @@ export default function NodeRewardPanel(props: { nodeId: string }) {
                             <div class="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-xl p-3">
                                 <div class="text-[8px] font-black text-amber-400/70 uppercase tracking-widest">RP</div>
                                 <div class="text-lg font-bold text-amber-400 mt-0.5">{(summary()!.totalEarnedRP || 0).toLocaleString()}</div>
-                                <div class="text-[9px] text-gray-500">Testnet</div>
+                                <div class="text-[9px] text-gray-500">Mainnet</div>
                             </div>
                         </div>
 

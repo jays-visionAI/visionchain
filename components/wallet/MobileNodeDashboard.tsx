@@ -615,7 +615,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                     <span class="text-[8px] font-black text-amber-400/80 uppercase tracking-wider">RP</span>
                                 </div>
                                 <div class="text-lg font-black text-amber-400">{(nodeStatus()!.pending_rp || 0).toLocaleString()}</div>
-                                <div class="text-[9px] text-gray-500">Testnet Bonus</div>
+                                <div class="text-[9px] text-gray-500">Mainnet Bonus</div>
                             </div>
                         </div>
 
@@ -693,7 +693,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                 </div>
                                 <div>
                                     <div class="text-xs font-bold text-white">RP (Reward Points)</div>
-                                    <div class="text-[10px] text-gray-500 mt-0.5">Bonus points during testnet phase. Earned from daily streaks and participation. Convertible after mainnet launch.</div>
+                                    <div class="text-[10px] text-gray-500 mt-0.5">Bonus points during the mainnet phase. Earned from daily streaks and participation. Convertible to VCN rewards.</div>
                                 </div>
                             </div>
                         </div>

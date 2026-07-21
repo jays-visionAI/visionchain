@@ -216,7 +216,7 @@ export default function AdminAIManagement() {
             return;
         }
 
-        if (!confirm(`Distribute testnet tokens to ${targets.length} users? (10% of purchased amount)`)) return;
+        if (!confirm(`Distribute mainnet tokens to ${targets.length} users? (10% of purchased amount)`)) return;
 
         setIsDistributing(true);
         try {
@@ -230,7 +230,7 @@ export default function AdminAIManagement() {
                     setDistTxHashes(prev => ({ ...prev, [target.email]: receipt.hash }));
                 }
             }
-            alert("Testnet distribution complete!");
+            alert("Mainnet distribution complete!");
         } catch (err) {
             console.error("Distribution failed:", err);
             alert("Distribution failed. Check console.");

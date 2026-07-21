@@ -108,14 +108,14 @@ export default function ActivateContract() {
                     <div>
                         <h2 class="text-lg font-black text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                            Testnet VCN Distribution
+                            Mainnet VCN Distribution
                         </h2>
-                        <p class="text-xs text-slate-400 font-medium">Automatic 10% allocation for testnet participation</p>
+                        <p class="text-xs text-slate-400 font-medium">Automatic 10% allocation for mainnet participation</p>
                     </div>
 
                     <div class="flex items-center gap-8 text-right">
                         <div>
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Max Supply (Testnet)</div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Max Supply (Mainnet)</div>
                             <div class="text-xl font-mono text-slate-300">
                                 4,000,000,000 <span class="text-xs text-slate-500">VCN</span>
                             </div>
@@ -191,7 +191,7 @@ export default function ActivateContract() {
                                                 {/* Testnet Token Button */}
                                                 <button
                                                     class={`px - 4 py - 2 text - white rounded - lg text - xs font - bold shadow - lg transition - all ${sendingFor() === user.email ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} `}
-                                                    title="Send 10% Testnet VCN"
+                                                    title="Send 10% Mainnet VCN"
                                                     disabled={sendingFor() === user.email}
                                                     onClick={async () => {
                                                         // CRITICAL: Prevent duplicate execution

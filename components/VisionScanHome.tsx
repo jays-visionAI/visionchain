@@ -170,7 +170,7 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                             <div class="flex items-center gap-3">
                                 <div class="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center gap-2">
                                     <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Testnet v2 Beta</span>
+                                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Mainnet v2</span>
                                 </div>
                                 <div class="px-3 py-1 bg-white/5 border border-white/10 rounded-full flex items-center gap-2">
                                     <Globe class="w-3 h-3 text-gray-500" />
@@ -234,7 +234,7 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                             >
                                 <div class="flex items-center gap-3">
                                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Live Testnet Balance</span>
+                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Live Mainnet Balance</span>
                                 </div>
                                 <div class="text-xl font-black text-white">{Number(props.addressBalance).toLocaleString()} VCN</div>
                             </Motion.div>
@@ -263,8 +263,8 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
             {/* Network Stats */}
             <div class="max-w-7xl mx-auto px-6 -mt-10 mb-12 relative z-20">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-                    <StatCard label="TESTNET VCN INDEX" value={`$${getVcnPrice().toFixed(4)}`} subValue="+12.42%" icon={<TrendingUp class="w-4 h-4 text-green-400" />} />
-                    <StatCard label="TESTNET THROUGHPUT" value={`${(142.82 + (Number(props.stats.blockHeight.replace(/,/g, '')) % 50) / 10).toFixed(2)}M`} subValue="LIVE" icon={<Activity class="w-4 h-4 text-blue-400" />} />
+                    <StatCard label="MAINNET VCN INDEX" value={`$${getVcnPrice().toFixed(4)}`} subValue="+12.42%" icon={<TrendingUp class="w-4 h-4 text-green-400" />} />
+                    <StatCard label="MAINNET THROUGHPUT" value={`${(142.82 + (Number(props.stats.blockHeight.replace(/,/g, '')) % 50) / 10).toFixed(2)}M`} subValue="LIVE" icon={<Activity class="w-4 h-4 text-blue-400" />} />
                     <StatCard label="v2 BLOCK HEIGHT" value={props.stats.blockHeight} icon={<Database class="w-4 h-4 text-blue-500" />} />
                     <StatCard label="GAS SETTLEMENT (v2)" value={`${props.stats.gasPrice} GWEI`} icon={<Layers class="w-4 h-4 text-blue-500" />} />
                 </div>
