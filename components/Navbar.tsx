@@ -43,6 +43,7 @@ const Navbar = (): JSX.Element => {
       label: 'Ecosystem',
       type: 'dropdown',
       children: [
+        { label: 'Vision Predict (Beta)', path: '/predict' },
         { label: 'Community', path: '/community' },
         { label: 'Academy', path: '/academy' },
         { label: 'Developer Hub', path: '/developer-community' },
@@ -251,7 +252,7 @@ const Navbar = (): JSX.Element => {
                                       <a
                                         href={child.href}
                                         target={child.target}
-                                        class={`text-[16px] text-[#86868b] hover:text-white transition-colors block flex items-center gap-2 ${child.badge ? 'opacity-50 pointer-events-none' : ''}`}
+                                        class={`text-[16px] text-[#c7c7cd] hover:text-white transition-colors block flex items-center gap-2 ${child.badge ? 'opacity-50 pointer-events-none' : ''}`}
                                       >
                                         {child.label}
                                         {child.badge && <span class="text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">{child.badge}</span>}
@@ -261,7 +262,7 @@ const Navbar = (): JSX.Element => {
                                     <A
                                       href={child.path!}
                                       onClick={closeMobileMenu}
-                                      class={`text-[16px] transition-colors block text-left w-full flex items-center gap-2 ${isActive(child.path!) ? 'text-blue-400' : 'text-[#86868b] hover:text-white'
+                                      class={`text-[16px] transition-colors block text-left w-full flex items-center gap-2 ${isActive(child.path!) ? 'text-blue-400' : 'text-[#c7c7cd] hover:text-white'
                                         }`}
                                     >
                                       {child.label}

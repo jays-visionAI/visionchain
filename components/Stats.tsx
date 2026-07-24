@@ -78,8 +78,8 @@ const StatItem = (props: StatItemProps): JSX.Element => (
     <div class="transition-transform duration-500 group-hover:scale-110 group-hover:-translate-y-1">
       <AnimatedCounter value={props.value} suffix={props.suffix} />
     </div>
-    <span class="text-[#86868b] font-medium text-lg mt-2 group-hover:text-blue-400 transition-colors duration-300">{props.label}</span>
-    {props.sub && <span class="text-[#86868b]/60 text-sm mt-1">{props.sub}</span>}
+    <span class="text-[#c7c7cd] font-medium text-lg mt-2 group-hover:text-blue-400 transition-colors duration-300">{props.label}</span>
+    {props.sub && <span class="text-[#c7c7cd]/60 text-sm mt-1">{props.sub}</span>}
   </div>
 );
 
@@ -101,7 +101,7 @@ const Stats = (): JSX.Element => {
           class="text-center mb-20"
         >
           <h3 class="text-4xl md:text-6xl font-semibold text-white tracking-tight drop-shadow-lg">Vision Scale.</h3>
-          <p class="mt-6 text-xl text-[#86868b] max-w-2xl mx-auto leading-relaxed">
+          <p class="mt-6 text-xl text-[#c7c7cd] max-w-2xl mx-auto leading-relaxed">
             Engineered to handle the immense throughput required by autonomous AI agent swarms.
           </p>
         </Motion.div>

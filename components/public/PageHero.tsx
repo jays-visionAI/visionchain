@@ -31,7 +31,7 @@ export const PageHero = (props: PageHeroProps): JSX.Element => (
                 <h1 class="text-5xl md:text-8xl font-semibold text-white tracking-tighter mb-8 leading-tight">
                     {props.title}
                 </h1>
-                <p class="text-[#86868b] text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
+                <p class="text-[#c7c7cd] text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
                     {props.description}
                 </p>
                 {props.visual}

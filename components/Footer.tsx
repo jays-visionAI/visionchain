@@ -41,7 +41,7 @@ const Footer = (): JSX.Element => {
   };
 
   return (
-    <footer class="bg-[#0b0b0b] text-[#86868b] text-[13px] border-t border-white/5 font-sans">
+    <footer class="bg-[#0b0b0b] text-[#c7c7cd] text-[13px] border-t border-white/5 font-sans">
       <div class="max-w-[980px] mx-auto px-4 py-16">
 
         <div class="grid grid-cols-1 md:grid-cols-12 gap-12 mb-16">
@@ -67,21 +67,21 @@ const Footer = (): JSX.Element => {
           <div class="md:col-span-2 space-y-4">
             <h4 class="text-white font-medium mb-4">Protocol</h4>
             <div class="flex flex-col space-y-3">
-              <A href="/technology" class="text-[#86868b] hover:text-white transition-colors">Technology</A>
-              <A href="/research" class="text-[#86868b] hover:text-white transition-colors">Research</A>
-              <a href="https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Token Dynamics</a>
-              <a href="https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Whitepaper</a>
+              <A href="/technology" class="text-[#c7c7cd] hover:text-white transition-colors">Technology</A>
+              <A href="/research" class="text-[#c7c7cd] hover:text-white transition-colors">Research</A>
+              <a href="https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#c7c7cd] hover:text-white transition-colors">Token Dynamics</a>
+              <a href="https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#c7c7cd] hover:text-white transition-colors">Whitepaper</a>
               <a
                 href="/wallet"
                 onClick={handleWalletClick}
-                class="text-[#86868b] hover:text-white transition-colors cursor-pointer"
+                class="text-[#c7c7cd] hover:text-white transition-colors cursor-pointer"
               >
                 Wallet
               </a>
-              <A href="/testnet" class="text-[#86868b] hover:text-white transition-colors">Mainnet</A>
-              <A href="/visionscan" class="text-[#86868b] hover:text-white transition-colors">Vision Scan</A>
+              <A href="/testnet" class="text-[#c7c7cd] hover:text-white transition-colors">Mainnet</A>
+              <A href="/visionscan" class="text-[#c7c7cd] hover:text-white transition-colors">Vision Scan</A>
               {!isProduction() && (
-                <A href="/dex" class="text-[#86868b] hover:text-white transition-colors">VisionDEX</A>
+                <A href="/dex" class="text-[#c7c7cd] hover:text-white transition-colors">VisionDEX</A>
               )}
             </div>
           </div>
@@ -89,14 +89,14 @@ const Footer = (): JSX.Element => {
           <div class="md:col-span-2 space-y-4">
             <h4 class="text-white font-medium mb-4">Ecosystem</h4>
             <div class="flex flex-col space-y-3">
-              <A href="/community" class="text-[#86868b] hover:text-white transition-colors">Community</A>
-              <A href="/academy" class="text-[#86868b] hover:text-white transition-colors">Academy</A>
-              <A href="/developer-community" class="text-[#86868b] hover:text-white transition-colors">Developer Hub</A>
-              <A href="/api" class="text-[#86868b] hover:text-white transition-colors">API Docs</A>
-              <A href="/docs/user-guide" class="text-[#86868b] hover:text-white transition-colors">User Guide</A>
-              <A href="/agent" class="text-[#86868b] hover:text-white transition-colors">Agent Gateway</A>
-              <a href="https://secretorage.forgedb.app" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Secretorage</a>
-              <A href="/contact" class="text-[#86868b] hover:text-white transition-colors">Contact Us</A>
+              <A href="/community" class="text-[#c7c7cd] hover:text-white transition-colors">Community</A>
+              <A href="/academy" class="text-[#c7c7cd] hover:text-white transition-colors">Academy</A>
+              <A href="/developer-community" class="text-[#c7c7cd] hover:text-white transition-colors">Developer Hub</A>
+              <A href="/api" class="text-[#c7c7cd] hover:text-white transition-colors">API Docs</A>
+              <A href="/docs/user-guide" class="text-[#c7c7cd] hover:text-white transition-colors">User Guide</A>
+              <A href="/agent" class="text-[#c7c7cd] hover:text-white transition-colors">Agent Gateway</A>
+              <a href="https://secretorage.forgedb.app" target="_blank" rel="noopener noreferrer" class="text-[#c7c7cd] hover:text-white transition-colors">Secretorage</a>
+              <A href="/contact" class="text-[#c7c7cd] hover:text-white transition-colors">Contact Us</A>
             </div>
           </div>
 
@@ -131,10 +131,10 @@ const Footer = (): JSX.Element => {
             <p>© 2025 Vision Chain Foundation. All rights reserved.</p>
           </div>
           <div class="flex gap-8">
-            <A href="/privacy" class="text-[#86868b] hover:text-white transition-colors">Privacy Policy</A>
-            <A href="/terms" class="text-[#86868b] hover:text-white transition-colors">Terms of Service</A>
-            <A href="/cookies" class="text-[#86868b] hover:text-white transition-colors">Cookie Policy</A>
-            <A href="/security" class="text-[#86868b] hover:text-white transition-colors">Security</A>
+            <A href="/privacy" class="text-[#c7c7cd] hover:text-white transition-colors">Privacy Policy</A>
+            <A href="/terms" class="text-[#c7c7cd] hover:text-white transition-colors">Terms of Service</A>
+            <A href="/cookies" class="text-[#c7c7cd] hover:text-white transition-colors">Cookie Policy</A>
+            <A href="/security" class="text-[#c7c7cd] hover:text-white transition-colors">Security</A>
           </div>
         </div>
 
