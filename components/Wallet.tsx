@@ -4402,7 +4402,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
     return (
         <Show when={!auth.loading() && !isLoading()} fallback={
-            <div class="fixed inset-0 bg-[#0d1119] flex items-center justify-center z-[100]">
+            <div class="fixed inset-0 bg-[#151a25] flex items-center justify-center z-[100]">
                 <div class="flex flex-col items-center gap-4">
                     <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
                     <div class="text-white text-sm font-bold tracking-widest animate-pulse">{loadingMessage()}</div>
@@ -4410,7 +4410,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
             </div>
         }>
             <>
-                <section class="bg-[#0d1119] h-[100dvh] flex overflow-hidden">
+                <section class="bg-[#151a25] h-[100dvh] flex overflow-hidden">
 
                     {/* Ambient Background */}
                     <div class="fixed inset-0 pointer-events-none overflow-hidden">

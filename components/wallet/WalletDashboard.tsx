@@ -1052,7 +1052,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     };
 
     return (
-        <div class="flex-1 flex h-full overflow-hidden relative bg-[#0d1119]">
+        <div class="flex-1 flex h-full overflow-hidden relative bg-[#151a25]">
             {/* Left Sidebar & Toggle Removed - Moved to Right Sidebar */}
 
             {/* Main Chat Area */}
@@ -1197,7 +1197,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 {/* Messages Area */}
                 <div
                     ref={(el) => messagesContainerRef = el}
-                    class="flex-1 overflow-y-auto overflow-x-hidden bg-[#0d1119] scrollbar-hide scroll-smooth overscroll-contain"
+                    class="flex-1 overflow-y-auto overflow-x-hidden bg-[#151a25] scrollbar-hide scroll-smooth overscroll-contain"
                     style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
@@ -1788,7 +1788,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Desktop Input Area - Desktop only */}
                 <Show when={!isMobile()}>
-                    <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#0d1119] via-[#0d1119]/95 to-transparent pt-32 z-30 pointer-events-none">
+                    <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#151a25] via-[#151a25]/95 to-transparent pt-32 z-30 pointer-events-none">
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
                                 {/* Unified Background Agents Bar - Above Input (also show for bridge monitoring) */}
