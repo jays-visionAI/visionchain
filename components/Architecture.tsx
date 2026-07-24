@@ -111,18 +111,18 @@ const LayerCard = (props: LayerCardProps): JSX.Element => {
                 <div class="flex items-center gap-3">
                   <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 border border-white/5">
                     <div class={`w-1.5 h-1.5 rounded-full ${theme.dot} animate-pulse`} />
-                    <span class="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Online</span>
+                    <span class="text-[10px] font-mono text-gray-300 uppercase tracking-wider">Online</span>
                   </div>
-                  <span class="text-[10px] font-mono text-gray-500 border border-white/5 px-2 py-1 rounded-md">V1.0</span>
+                  <span class="text-[10px] font-mono text-gray-300 border border-white/5 px-2 py-1 rounded-md">V1.0</span>
                 </div>
               </div>
-              <p class="text-gray-400 text-sm md:text-base font-medium mb-4 leading-relaxed">{props.subtitle}</p>
+              <p class="text-gray-300 text-sm md:text-base font-medium mb-4 leading-relaxed">{props.subtitle}</p>
 
               {/* Tech Specs / Features */}
               <div class="flex flex-wrap gap-2">
                 <For each={props.features}>
                   {(feat) => (
-                    <span class="text-[11px] font-mono text-gray-500 bg-white/5 px-2 py-1 rounded border border-white/5 flex items-center gap-1 transition-all duration-300 cursor-default group-hover:text-white group-hover:border-white/30 group-hover:bg-white/10 group-hover:shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+                    <span class="text-[11px] font-mono text-gray-300 bg-white/5 px-2 py-1 rounded border border-white/5 flex items-center gap-1 transition-all duration-300 cursor-default group-hover:text-white group-hover:border-white/30 group-hover:bg-white/10 group-hover:shadow-[0_0_10px_rgba(255,255,255,0.1)]">
                       {feat}
                     </span>
                   )}
@@ -170,7 +170,7 @@ const Architecture = (): JSX.Element => {
             inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             transition={{ delay: 0.2 }}
-            class="text-xl text-gray-400 max-w-2xl mx-auto"
+            class="text-xl text-gray-300 max-w-2xl mx-auto"
           >
             Designed from first principles to eliminate bottlenecks between compute, storage, and consensus.
           </Motion.p>
@@ -230,7 +230,7 @@ const Architecture = (): JSX.Element => {
             inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             transition={{ delay: 0.3 }}
-            class="text-center text-xs text-gray-400 font-mono uppercase tracking-[0.2em]"
+            class="text-center text-xs text-gray-300 font-mono uppercase tracking-[0.2em]"
           >
             Physical Infrastructure Layer
           </Motion.p>

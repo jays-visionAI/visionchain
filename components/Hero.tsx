@@ -151,12 +151,12 @@ const Hero = (): JSX.Element => {
           <h2
             class={`text-xl md:text-3xl lg:text-4xl font-medium text-[#f5f5f7] mb-8 tracking-tight ${isReady() ? 'hero-animate-2' : 'opacity-0'}`}
           >
-            Universal Interoperability. <span class="text-[#c7c7cd]">For the Agentic Economy.</span>
+            Universal Interoperability. <span class="text-[#e5e5ea]">For the Agentic Economy.</span>
           </h2>
 
           {/* Description */}
           <p
-            class={`text-[#c7c7cd] text-sm md:text-base font-normal max-w-2xl mb-12 leading-relaxed ${isReady() ? 'hero-animate-3' : 'opacity-0'}`}
+            class={`text-[#e5e5ea] text-sm md:text-base font-normal max-w-2xl mb-12 leading-relaxed ${isReady() ? 'hero-animate-3' : 'opacity-0'}`}
           >
             The first L1 blockchain engineered to unify fragmented ecosystems. <br class="hidden md:block" />
             Empowering autonomous agents with seamless access to identity, compute, and liquidity across any chain.
