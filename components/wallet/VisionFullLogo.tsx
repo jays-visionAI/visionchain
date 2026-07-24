@@ -2,34 +2,32 @@ import { JSX } from 'solid-js';
 
 export const VisionFullLogo = (props: { class?: string }) => {
     return (
-        <div class={`flex items-baseline gap-[2px] select-none ${props.class}`}>
-            {/* Stylized V */}
-            <div class="relative flex items-baseline h-[1em]">
-                <svg
-                    viewBox="0 0 32 32"
-                    class="h-[1.2em] w-auto overflow-visible"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    {/* Left part of V - White */}
-                    <path
-                        d="M2 4L14 30"
-                        stroke="white"
-                        stroke-width="5"
-                        stroke-linecap="butt"
-                    />
-                    {/* Right part of V - Cyan */}
-                    <path
-                        d="M11 30L26 2"
-                        stroke="#22D3EE"
-                        stroke-width="5"
-                        stroke-linecap="butt"
-                    />
-                </svg>
-            </div>
-            {/* Text Part */}
-            <span class="font-black text-white tracking-tighter text-[1.2em] relative -left-[4px]">
-                ISION&nbsp;CHAIN
+        <div class={`flex items-center gap-[7px] select-none ${props.class}`}>
+            {/* Connected node chain icon */}
+            <svg
+                viewBox="0 0 48 48"
+                class="h-[1.25em] w-auto overflow-visible"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <defs>
+                    <linearGradient id="vcFullGrad" x1="6" y1="8" x2="42" y2="42" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="#63e5f7" />
+                        <stop offset="0.55" stop-color="#37b5ff" />
+                        <stop offset="1" stop-color="#2b6bff" />
+                    </linearGradient>
+                </defs>
+                <line x1="13" y1="14" x2="30" y2="12" stroke="url(#vcFullGrad)" stroke-width="3.4" stroke-linecap="round" />
+                <line x1="30" y1="12" x2="19" y2="27" stroke="url(#vcFullGrad)" stroke-width="3.4" stroke-linecap="round" />
+                <line x1="19" y1="27" x2="36" y2="35" stroke="url(#vcFullGrad)" stroke-width="3.4" stroke-linecap="round" />
+                <circle cx="13" cy="14" r="5" fill="url(#vcFullGrad)" />
+                <circle cx="30" cy="12" r="4.4" fill="url(#vcFullGrad)" />
+                <circle cx="19" cy="27" r="4.4" fill="url(#vcFullGrad)" />
+                <circle cx="36" cy="35" r="5.4" fill="url(#vcFullGrad)" />
+            </svg>
+            {/* Wordmark */}
+            <span class="font-black text-white tracking-tighter text-[1.2em]">
+                VISION&nbsp;CHAIN
             </span>
         </div>
     );

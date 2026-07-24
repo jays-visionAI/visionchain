@@ -9,45 +9,28 @@ interface LogoProps {
 const Logo = (props: LogoProps): JSX.Element => {
   return (
     <div class="flex items-center gap-2.5 select-none">
-      {/* Vision Chain Icon */}
+      {/* Vision Chain Icon — connected node chain */}
       <svg
-        viewBox="0 0 100 100"
+        viewBox="0 0 48 48"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         class={props.class ?? "w-8 h-8"}
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
-          <linearGradient id="v-left-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#22d3ee" /> {/* Cyan-400 */}
-            <stop offset="100%" stop-color="#2563eb" /> {/* Blue-600 */}
-          </linearGradient>
-          <linearGradient id="v-right-grad" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0%" stop-color="#1e1b4b" /> {/* Indigo-950 */}
-            <stop offset="100%" stop-color="#60a5fa" /> {/* Blue-400 */}
+          <linearGradient id="vcNavGrad" x1="6" y1="8" x2="42" y2="42" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#63e5f7" /> {/* Cyan */}
+            <stop offset="0.55" stop-color="#37b5ff" />
+            <stop offset="1" stop-color="#2b6bff" /> {/* Blue */}
           </linearGradient>
         </defs>
-
-        {/* Right Arm (Darker) */}
-        <path
-          d="M45 80 L85 15 C88 10 95 10 98 15 C101 20 98 28 95 32 L55 95 C50 102 38 102 35 95 L30 85"
-          stroke="url(#v-right-grad)"
-          stroke-width="16"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-
-        {/* Left Arm (Lighter) */}
-        <path
-          d="M15 15 L45 80"
-          stroke="url(#v-left-grad)"
-          stroke-width="16"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-
-        {/* Center Dot */}
-        <circle cx="45" cy="80" r="6" fill="#22d3ee" />
+        <line x1="13" y1="14" x2="30" y2="12" stroke="url(#vcNavGrad)" stroke-width="3.4" stroke-linecap="round" />
+        <line x1="30" y1="12" x2="19" y2="27" stroke="url(#vcNavGrad)" stroke-width="3.4" stroke-linecap="round" />
+        <line x1="19" y1="27" x2="36" y2="35" stroke="url(#vcNavGrad)" stroke-width="3.4" stroke-linecap="round" />
+        <circle cx="13" cy="14" r="5" fill="url(#vcNavGrad)" />
+        <circle cx="30" cy="12" r="4.4" fill="url(#vcNavGrad)" />
+        <circle cx="19" cy="27" r="4.4" fill="url(#vcNavGrad)" />
+        <circle cx="36" cy="35" r="5.4" fill="url(#vcNavGrad)" />
       </svg>
 
       {/* Text */}
