@@ -159,7 +159,7 @@ export function DailyTipCard(props: DailyTipCardProps) {
 
     return (
         <Show when={!loading() && tips().length > 0 && getDisplayTip()}>
-            <div class="w-full min-w-0 rounded-2xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 backdrop-blur-sm overflow-hidden transition-all duration-300 hover:border-purple-500/30" style="box-sizing: border-box;">
+            <div class="w-full min-w-0 rounded-2xl bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 backdrop-blur-sm overflow-hidden transition-all duration-300 hover:border-purple-500/40" style="box-sizing: border-box;">
                 {/* Header Row */}
                 <div class="flex items-center justify-between px-4 pt-3 pb-1">
                     <div class="flex items-center gap-2">

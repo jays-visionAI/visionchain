@@ -1052,7 +1052,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     };
 
     return (
-        <div class="flex-1 flex h-full overflow-hidden relative bg-[#070708]">
+        <div class="flex-1 flex h-full overflow-hidden relative bg-[#0d1119]">
             {/* Left Sidebar & Toggle Removed - Moved to Right Sidebar */}
 
             {/* Main Chat Area */}
@@ -1197,7 +1197,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 {/* Messages Area */}
                 <div
                     ref={(el) => messagesContainerRef = el}
-                    class="flex-1 overflow-y-auto overflow-x-hidden bg-[#070708] scrollbar-hide scroll-smooth overscroll-contain"
+                    class="flex-1 overflow-y-auto overflow-x-hidden bg-[#0d1119] scrollbar-hide scroll-smooth overscroll-contain"
                     style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
@@ -1213,7 +1213,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
                                         {t('chat.hello')} {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || <span class="text-red-400">NO DATA</span>}
                                     </h2>
-                                    <p class="text-lg text-gray-500 font-medium">{t('chat.howCanIHelp')}</p>
+                                    <p class="text-lg text-gray-400 font-medium">{t('chat.howCanIHelp')}</p>
                                 </div>
 
                                 <div class="flex flex-col gap-2 w-full items-start">
@@ -1788,7 +1788,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Desktop Input Area - Desktop only */}
                 <Show when={!isMobile()}>
-                    <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
+                    <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#0d1119] via-[#0d1119]/95 to-transparent pt-32 z-30 pointer-events-none">
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
                                 {/* Unified Background Agents Bar - Above Input (also show for bridge monitoring) */}
