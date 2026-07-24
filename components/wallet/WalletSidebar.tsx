@@ -168,7 +168,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                 <Show when={!props.isDesktop}>
                     <button
                         onClick={() => props.setSidebarOpen(false)}
-                        class="ml-auto p-2 text-gray-400 hover:text-white"
+                        class="ml-auto p-2 text-gray-200 hover:text-white"
                     >
                         <X class="w-5 h-5" />
                     </button>
@@ -193,7 +193,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                             disabled={props.onboardingStep > 0 && item.id !== 'profile'}
                             class={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all group border-none cursor-pointer ${props.activeView === item.id
                                 ? 'bg-white/[0.08] text-white shadow-lg shadow-black/20'
-                                : 'text-gray-400 hover:bg-white/[0.04] hover:text-white bg-transparent'
+                                : 'text-gray-200 hover:bg-white/[0.04] hover:text-white bg-transparent'
                                 } ${props.onboardingStep > 0 && item.id !== 'profile' ? 'opacity-30 cursor-not-allowed' : ''}`}
                         >
                             <div class={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${props.activeView === item.id
@@ -225,13 +225,13 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                     <div class="flex items-center gap-3 mb-4">
                         <div class="w-10 h-10 rounded-xl bg-[#1a1a1e] border border-white/10 flex items-center justify-center relative overflow-hidden">
                             <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-                            <User class="w-5 h-5 text-gray-400 group-hover/card:text-cyan-400 transition-colors" />
+                            <User class="w-5 h-5 text-gray-200 group-hover/card:text-cyan-400 transition-colors" />
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="text-[13px] font-black text-white truncate uppercase italic tracking-tight">
                                 {props.userProfile?.email?.split('@')[0] || <span class="text-red-400">NO DATA</span>}
                             </div>
-                            <div class="text-[10px] font-bold text-gray-500 truncate flex items-center gap-1">
+                            <div class="text-[10px] font-bold text-gray-300 truncate flex items-center gap-1">
                                 <span class="w-1 h-1 rounded-full bg-green-500" /> Secured VID
                             </div>
                         </div>
@@ -245,14 +245,14 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                         class="w-full h-10 flex items-center justify-between gap-3 px-3.5 bg-black/40 hover:bg-black/60 rounded-xl border border-white/5 transition-all group/btn active:scale-95"
                     >
                         <div class="flex items-center gap-2 min-w-0">
-                            <WalletIcon class="w-4 h-4 text-gray-500 group-hover/btn:text-cyan-400 transition-colors" />
-                            <span class="text-[11px] font-mono text-gray-500 group-hover/btn:text-white transition-colors truncate">
+                            <WalletIcon class="w-4 h-4 text-gray-300 group-hover/btn:text-cyan-400 transition-colors" />
+                            <span class="text-[11px] font-mono text-gray-300 group-hover/btn:text-white transition-colors truncate">
                                 {props.shortAddress || '0x000...000'}
                             </span>
                         </div>
                         <div class="shrink-0">
                             <Show when={props.copied} fallback={
-                                <Copy class="w-3.5 h-3.5 text-gray-600 group-hover/btn:text-white transition-all transform group-hover/btn:rotate-12" />
+                                <Copy class="w-3.5 h-3.5 text-gray-400 group-hover/btn:text-white transition-all transform group-hover/btn:rotate-12" />
                             }>
                                 <Check class="w-3.5 h-3.5 text-cyan-400 scale-110" />
                             </Show>

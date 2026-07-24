@@ -166,22 +166,22 @@ export function DailyTipCard(props: DailyTipCardProps) {
                         <div class="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-400">
                             <LightbulbIcon />
                         </div>
-                        <span class="text-[11px] font-black text-purple-400 uppercase tracking-widest">Did you know?</span>
+                        <span class="text-[11px] font-black text-purple-300 uppercase tracking-widest">Did you know?</span>
                     </div>
                     {/* Nav Controls */}
                     <div class="flex items-center gap-1">
                         <button
                             onClick={goPrev}
-                            class="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors active:scale-90"
+                            class="w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-white/10 transition-colors active:scale-90"
                         >
                             <ChevronLeftIcon />
                         </button>
-                        <span class="text-[10px] font-bold text-gray-500 tabular-nums min-w-[32px] text-center">
+                        <span class="text-[10px] font-bold text-gray-300 tabular-nums min-w-[32px] text-center">
                             {currentIndex() + 1}/{tips().length}
                         </span>
                         <button
                             onClick={goNext}
-                            class="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors active:scale-90"
+                            class="w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-white/10 transition-colors active:scale-90"
                         >
                             <ChevronRightIcon />
                         </button>
@@ -190,11 +190,11 @@ export function DailyTipCard(props: DailyTipCardProps) {
 
                 {/* Content */}
                 <div class="px-4 pb-3 pt-1">
-                    <p class="text-[13px] font-bold text-gray-100 leading-relaxed mb-0.5" style="word-break: break-word; overflow-wrap: break-word;">
+                    <p class="text-[13px] font-bold text-white leading-relaxed mb-0.5" style="word-break: break-word; overflow-wrap: break-word;">
                         {getDisplayTip()!.title}
                     </p>
                     <Show when={getDisplayTip()!.body}>
-                        <p class="text-[11px] text-gray-400 leading-relaxed" style="word-break: break-word; overflow-wrap: break-word;">
+                        <p class="text-[11px] text-gray-200 leading-relaxed" style="word-break: break-word; overflow-wrap: break-word;">
                             {getDisplayTip()!.body}
                         </p>
                     </Show>
@@ -207,7 +207,7 @@ export function DailyTipCard(props: DailyTipCardProps) {
                                 const view = getDisplayTip()!.targetView;
                                 if (view) props.setActiveView(view);
                             }}
-                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-purple-300 text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95"
+                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/25 hover:bg-purple-500/35 border border-purple-400/40 text-purple-200 text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95"
                         >
                             Go
                             <ArrowRightIcon />

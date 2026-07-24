@@ -163,7 +163,7 @@ const ThinkingDisplay = (props: { steps: any[] }) => {
                             <span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
                             <span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.3s" }} />
                         </div>
-                        <span class="text-[13px] font-medium text-gray-400">Vision AI Responding...</span>
+                        <span class="text-[13px] font-medium text-gray-200">Vision AI Responding...</span>
                     </div>
                 </div>
             </div>
@@ -239,13 +239,13 @@ const AccordionResponse = (props: {
                             <div class="flex items-center gap-3">
                                 <div class={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${expandedSections().has(index())
                                     ? 'bg-blue-500/20 text-blue-400'
-                                    : 'bg-white/5 text-gray-500'
+                                    : 'bg-white/5 text-gray-300'
                                     }`}>
                                     {index() + 1}
                                 </div>
                                 <span class="text-sm font-bold text-gray-200">{section.title}</span>
                             </div>
-                            <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections().has(index()) ? 'rotate-180' : ''
+                            <ChevronDown class={`w-4 h-4 text-gray-300 transition-transform duration-200 ${expandedSections().has(index()) ? 'rotate-180' : ''
                                 }`} />
                         </button>
 
@@ -262,7 +262,7 @@ const AccordionResponse = (props: {
                                     {/* Copy */}
                                     <button
                                         onClick={() => props.onCopy(section.content)}
-                                        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-gray-300 transition-all text-xs"
+                                        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-gray-300 hover:text-gray-300 transition-all text-xs"
                                     >
                                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -276,7 +276,7 @@ const AccordionResponse = (props: {
                                         onClick={() => handleFeedback(index(), 'up')}
                                         class={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs ${feedback()[index()] === 'up'
                                             ? 'bg-green-500/10 text-green-400'
-                                            : 'hover:bg-green-500/10 text-gray-500 hover:text-green-400'
+                                            : 'hover:bg-green-500/10 text-gray-300 hover:text-green-400'
                                             }`}
                                     >
                                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -290,7 +290,7 @@ const AccordionResponse = (props: {
                                         onClick={() => handleFeedback(index(), 'down')}
                                         class={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs ${feedback()[index()] === 'down'
                                             ? 'bg-red-500/10 text-red-400'
-                                            : 'hover:bg-red-500/10 text-gray-500 hover:text-red-400'
+                                            : 'hover:bg-red-500/10 text-gray-300 hover:text-red-400'
                                             }`}
                                     >
                                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -339,18 +339,18 @@ const MultiReviewCard = (props: {
                         <div class="flex items-center justify-between group">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-white/[0.03] flex items-center justify-center border border-white/5 group-hover:border-blue-500/30 transition-colors">
-                                    <User class="w-3.5 h-3.5 text-gray-400" />
+                                    <User class="w-3.5 h-3.5 text-gray-200" />
                                 </div>
                                 <div class="flex flex-col">
                                     <span class="text-[12px] font-bold text-gray-200">{tx.name || tx.vid || 'New Recipient'}</span>
-                                    <span class="text-[10px] text-gray-500 font-mono italic">
+                                    <span class="text-[10px] text-gray-300 font-mono italic">
                                         {tx.recipient.slice(0, 6)}...{tx.recipient.slice(-4)}
                                     </span>
                                 </div>
                             </div>
                             <div class="text-right">
                                 <div class="text-[12px] font-black text-white">{tx.amount}</div>
-                                <div class="text-[9px] font-bold text-gray-500 uppercase">{tx.symbol || 'VCN'}</div>
+                                <div class="text-[9px] font-bold text-gray-300 uppercase">{tx.symbol || 'VCN'}</div>
                             </div>
                         </div>
                     )}
@@ -369,11 +369,11 @@ const MultiReviewCard = (props: {
             {/* Interval Setting */}
             <div class="px-4 py-3 bg-white/[0.02] border-t border-white/5">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Execution Interval</span>
-                    <span class="text-[10px] font-bold text-blue-400">{props.interval}s <span class="text-gray-600">/ Tx</span></span>
+                    <span class="text-[10px] font-black text-gray-300 uppercase tracking-widest">Execution Interval</span>
+                    <span class="text-[10px] font-bold text-blue-400">{props.interval}s <span class="text-gray-400">/ Tx</span></span>
                 </div>
                 <div class="flex items-center gap-3">
-                    <span class="text-[9px] font-bold text-gray-600">3s</span>
+                    <span class="text-[9px] font-bold text-gray-400">3s</span>
                     <input
                         type="range"
                         min="3"
@@ -383,14 +383,14 @@ const MultiReviewCard = (props: {
                         onInput={(e) => props.onIntervalChange(parseInt(e.currentTarget.value))}
                         class="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
-                    <span class="text-[9px] font-bold text-gray-600">10s</span>
+                    <span class="text-[9px] font-bold text-gray-400">10s</span>
                 </div>
             </div>
 
             <div class="p-3 bg-black/40 border-t border-white/5 flex gap-2">
                 <button
                     onClick={props.onCancel}
-                    class="flex-1 py-2 rounded-xl text-[11px] font-black text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
+                    class="flex-1 py-2 rounded-xl text-[11px] font-black text-gray-300 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
                 >
                     Cancel
                 </button>
@@ -456,10 +456,10 @@ const BatchResultsModal = (props: {
                                 </div>
                                 <div>
                                     <h3 class="text-xl font-black text-white">Execution Report</h3>
-                                    <p class="text-xs text-gray-500 font-bold uppercase tracking-widest">ID: {props.agent.id}</p>
+                                    <p class="text-xs text-gray-300 font-bold uppercase tracking-widest">ID: {props.agent.id}</p>
                                 </div>
                             </div>
-                            <button onClick={props.onClose} class="text-gray-500 hover:text-white transition-colors">
+                            <button onClick={props.onClose} class="text-gray-300 hover:text-white transition-colors">
                                 <Plus class="w-6 h-6 rotate-45" />
                             </button>
                         </div>
@@ -467,7 +467,7 @@ const BatchResultsModal = (props: {
                         <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
                             <div class="grid grid-cols-3 gap-4 mb-8">
                                 <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
-                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total</div>
+                                    <div class="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Total</div>
                                     <div class="text-2xl font-black text-white">{totalCount()}</div>
                                 </div>
                                 <div class="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10">
@@ -492,7 +492,7 @@ const BatchResultsModal = (props: {
                                                 </div>
                                                 <div class="flex flex-col">
                                                     <span class="text-xs font-bold text-gray-200 truncate max-w-[150px]">{res.tx.recipient}</span>
-                                                    <span class="text-[10px] text-gray-500">{res.tx.amount} {res.tx.symbol || 'VCN'}</span>
+                                                    <span class="text-[10px] text-gray-300">{res.tx.amount} {res.tx.symbol || 'VCN'}</span>
                                                 </div>
                                             </div>
                                             <div class="text-right">
@@ -554,7 +554,7 @@ const BatchReportCard = (props: {
                     </div>
                     <div>
                         <h4 class="text-sm font-black text-white uppercase tracking-widest">Execution Report</h4>
-                        <p class="text-[10px] text-gray-500 font-bold">BATCH ID: {props.data.agentId}</p>
+                        <p class="text-[10px] text-gray-300 font-bold">BATCH ID: {props.data.agentId}</p>
                     </div>
                 </div>
                 <div class={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${props.data.failed === 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}`}>
@@ -564,7 +564,7 @@ const BatchReportCard = (props: {
 
             <div class="grid grid-cols-3 gap-3 mb-6">
                 <div class="bg-white/5 rounded-2xl p-3 border border-white/5">
-                    <div class="text-[9px] font-black text-gray-500 uppercase mb-1">Total</div>
+                    <div class="text-[9px] font-black text-gray-300 uppercase mb-1">Total</div>
                     <div class="text-lg font-black text-white">{props.data.total}</div>
                 </div>
                 <div class="bg-emerald-500/5 rounded-2xl p-3 border border-emerald-500/10">
@@ -646,11 +646,11 @@ const MultiBatchDrawer = (props: {
                         <div class="p-8 flex items-center justify-between border-b border-white/5 bg-gradient-to-br from-blue-500/5 to-transparent">
                             <div>
                                 <h2 class="text-2xl font-black text-white mb-1">Detailed Batch List</h2>
-                                <p class="text-gray-500 text-sm font-medium italic">Review all {props.transactions.length} items for precision</p>
+                                <p class="text-gray-300 text-sm font-medium italic">Review all {props.transactions.length} items for precision</p>
                             </div>
                             <button
                                 onClick={props.onClose}
-                                class="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                                class="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-200 hover:text-white transition-all"
                             >
                                 <Plus class="w-6 h-6 rotate-45" />
                             </button>
@@ -659,7 +659,7 @@ const MultiBatchDrawer = (props: {
                         <div class="flex-1 overflow-y-auto p-8 scrollbar-hide">
                             <table class="w-full text-left">
                                 <thead>
-                                    <tr class="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                    <tr class="text-[10px] font-black text-gray-300 uppercase tracking-widest border-b border-white/5">
                                         <th class="pb-4 pl-2">#</th>
                                         <th class="pb-4">Recipient (VID)</th>
                                         <th class="pb-4">Wallet Address</th>
@@ -670,7 +670,7 @@ const MultiBatchDrawer = (props: {
                                     <For each={props.transactions}>
                                         {(tx, i) => (
                                             <tr class="group hover:bg-white/[0.01] transition-colors">
-                                                <td class="py-4 pl-2 text-xs font-mono text-gray-600 italic">{(i() + 1).toString().padStart(2, '0')}</td>
+                                                <td class="py-4 pl-2 text-xs font-mono text-gray-400 italic">{(i() + 1).toString().padStart(2, '0')}</td>
                                                 <td class="py-4">
                                                     <div class="flex items-center gap-2">
                                                         <div class="w-6 h-6 rounded-md bg-blue-500/10 flex items-center justify-center">
@@ -679,10 +679,10 @@ const MultiBatchDrawer = (props: {
                                                         <span class="text-xs font-bold text-gray-200">{tx.vid || 'External'}</span>
                                                     </div>
                                                 </td>
-                                                <td class="py-4 text-xs font-mono text-gray-500">{tx.recipient}</td>
+                                                <td class="py-4 text-xs font-mono text-gray-300">{tx.recipient}</td>
                                                 <td class="py-4 text-right">
                                                     <span class="text-xs font-black text-white">{tx.amount}</span>
-                                                    <span class="text-[9px] font-bold text-gray-500 ml-1 uppercase">{tx.symbol || 'VCN'}</span>
+                                                    <span class="text-[9px] font-bold text-gray-300 ml-1 uppercase">{tx.symbol || 'VCN'}</span>
                                                 </td>
                                             </tr>
                                         )}
@@ -694,7 +694,7 @@ const MultiBatchDrawer = (props: {
                         <div class="p-8 bg-black/40 border-t border-white/5 flex gap-4">
                             <button
                                 onClick={props.onClose}
-                                class="flex-1 py-4 rounded-2xl border border-white/10 text-[13px] font-black text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
+                                class="flex-1 py-4 rounded-2xl border border-white/10 text-[13px] font-black text-gray-300 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
                             >
                                 Continue Editing
                             </button>
@@ -1117,7 +1117,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 e.stopPropagation();
                                 setIsMobileHistoryOpen(false);
                             }}
-                            class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors active:scale-95"
+                            class="p-2 rounded-lg hover:bg-white/10 text-gray-200 hover:text-white transition-colors active:scale-95"
                         >
                             <X class="w-4 h-4" />
                         </button>
@@ -1140,7 +1140,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     {/* History List */}
                     <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-hide overscroll-contain">
                         <Show when={props.history().length === 0}>
-                            <div class="py-12 text-center text-gray-500 text-xs font-bold uppercase tracking-widest">
+                            <div class="py-12 text-center text-gray-300 text-xs font-bold uppercase tracking-widest">
                                 No chat history yet
                             </div>
                         </Show>
@@ -1161,7 +1161,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             }`}>
                                             {conv.messages[0]?.text || 'New Chat'}
                                         </span>
-                                        <div class="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                        <div class="flex items-center gap-2 text-[9px] text-gray-300 font-bold uppercase tracking-widest">
                                             <span>{new Date(conv.updatedAt || conv.createdAt).toLocaleDateString()}</span>
                                             <span class="w-1 h-1 rounded-full bg-gray-700" />
                                             <span>{conv.messages.length} msgs</span>
@@ -1210,10 +1210,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 class="w-full md:max-w-sm flex flex-col gap-6 self-center min-w-0"
                             >
                                 <div class="flex flex-col gap-1">
-                                    <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
+                                    <h2 class="text-2xl font-bold text-white">
                                         {t('chat.hello')} {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || <span class="text-red-400">NO DATA</span>}
                                     </h2>
-                                    <p class="text-lg text-gray-400 font-medium">{t('chat.howCanIHelp')}</p>
+                                    <p class="text-lg text-gray-200 font-medium">{t('chat.howCanIHelp')}</p>
                                 </div>
 
                                 <div class="flex flex-col gap-2 w-full items-start">
@@ -1243,12 +1243,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             return (
                                                 <button
                                                     onClick={handleClick}
-                                                    class="flex items-center gap-3 py-3 px-4 rounded-[20px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
+                                                    class="flex items-center gap-3 py-3 px-4 rounded-[20px] bg-[#26262c] border border-white/10 hover:bg-[#32323a] transition-all group text-left"
                                                 >
                                                     <div class={`w-5 h-5 ${action.iconColor} group-hover:scale-110 transition-transform`}>
                                                         <IconComponent class="w-full h-full" />
                                                     </div>
-                                                    <span class="text-[13px] font-medium text-gray-200 group-hover:text-white">{action.label}</span>
+                                                    <span class="text-[13px] font-semibold text-white">{action.label}</span>
                                                 </button>
                                             );
                                         }}
@@ -1316,7 +1316,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                         </Show>
                                                         <For each={charts}>
                                                             {(chartData) => (
-                                                                <Suspense fallback={<div class="h-48 flex items-center justify-center text-gray-500 text-sm">Loading chart...</div>}>
+                                                                <Suspense fallback={<div class="h-48 flex items-center justify-center text-gray-300 text-sm">Loading chart...</div>}>
                                                                     <VisionChart data={chartData} />
                                                                 </Suspense>
                                                             )}
@@ -1334,7 +1334,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                     props.setInput(q.trim());
                                                                     props.handleSend();
                                                                 }}
-                                                                class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] font-bold text-gray-400 hover:text-blue-400 hover:border-blue-500/30 transition-all active:scale-95"
+                                                                class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] font-bold text-gray-200 hover:text-blue-400 hover:border-blue-500/30 transition-all active:scale-95"
                                                             >
                                                                 {q.trim()}
                                                             </button>
@@ -1391,7 +1391,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 <div class="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
                                                                     <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v12" /><path d="M8 10l4-4 4 4" /></svg>
                                                                 </div>
-                                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-wider">Vision</span>
+                                                                <span class="text-[9px] font-black text-gray-300 uppercase tracking-wider">Vision</span>
                                                             </div>
                                                             <div class="flex items-center gap-1.5 px-3">
                                                                 <div class="w-6 h-px bg-gradient-to-r from-blue-500/40 to-transparent" />
@@ -1414,7 +1414,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 </div>
                                                                 <div class="flex flex-col">
                                                                     <span class="text-[12px] font-bold text-gray-200">Transfer Amount</span>
-                                                                    <span class="text-[10px] text-gray-500 font-mono italic">Lock on Vision, Mint on {msg.bridgeData.destinationChain}</span>
+                                                                    <span class="text-[10px] text-gray-300 font-mono italic">Lock on Vision, Mint on {msg.bridgeData.destinationChain}</span>
                                                                 </div>
                                                             </div>
                                                             <div class="text-right">
@@ -1427,11 +1427,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     {/* Bridge Delay Setting - Same pattern as Batch Interval */}
                                                     <div class="px-4 py-3 bg-white/[0.02] border-t border-white/5">
                                                         <div class="flex items-center justify-between mb-2">
-                                                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Bridge Delay</span>
-                                                            <span class="text-[10px] font-bold text-purple-400">{props.bridgeDelay?.() || 2}min <span class="text-gray-600">/ Challenge</span></span>
+                                                            <span class="text-[10px] font-black text-gray-300 uppercase tracking-widest">Bridge Delay</span>
+                                                            <span class="text-[10px] font-bold text-purple-400">{props.bridgeDelay?.() || 2}min <span class="text-gray-400">/ Challenge</span></span>
                                                         </div>
                                                         <div class="flex items-center gap-3">
-                                                            <span class="text-[9px] font-bold text-gray-600">2m</span>
+                                                            <span class="text-[9px] font-bold text-gray-400">2m</span>
                                                             <input
                                                                 type="range"
                                                                 min="2"
@@ -1441,7 +1441,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 onInput={(e) => props.onBridgeDelayChange?.(parseInt(e.currentTarget.value))}
                                                                 class="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                             />
-                                                            <span class="text-[9px] font-bold text-gray-600">10m</span>
+                                                            <span class="text-[9px] font-bold text-gray-400">10m</span>
                                                         </div>
                                                         {/* Quick Presets */}
                                                         <div class="flex gap-1.5 mt-2">
@@ -1450,7 +1450,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                     onClick={() => props.onBridgeDelayChange?.(v)}
                                                                     class={`flex-1 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all ${(props.bridgeDelay?.() || 2) === v
                                                                         ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                                                                        : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:border-purple-500/20 hover:text-purple-400'
+                                                                        : 'bg-white/[0.03] text-gray-300 border border-white/5 hover:border-purple-500/20 hover:text-purple-400'
                                                                         }`}
                                                                 >
                                                                     {v === 2 ? 'Fast' : v === 5 ? 'Standard' : 'Secure'}
@@ -1458,7 +1458,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 </button>
                                                             ))}
                                                         </div>
-                                                        <div class="mt-2 text-[9px] text-gray-600 italic">
+                                                        <div class="mt-2 text-[9px] text-gray-400 italic">
                                                             Challenge period before tokens arrive. Longer = more secure.
                                                         </div>
                                                     </div>
@@ -1467,7 +1467,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     <div class="p-3 bg-black/40 border-t border-white/5 flex gap-2">
                                                         <button
                                                             onClick={() => props.onCancelBridge?.()}
-                                                            class="flex-1 py-2 rounded-xl text-[11px] font-black text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
+                                                            class="flex-1 py-2 rounded-xl text-[11px] font-black text-gray-300 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
                                                         >
                                                             Cancel
                                                         </button>
@@ -1500,7 +1500,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                             {/* Response Time Display */}
                                             <Show when={msg.role === 'assistant' && msg.responseTime && props.showResponseTime}>
-                                                <div class="mt-1.5 px-2 text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                                                <div class="mt-1.5 px-2 text-[10px] text-gray-300 font-mono flex items-center gap-1">
                                                     <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                         <circle cx="12" cy="12" r="10" />
                                                         <polyline points="12,6 12,12 16,14" />
@@ -1526,7 +1526,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             document.body.appendChild(toast);
                                                             setTimeout(() => toast.remove(), 2000);
                                                         }}
-                                                        class="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-gray-300 transition-all"
+                                                        class="p-1.5 rounded-lg hover:bg-white/5 text-gray-300 hover:text-gray-300 transition-all"
                                                         title="Copy response"
                                                     >
                                                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1541,7 +1541,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             console.log('[Feedback] Positive for message:', msg.id);
                                                             // TODO: Save feedback to Firebase
                                                         }}
-                                                        class="p-1.5 rounded-lg hover:bg-green-500/10 text-gray-500 hover:text-green-400 transition-all"
+                                                        class="p-1.5 rounded-lg hover:bg-green-500/10 text-gray-300 hover:text-green-400 transition-all"
                                                         title="Good response"
                                                     >
                                                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1555,7 +1555,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             console.log('[Feedback] Negative for message:', msg.id);
                                                             // TODO: Save feedback to Firebase
                                                         }}
-                                                        class="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-all"
+                                                        class="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-300 hover:text-red-400 transition-all"
                                                         title="Bad response"
                                                     >
                                                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1567,7 +1567,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         </div>
                                         <Show when={msg.role === 'user'}>
                                             <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.05] flex items-center justify-center flex-shrink-0 mt-1 shadow-xl">
-                                                <User class="w-5 h-5 text-gray-400" />
+                                                <User class="w-5 h-5 text-gray-200" />
                                             </div>
                                         </Show>
                                     </Motion.div>
@@ -1632,7 +1632,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             class="px-4 pb-6 flex items-center gap-3"
                             onClick={() => setBottomSheetExpanded(true)}
                         >
-                            <div class="flex-1 bg-[#1a1a1c] rounded-2xl px-5 py-3 text-gray-400 text-base border border-white/10">
+                            <div class="flex-1 bg-[#1a1a1c] rounded-2xl px-5 py-3 text-gray-200 text-base border border-white/10">
                                 Tap to type a message...
                             </div>
                             <button
@@ -1656,7 +1656,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
                                             class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 ${isAgentBayCollapsed()
                                                 ? 'bg-blue-600/90 border-blue-400 text-white'
-                                                : 'bg-[#121214]/80 border-white/10 text-gray-400'
+                                                : 'bg-[#121214]/80 border-white/10 text-gray-200'
                                                 }`}
                                         >
                                             <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500'}`} />
@@ -1736,7 +1736,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     value={props.input()}
                                     placeholder={t('chat.placeholder')}
                                     rows="1"
-                                    class="w-full bg-transparent text-white text-base px-4 py-4 pb-14 resize-none focus:outline-none placeholder:text-gray-500"
+                                    class="w-full bg-transparent text-white text-base px-4 py-4 pb-14 resize-none focus:outline-none placeholder:text-gray-300"
                                     style="max-height: 200px;"
                                     onInput={(e) => {
                                         props.setInput(e.currentTarget.value);
@@ -1756,13 +1756,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="flex items-center gap-1">
                                         <button
                                             onClick={() => fileInputRef?.click()}
-                                            class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 hover:text-white hover:bg-white/10"
+                                            class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-300 hover:text-white hover:bg-white/10"
                                         >
                                             <Plus class="w-5 h-5" />
                                         </button>
                                         <button
                                             onClick={props.toggleRecording}
-                                            class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
+                                            class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                                         >
                                             <Mic class="w-5 h-5" />
                                         </button>
@@ -1775,7 +1775,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         disabled={!props.input().trim() || props.isLoading()}
                                         class={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${props.input().trim() && !props.isLoading()
                                             ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white'
-                                            : 'bg-white/5 text-gray-600'
+                                            : 'bg-white/5 text-gray-400'
                                             }`}
                                     >
                                         <Send class="w-5 h-5" />
@@ -1801,7 +1801,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
                                                 class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
                                                     ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
-                                                    : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
+                                                    : 'bg-[#121214]/80 border-white/10 text-gray-200 hover:text-white hover:border-white/20'
                                                     }`}
                                             >
                                                 <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
@@ -1820,7 +1820,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
                                                 class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
                                                     ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
-                                                    : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
+                                                    : 'bg-[#121214]/80 border-white/10 text-gray-200 hover:text-white hover:border-white/20'
                                                     }`}
                                             >
                                                 <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
@@ -1913,7 +1913,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                         e.stopPropagation();
                                                         setIsQueueDrawerOpen(true);
                                                     }}
-                                                    class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
+                                                    class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-200 hover:text-white transition-all border border-white/10 shadow-xl"
                                                 >
                                                     <List class="w-5 h-5" />
                                                 </button>
@@ -1933,7 +1933,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             {(att, i) => (
                                                 <div class="relative w-20 h-20 rounded-2xl border border-white/[0.08] bg-[#0d0d0f] flex-shrink-0 group overflow-hidden shadow-2xl">
                                                     <Show when={att.type === 'image'} fallback={
-                                                        <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-600">
+                                                        <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-400">
                                                             <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-600" />}>
                                                                 <FileText class="w-7 h-7 text-red-600" />
                                                             </Show>
@@ -1967,7 +1967,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     {/* Text area - Top on mobile, Center on desktop */}
                                     <div class="flex-1 px-1 border-0 md:border md:border-[#1a1a1c] md:group-focus-within:border-[#2a2a2e] rounded-xl self-stretch mt-1 mb-0 mx-0 md:mx-[10px] order-1 md:order-2 transition-colors">
                                         <textarea
-                                            class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
+                                            class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-400 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
                                             placeholder={props.isRecording() ? t('chat.listening') : t('chat.placeholder')}
                                             rows={1}
                                             value={props.input()}
@@ -1999,7 +1999,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 {/* Tools / Plus Button */}
                                                 <button
                                                     onClick={() => fileInputRef?.click()}
-                                                    class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                                                    class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
                                                 >
                                                     <Plus class="w-5 h-5" />
                                                 </button>
@@ -2016,7 +2016,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 {/* Voice Button */}
                                                 <button
                                                     onClick={props.toggleRecording}
-                                                    class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                                    class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
                                                 >
                                                     <Mic class="w-5 h-5" />
                                                 </button>
@@ -2053,7 +2053,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             {/* Row 1: Plus + Language */}
                                             <button
                                                 onClick={() => fileInputRef?.click()}
-                                                class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                                                class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
                                             >
                                                 <Plus class="w-5 h-5" />
                                             </button>
@@ -2070,7 +2070,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             {/* Row 2: Mic + Send */}
                                             <button
                                                 onClick={props.toggleRecording}
-                                                class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                                class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
                                             >
                                                 <Mic class="w-5 h-5" />
                                             </button>
@@ -2128,7 +2128,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                         <div class="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
                             <Show when={props.history().length === 0}>
-                                <div class="py-8 text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                                <div class="py-8 text-center text-gray-300 text-[10px] font-bold uppercase tracking-widest">
                                     No sessions yet
                                 </div>
                             </Show>
@@ -2146,7 +2146,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 <span class={`text-[12px] font-bold truncate pr-6 ${props.currentSessionId() === conv.id ? 'text-purple-400' : 'text-gray-100'}`}>
                                                     {conv.messages[0]?.text || 'New Chat'}
                                                 </span>
-                                                <div class="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                                <div class="flex items-center gap-2 text-[9px] text-gray-300 font-bold uppercase tracking-widest">
                                                     <span>{new Date(conv.updatedAt || conv.createdAt).toLocaleDateString()}</span>
                                                     <span class="w-1 h-1 rounded-full bg-gray-700" />
                                                     <span>{conv.messages.length} msgs</span>
@@ -2158,7 +2158,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 e.stopPropagation();
                                                 props.onDeleteConversation(conv.id);
                                             }}
-                                            class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all bg-[#0c0c0e]/90"
+                                            class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all bg-[#0c0c0e]/90"
                                         >
                                             <Trash2 class="w-3.5 h-3.5" />
                                         </button>
@@ -2170,7 +2170,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                     {/* Staking / Rewards (Mirrored from Sidebar logic) */}
                     <div class="space-y-6">
-                        <span class="text-[10px] font-bold text-gray-600 uppercase tracking-[0.2em]">{t('chat.activeRewards')}</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{t('chat.activeRewards')}</span>
                         <div class="space-y-4">
                             <div
                                 onClick={() => props.setActiveView('nodes')}
@@ -2180,10 +2180,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400">
                                         <Zap class="w-4 h-4" />
                                     </div>
-                                    <ChevronRight class="w-4 h-4 text-gray-600 group-hover:text-blue-400 transition-all" />
+                                    <ChevronRight class="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-all" />
                                 </div>
                                 <div class="text-[18px] font-bold text-white mb-1">{t('chat.vcnYield')}</div>
-                                <p class="text-[12px] text-gray-500 leading-relaxed">{t('chat.vcnYieldDesc')}</p>
+                                <p class="text-[12px] text-gray-300 leading-relaxed">{t('chat.vcnYieldDesc')}</p>
                             </div>
 
                             <div
@@ -2194,10 +2194,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="p-2 bg-purple-500/20 rounded-lg text-purple-400">
                                         <Sparkles class="w-4 h-4" />
                                     </div>
-                                    <ChevronRight class="w-4 h-4 text-gray-600 group-hover:text-purple-400 transition-all" />
+                                    <ChevronRight class="w-4 h-4 text-gray-400 group-hover:text-purple-400 transition-all" />
                                 </div>
                                 <div class="text-[18px] font-bold text-white mb-1">{t('chat.season1Airdrop')}</div>
-                                <p class="text-[12px] text-gray-500 leading-relaxed">{t('chat.season1AirdropDesc')}</p>
+                                <p class="text-[12px] text-gray-300 leading-relaxed">{t('chat.season1AirdropDesc')}</p>
                             </div>
                         </div>
                     </div>
@@ -2210,11 +2210,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             </div>
                             <div>
                                 <div class="text-[11px] font-black text-white uppercase tracking-widest">{t('chat.kycLevel')}</div>
-                                <div class="text-[10px] text-gray-500 font-bold uppercase">{t('chat.basicAccount')}</div>
+                                <div class="text-[10px] text-gray-300 font-bold uppercase">{t('chat.basicAccount')}</div>
                             </div>
                         </div>
                         <div class="h-px bg-white/[0.04] w-full" />
-                        <div class="text-[10px] text-gray-500 leading-loose">
+                        <div class="text-[10px] text-gray-300 leading-loose">
                             {t('chat.identityVerified')}
                         </div>
                     </div>
