@@ -3,26 +3,35 @@ import { JSX } from 'solid-js';
 export const VisionLogo = (props: { class?: string }) => {
     return (
         <svg
-            viewBox="0 0 48 48"
+            viewBox="0 0 100 100"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             class={props.class}
         >
             <defs>
-                <linearGradient id="vcIconGrad" x1="6" y1="8" x2="42" y2="42" gradientUnits="userSpaceOnUse">
-                    <stop offset="0" stop-color="#63e5f7" />
-                    <stop offset="0.55" stop-color="#37b5ff" />
-                    <stop offset="1" stop-color="#2b6bff" />
+                <linearGradient id="vcMark" x1="13" y1="14" x2="89" y2="83" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stop-color="#63b3f7" />
+                    <stop offset="0.5" stop-color="#3f74ee" />
+                    <stop offset="1" stop-color="#2b50d4" />
                 </linearGradient>
             </defs>
-            {/* Connected node chain */}
-            <line x1="13" y1="14" x2="30" y2="12" stroke="url(#vcIconGrad)" stroke-width="3.4" stroke-linecap="round" />
-            <line x1="30" y1="12" x2="19" y2="27" stroke="url(#vcIconGrad)" stroke-width="3.4" stroke-linecap="round" />
-            <line x1="19" y1="27" x2="36" y2="35" stroke="url(#vcIconGrad)" stroke-width="3.4" stroke-linecap="round" />
-            <circle cx="13" cy="14" r="5" fill="url(#vcIconGrad)" />
-            <circle cx="30" cy="12" r="4.4" fill="url(#vcIconGrad)" />
-            <circle cx="19" cy="27" r="4.4" fill="url(#vcIconGrad)" />
-            <circle cx="36" cy="35" r="5.4" fill="url(#vcIconGrad)" />
+            {/* Connector bars */}
+            <g stroke="url(#vcMark)" stroke-width="6.4" stroke-linecap="round">
+                <line x1="49" y1="22.9" x2="34.4" y2="51.3" />
+                <line x1="81.3" y1="21" x2="73.3" y2="46" />
+                <line x1="73.3" y1="46" x2="61.6" y2="57.6" />
+                <line x1="61.6" y1="57.6" x2="51.7" y2="75.3" />
+            </g>
+            {/* Nodes */}
+            <g fill="url(#vcMark)">
+                <circle cx="20.3" cy="25.1" r="7" />
+                <circle cx="49" cy="22.9" r="7" />
+                <circle cx="34.4" cy="51.3" r="7" />
+                <circle cx="81.3" cy="21" r="7.3" />
+                <circle cx="73.3" cy="46" r="7" />
+                <circle cx="61.6" cy="57.6" r="7" />
+                <circle cx="51.7" cy="75.3" r="7.6" />
+            </g>
         </svg>
     );
 };
