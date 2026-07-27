@@ -30611,3 +30611,35 @@ Object.assign(exports, vpisSelfImprove);
 // ── VPIS: Operations + Alerting (Phase 7) ───────────────────────────────
 const vpisOps = require("./vpisOperations");
 Object.assign(exports, vpisOps);
+
+// ── Public Network Stats (homepage Vision Scale section) ─────────────────
+// Aggregate-only counts, cached 10 min in Firestore to keep reads cheap.
+exports.publicNetworkStats = onRequest({ cors: true, invoker: "public", maxInstances: 3, timeoutSeconds: 30 }, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const cacheRef = db.collection("system_stats").doc("public");
+    const cacheSnap = await cacheRef.get();
+    const now = Date.now();
+    if (cacheSnap.exists) {
+      const c = cacheSnap.data();
+      if (c.updatedAt && now - c.updatedAt < 10 * 60 * 1000) {
+        return res.status(200).json({ success: true, cached: true, stats: c.stats });
+      }
+    }
+
+    const [usersSnap, agentsSnap, nodesSnap] = await Promise.all([
+      db.collection("users").count().get(),
+      db.collection("agents").count().get(),
+      db.collection("mobile_nodes").where("status", "==", "active").count().get(),
+    ]);
+    const stats = {
+      users: usersSnap.data().count,
+      agents: agentsSnap.data().count,
+      active_nodes: nodesSnap.data().count,
+    };
+    await cacheRef.set({ stats, updatedAt: now });
+    return res.status(200).json({ success: true, cached: false, stats });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});

@@ -95,41 +95,31 @@ const rpc = async (method: string, params: any[]): Promise<any> => {
   return json.result;
 };
 
-const GATEWAY_URL = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+const STATS_URL = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/publicNetworkStats';
 
 const Stats = (): JSX.Element => {
-  // Live metrics with measured fallbacks (2026-07: 1.83M blocks, 142 nodes, 106 days)
+  // Live metrics with real-figure fallbacks (measured 2026-07-27)
   const [blockHeight, setBlockHeight] = createSignal(1_830_000);
+  const [accountCount, setAccountCount] = createSignal(1_082);
   const [nodeCount, setNodeCount] = createSignal(142);
-  const [daysLive, setDaysLive] = createSignal(106);
 
   onMount(async () => {
     try {
       const latest = await rpc('eth_getBlockByNumber', ['latest', false]);
-      if (latest) {
-        setBlockHeight(parseInt(latest.number, 16));
-        const genesis = await rpc('eth_getBlockByNumber', ['0x1', false]);
-        if (genesis) {
-          const age = Math.floor((Date.now() / 1000 - parseInt(genesis.timestamp, 16)) / 86400);
-          if (age > 0) setDaysLive(age);
-        }
-      }
+      if (latest) setBlockHeight(parseInt(latest.number, 16));
     } catch (e) {
-      console.warn('[Stats] live chain fetch failed, using fallbacks', e);
+      console.warn('[Stats] live chain fetch failed, using fallback', e);
     }
     try {
-      // Real active-node count from the public agent gateway
-      const res = await fetch(GATEWAY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mobile_node.leaderboard', limit: 1 }),
-      });
+      // Official aggregate counts (users / active nodes), cached server-side
+      const res = await fetch(STATS_URL);
       const json = await res.json();
-      if (json?.success && typeof json.total_nodes === 'number' && json.total_nodes > 0) {
-        setNodeCount(json.total_nodes);
+      if (json?.success && json.stats) {
+        if (json.stats.users > 0) setAccountCount(json.stats.users);
+        if (json.stats.active_nodes > 0) setNodeCount(json.stats.active_nodes);
       }
     } catch (e) {
-      console.warn('[Stats] node count fetch failed, using fallback', e);
+      console.warn('[Stats] network stats fetch failed, using fallbacks', e);
     }
   });
 
@@ -157,8 +147,8 @@ const Stats = (): JSX.Element => {
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-y-16 gap-x-8">
           <StatItem value={blockHeight()} suffix="+" label="Blocks Produced" sub="Mainnet · Live" />
+          <StatItem value={accountCount()} suffix="+" label="Smart Accounts" sub="Registered · Live" />
           <StatItem value={nodeCount()} suffix="" label="Observer Nodes" sub="Active · Live" />
-          <StatItem value={daysLive()} suffix="" label="Days Live" sub="Since Genesis" />
           <StatItem value={97500} suffix="" label="Peak TPS" sub="Simulated High Stress" />
         </div>
       </div>
