@@ -95,35 +95,41 @@ const rpc = async (method: string, params: any[]): Promise<any> => {
   return json.result;
 };
 
+const GATEWAY_URL = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+
 const Stats = (): JSX.Element => {
-  // Live on-chain metrics with measured fallbacks (2026-07: 1.83M blocks, 5.0s, 106 days)
+  // Live metrics with measured fallbacks (2026-07: 1.83M blocks, 142 nodes, 106 days)
   const [blockHeight, setBlockHeight] = createSignal(1_830_000);
-  const [blockTime, setBlockTime] = createSignal(5);
+  const [nodeCount, setNodeCount] = createSignal(142);
   const [daysLive, setDaysLive] = createSignal(106);
 
   onMount(async () => {
     try {
       const latest = await rpc('eth_getBlockByNumber', ['latest', false]);
-      if (!latest) return;
-      const height = parseInt(latest.number, 16);
-      const latestTs = parseInt(latest.timestamp, 16);
-      setBlockHeight(height);
-
-      const [older, genesis] = await Promise.all([
-        rpc('eth_getBlockByNumber', ['0x' + (height - 5000).toString(16), false]),
-        rpc('eth_getBlockByNumber', ['0x1', false]),
-      ]);
-      if (older) {
-        const bt = (latestTs - parseInt(older.timestamp, 16)) / 5000;
-        if (bt > 0 && bt < 60) setBlockTime(Math.round(bt));
-      }
-      if (genesis) {
-        const age = Math.floor((Date.now() / 1000 - parseInt(genesis.timestamp, 16)) / 86400);
-        if (age > 0) setDaysLive(age);
+      if (latest) {
+        setBlockHeight(parseInt(latest.number, 16));
+        const genesis = await rpc('eth_getBlockByNumber', ['0x1', false]);
+        if (genesis) {
+          const age = Math.floor((Date.now() / 1000 - parseInt(genesis.timestamp, 16)) / 86400);
+          if (age > 0) setDaysLive(age);
+        }
       }
     } catch (e) {
-      // keep fallbacks
       console.warn('[Stats] live chain fetch failed, using fallbacks', e);
+    }
+    try {
+      // Real active-node count from the public agent gateway
+      const res = await fetch(GATEWAY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mobile_node.leaderboard', limit: 1 }),
+      });
+      const json = await res.json();
+      if (json?.success && typeof json.total_nodes === 'number' && json.total_nodes > 0) {
+        setNodeCount(json.total_nodes);
+      }
+    } catch (e) {
+      console.warn('[Stats] node count fetch failed, using fallback', e);
     }
   });
 
@@ -151,7 +157,7 @@ const Stats = (): JSX.Element => {
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-y-16 gap-x-8">
           <StatItem value={blockHeight()} suffix="+" label="Blocks Produced" sub="Mainnet · Live" />
-          <StatItem value={blockTime()} suffix="s" label="Avg Block Time" sub="Measured On-Chain" />
+          <StatItem value={nodeCount()} suffix="" label="Observer Nodes" sub="Active · Live" />
           <StatItem value={daysLive()} suffix="" label="Days Live" sub="Since Genesis" />
           <StatItem value={97500} suffix="" label="Peak TPS" sub="Simulated High Stress" />
         </div>
