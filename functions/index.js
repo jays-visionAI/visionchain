@@ -14050,35 +14050,131 @@ exports.agentGateway = onRequest({
         if (!attestations || !Array.isArray(attestations) || attestations.length === 0) {
           return res.status(400).json({ error: "attestations array is required" });
         }
-        if (attestations.length > 50) {
-          return res.status(400).json({ error: "Maximum 50 attestations per batch" });
+        // Process the first 20 — never hard-reject an oversized batch, or
+        // clients with a grown retry queue can wedge permanently.
+        const submitted = attestations.slice(0, 20);
+        const truncated = attestations.length - submitted.length;
+
+        // Rate limit: one batch per 5 minutes per node
+        const lastAtt = mn.last_attestation_at;
+        const lastAttMs = lastAtt && typeof lastAtt.toMillis === "function" ? lastAtt.toMillis() : 0;
+        if (Date.now() - lastAttMs < 5 * 60 * 1000) {
+          return res.status(429).json({
+            error: "Attestation cooldown active",
+            retry_after_seconds: Math.ceil((lastAttMs + 5 * 60 * 1000 - Date.now()) / 1000),
+          });
         }
 
-        // Validate and store attestations
+        // Phase 2: the server verifies each attested block against the chain
+        // itself — client-reported validity booleans are recorded but never
+        // trusted. Duplicate block numbers are skipped so stats can't be
+        // farmed by resubmission.
+        const normalizeHash = (h) => {
+          const s = String(h || "").toLowerCase();
+          return s.startsWith("0x") ? s : `0x${s}`;
+        };
+
+        const candidates = [];
+        const seenBlocks = new Set();
+        for (const att of submitted) {
+          const blockNumber = parseInt(att.block_number, 10);
+          if (!Number.isFinite(blockNumber) || blockNumber < 0 || !att.block_hash) continue;
+          if (seenBlocks.has(blockNumber)) continue;
+          seenBlocks.add(blockNumber);
+          candidates.push({ blockNumber, blockHash: normalizeHash(att.block_hash), raw: att });
+        }
+        if (candidates.length === 0) {
+          return res.status(400).json({ error: "No valid attestations (block_number + block_hash required)" });
+        }
+
+        // Skip blocks this node already attested (dedup across batches)
+        const existingSnaps = await Promise.all(candidates.map((c) =>
+          mnDoc.ref.collection("attestations").doc(`block_${c.blockNumber}`).get()
+        ));
+        const fresh = candidates.filter((c, i) => !existingSnaps[i].exists);
+
+        // Server-side chain verification
+        let attProvider;
+        let latestChainBlock;
+        try {
+          attProvider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+          latestChainBlock = await attProvider.getBlockNumber();
+        } catch (rpcErr) {
+          return res.status(503).json({ error: "Chain RPC unavailable, retry later" });
+        }
+
         let validCount = 0;
         let totalCount = 0;
+        let pendingCount = 0; // too close to head — resubmit later
+        let rpcErrorCount = 0; // transient RPC failure — resubmit later
         const batch = db.batch();
 
-        for (const att of attestations) {
-          if (!att.block_number || !att.block_hash) continue;
+        const CONFIRMATION_DEPTH = 2;
+        const verifiedBlocks = await Promise.all(fresh.map(async (c) => {
+          // Head-of-chain lag: don't judge blocks the RPC may not serve yet.
+          // They are NOT written, so dedup won't block a later resubmission.
+          if (c.blockNumber > latestChainBlock - CONFIRMATION_DEPTH) {
+            return { ...c, pending: true };
+          }
+          try {
+            const block = await attProvider.getBlock(c.blockNumber);
+            return { ...c, chainBlock: block };
+          } catch (e) {
+            // Transient RPC error ≠ invalid attestation — skip, allow retry
+            return { ...c, rpcError: true };
+          }
+        }));
+
+        for (const c of verifiedBlocks) {
+          if (c.pending) { pendingCount++; continue; }
+          if (c.rpcError) { rpcErrorCount++; continue; }
 
           totalCount++;
-          const isValid = att.signer_valid && att.parent_hash_valid && att.timestamp_valid;
+          // chainBlock === null here means the block genuinely doesn't exist
+          const chainHash = c.chainBlock ? String(c.chainBlock.hash).toLowerCase() : null;
+          const hashValid = !!chainHash && chainHash === c.blockHash;
+          const parentValid = c.raw.parent_hash && c.chainBlock
+            ? String(c.chainBlock.parentHash).toLowerCase() === normalizeHash(c.raw.parent_hash)
+            : hashValid; // parent optional; hash match implies chain inclusion
+          const isValid = hashValid && parentValid;
           if (isValid) validCount++;
 
-          const attRef = mnDoc.ref.collection("attestations").doc(`block_${att.block_number}`);
+          const attRef = mnDoc.ref.collection("attestations").doc(`block_${c.blockNumber}`);
           batch.set(attRef, {
-            block_number: att.block_number,
-            block_hash: att.block_hash,
-            signer_valid: !!att.signer_valid,
-            parent_hash_valid: !!att.parent_hash_valid,
-            timestamp_valid: !!att.timestamp_valid,
+            block_number: c.blockNumber,
+            block_hash: c.blockHash,
+            server_verified: true,
+            hash_valid: hashValid,
+            parent_hash_valid: parentValid,
+            client_claims: {
+              signer_valid: !!c.raw.signer_valid,
+              parent_hash_valid: !!c.raw.parent_hash_valid,
+              timestamp_valid: !!c.raw.timestamp_valid,
+            },
             is_valid: isValid,
             submitted_at: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
 
-        await batch.commit();
+        if (totalCount > 0) {
+          await batch.commit();
+        }
+
+        // Nothing actually judged (all dupes/pending/rpc-errors): return
+        // without touching stats so a resubmit can't zero the earned bonus.
+        // Still stamp the cooldown so all-pending batches can't be spammed.
+        if (totalCount === 0) {
+          await mnDoc.ref.update({ last_attestation_at: admin.firestore.FieldValue.serverTimestamp() });
+          return res.status(200).json({
+            success: true,
+            attestations_accepted: 0,
+            duplicates_skipped: candidates.length - fresh.length,
+            pending_blocks: pendingCount,
+            rpc_errors: rpcErrorCount,
+            truncated,
+            server_verified: true,
+          });
+        }
 
         // Calculate bonus weight based on verification accuracy
         const accuracy = totalCount > 0 ? validCount / totalCount : 0;
@@ -14105,9 +14201,14 @@ exports.agentGateway = onRequest({
         return res.status(200).json({
           success: true,
           attestations_accepted: totalCount,
+          duplicates_skipped: candidates.length - fresh.length,
+          pending_blocks: pendingCount,
+          rpc_errors: rpcErrorCount,
+          truncated,
           valid_count: validCount,
           accuracy: totalCount > 0 ? Math.round(accuracy * 100) : 0,
           bonus_weight: bonusWeight,
+          server_verified: true,
         });
       } catch (e) {
         console.error("[Mobile Node] Attestation error:", e);
@@ -15819,6 +15920,72 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // ── Storage-proof commitments (Phase 2) ─────────────────────────────
+    // While chunk bytes are server-side (staging), we precompute N random
+    // 32-byte slices and keep them PRIVATE in
+    //   chunk_registry/{hash}/private/commitments  { entries: [{offset, slice_b64}] }
+    // Challenges then carry a server-side expected_proof =
+    //   sha256(utf8(challenge_id) || slice_bytes)  (hex, lowercase)
+    // and the node must answer with
+    //   proof_hash = sha256(utf8(challenge_id) || chunk_bytes[offset..offset+32])
+    // so proofs stay verifiable even after staging_chunks are purged.
+    const PROOF_READ_BYTES = 32;
+    const PROOF_COMMITMENT_COUNT = 16;
+
+    const generateProofCommitments = (chunkBuffer) => {
+      const entries = [];
+      const maxOffset = Math.max(1, chunkBuffer.length - PROOF_READ_BYTES);
+      const used = new Set();
+      const count = Math.min(PROOF_COMMITMENT_COUNT, maxOffset);
+      while (entries.length < count) {
+        const offset = Math.floor(Math.random() * maxOffset);
+        if (used.has(offset)) continue;
+        used.add(offset);
+        entries.push({
+          offset,
+          slice_b64: chunkBuffer.slice(offset, offset + PROOF_READ_BYTES).toString("base64"),
+        });
+      }
+      return entries;
+    };
+
+    // Load commitments for a chunk; lazily generate from staging if absent.
+    // Returns null when the chunk is currently unverifiable.
+    const getProofCommitments = async (chunkHash) => {
+      const commitRef = db.collection("chunk_registry").doc(chunkHash)
+        .collection("private").doc("commitments");
+      const commitSnap = await commitRef.get();
+      if (commitSnap.exists) {
+        const d = commitSnap.data();
+        if (Array.isArray(d.entries) && d.entries.length > 0) return d.entries;
+        // Negative cache: previously determined unverifiable — don't re-read
+        // the (large) staging doc on every challenge cycle. A re-upload
+        // overwrites this doc with real entries.
+        if (d.unverifiable) return null;
+      }
+      const stagingDoc = await db.collection("staging_chunks").doc(chunkHash).get();
+      if (!stagingDoc.exists || !stagingDoc.data().data) {
+        await commitRef.set({ entries: [], unverifiable: true, checked_at: Date.now() }, { merge: true });
+        return null;
+      }
+      const buf = Buffer.from(stagingDoc.data().data, "base64");
+      // Integrity: the registry doc id must be the sha256 of the chunk bytes
+      const realHash = crypto.createHash("sha256").update(buf).digest("hex");
+      if (realHash !== chunkHash) {
+        console.error(`[Storage Proof] staging data hash mismatch for ${chunkHash}`);
+        await commitRef.set({ entries: [], unverifiable: true, reason: "hash_mismatch", checked_at: Date.now() }, { merge: true });
+        return null;
+      }
+      const entries = generateProofCommitments(buf);
+      await commitRef.set({ entries, unverifiable: false, created_at: Date.now() }, { merge: true });
+      return entries;
+    };
+
+    const computeExpectedProof = (challengeId, sliceB64) =>
+      crypto.createHash("sha256")
+        .update(Buffer.concat([Buffer.from(challengeId, "utf8"), Buffer.from(sliceB64, "base64")]))
+        .digest("hex");
+
     // --- storage_node.register_chunks ---
     // Node reports which chunks it currently holds
     if (action === "storage_node.register_chunks" || action === "chunk.register") {
@@ -15832,10 +15999,17 @@ exports.agentGateway = onRequest({
         const now = Date.now();
         let registered = 0;
 
-        for (const chunk of chunks.slice(0, 500)) {
+        // Phase 2: self-reporting must not overwrite proof state. Existing
+        // holder docs keep their status (a suspended holder stays suspended)
+        // and last_verified is ONLY ever set by a passed storage proof.
+        const capped = chunks.slice(0, 100).filter((c) => c && c.hash);
+        const holderRefs = capped.map((c) =>
+          db.collection("chunk_registry").doc(c.hash).collection("holders").doc(nodeId));
+        const existingHolders = holderRefs.length > 0 ? await db.getAll(...holderRefs) : [];
+
+        capped.forEach((chunk, i) => {
           const chunkHash = chunk.hash;
           const fileKey = chunk.file_key;
-          if (!chunkHash) continue;
 
           // Register in chunk_registry collection
           const chunkRef = db.collection("chunk_registry").doc(chunkHash);
@@ -15847,17 +16021,22 @@ exports.agentGateway = onRequest({
             updated_at: now,
           }, { merge: true });
 
-          // Add this node as a holder
-          const holderRef = chunkRef.collection("holders").doc(nodeId);
-          batch.set(holderRef, {
-            node_id: nodeId,
-            registered_at: now,
-            last_verified: now,
-            status: "active",
-          }, { merge: true });
+          const holderRef = holderRefs[i];
+          if (existingHolders[i] && existingHolders[i].exists) {
+            batch.set(holderRef, { last_seen_at: now }, { merge: true });
+          } else {
+            batch.set(holderRef, {
+              node_id: nodeId,
+              registered_at: now,
+              last_seen_at: now,
+              last_verified: 0, // set only by a passed storage proof
+              consecutive_proof_fails: 0,
+              status: "active",
+            }, { merge: true });
+          }
 
           registered++;
-        }
+        });
 
         await batch.commit();
 
@@ -15935,13 +16114,22 @@ exports.agentGateway = onRequest({
         const holderRef = chunkRef.collection("holders").doc(nodeId);
         const now = Date.now();
 
-        await holderRef.set({
-          node_id: nodeId,
-          registered_at: now,
-          last_verified: now,
-          status: "active",
-          size: body.size || 0,
-        }, { merge: true });
+        // Phase 2: don't resurrect suspended holders or fake verification —
+        // last_verified is set only by a passed storage proof.
+        const existingHolder = await holderRef.get();
+        if (existingHolder.exists) {
+          await holderRef.set({ last_seen_at: now, size: body.size || 0 }, { merge: true });
+        } else {
+          await holderRef.set({
+            node_id: nodeId,
+            registered_at: now,
+            last_seen_at: now,
+            last_verified: 0, // set only by a passed storage proof
+            consecutive_proof_fails: 0,
+            status: "active",
+            size: body.size || 0,
+          }, { merge: true });
+        }
 
         // Count total holders
         const holdersSnap = await chunkRef.collection("holders")
@@ -15961,6 +16149,19 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // Phase 2: while a storage-proof challenge is open on a chunk, its bytes
+    // must not be downloadable — otherwise a non-storing node could fetch the
+    // data on demand and answer the challenge within the window.
+    const chunkUnderChallenge = async (chunkHash) => {
+      const pendingSnap = await db.collection("proof_challenges")
+        .where("chunk_hash", "==", chunkHash)
+        .where("status", "==", "pending")
+        .limit(5)
+        .get();
+      const now = Date.now();
+      return pendingSnap.docs.some((d) => (d.data().expires_at || 0) > now);
+    };
+
     // --- chunk.fetch_staging ---
     // Node downloads assigned chunk data from staging_chunks
     if (action === "chunk.fetch_staging") {
@@ -15968,6 +16169,10 @@ exports.agentGateway = onRequest({
         const hash = body.hash;
         if (!hash) {
           return res.status(400).json({ error: "hash required" });
+        }
+
+        if (await chunkUnderChallenge(hash)) {
+          return res.status(423).json({ error: "Chunk locked: proof challenge in progress, retry shortly" });
         }
 
         const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
@@ -15999,6 +16204,19 @@ exports.agentGateway = onRequest({
           return res.status(400).json({ error: "node_id required" });
         }
 
+        // Phase 2: per-node cooldown FIRST — a rejected poll must not bill
+        // the 50-doc collectionGroup query below.
+        const CHALLENGE_COOLDOWN_MS = 10 * 60 * 1000;
+        const nodeStatsRef = db.collection("vision_nodes").doc(nodeId);
+        const nodeStatsSnap = await nodeStatsRef.get();
+        const lastIssued = nodeStatsSnap.data()?.proof_stats?.last_challenge_issued_at || 0;
+        if (Date.now() - lastIssued < CHALLENGE_COOLDOWN_MS) {
+          return res.status(429).json({
+            error: "Challenge cooldown active",
+            retry_after_seconds: Math.ceil((lastIssued + CHALLENGE_COOLDOWN_MS - Date.now()) / 1000),
+          });
+        }
+
         // Find random chunks this node holds
         const holdingsSnap = await db.collectionGroup("holders")
           .where("node_id", "==", nodeId)
@@ -16014,33 +16232,38 @@ exports.agentGateway = onRequest({
           });
         }
 
-        // Pick up to 3 random chunks for challenge
+        // Pick up to 3 random verifiable chunks for challenge
         const allHoldings = holdingsSnap.docs;
+        const shuffled = allHoldings
+          .map((h) => ({ h, r: Math.random() }))
+          .sort((a, b) => a.r - b.r)
+          .map((x) => x.h);
         const selected = [];
-        const usedSet = new Set();
-        const cnt = Math.min(3, allHoldings.length);
+        let unverifiable = 0;
 
-        while (selected.length < cnt) {
-          const idx = Math.floor(Math.random() * allHoldings.length);
-          if (usedSet.has(idx)) continue;
-          usedSet.add(idx);
-
-          const holder = allHoldings[idx];
+        for (const holder of shuffled) {
+          if (selected.length >= 3) break;
           const chunkHash = holder.ref.parent.parent.id;
 
-          // Generate random offset for proof
-          const chunkDoc = await holder.ref.parent.parent.get();
-          const chunkSize = chunkDoc.data()?.size || 262144; // default 256KB
-          const offset = Math.floor(Math.random() * Math.max(1, chunkSize - 32));
+          // Phase 2: challenges must be backed by a private commitment so the
+          // answer is verifiable server-side. No commitment -> skip (never
+          // issue a blind challenge that would be rubber-stamped).
+          const commitments = await getProofCommitments(chunkHash);
+          if (!commitments || commitments.length === 0) {
+            unverifiable++;
+            continue;
+          }
+          const commit = commitments[Math.floor(Math.random() * commitments.length)];
           const cId = `pc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-          // Store challenge
+          // Store challenge with the server-side expected answer
           await db.collection("proof_challenges").doc(cId).set({
             challenge_id: cId,
             node_id: nodeId,
             chunk_hash: chunkHash,
-            offset,
-            read_bytes: 32,
+            offset: commit.offset,
+            read_bytes: PROOF_READ_BYTES,
+            expected_proof: computeExpectedProof(cId, commit.slice_b64),
             created_at: Date.now(),
             status: "pending",
             expires_at: Date.now() + 5 * 60 * 1000, // 5 min expiry
@@ -16049,16 +16272,22 @@ exports.agentGateway = onRequest({
           selected.push({
             challenge_id: cId,
             chunk_hash: chunkHash,
-            offset,
-            read_bytes: 32,
+            offset: commit.offset,
+            read_bytes: PROOF_READ_BYTES,
           });
         }
+
+        await nodeStatsRef.set({
+          proof_stats: { last_challenge_issued_at: Date.now() },
+        }, { merge: true });
 
         return res.json({
           success: true,
           node_id: nodeId,
           challenges: selected,
+          unverifiable_chunks_skipped: unverifiable,
           expires_in_seconds: 300,
+          proof_spec: "proof_hash = sha256(utf8(challenge_id) || chunk_bytes[offset .. offset+read_bytes]) as lowercase hex",
         });
       } catch (e) {
         console.error("[Storage Proof] challenge error:", e);
@@ -16071,10 +16300,18 @@ exports.agentGateway = onRequest({
     if (action === "storage_node.proof_response" || action === "chunk.proof_response") {
       try {
         const nodeId = body.node_id;
-        const proofResponses = body.responses;
-        if (!nodeId || !Array.isArray(proofResponses)) {
-          return res.status(400).json({ error: "node_id and responses[] required" });
+        const proofResponses = Array.isArray(body.responses) ? body.responses.slice(0, 10) : null;
+        if (!nodeId || !proofResponses) {
+          return res.status(400).json({ error: "node_id and responses[] required (max 10 per call)" });
         }
+
+        // Phase 2 rollout switch: "observe" (default) verifies and records
+        // results but does NOT suspend holders or push failures on-chain —
+        // protects legacy clients that predate the proof spec. Flip
+        // system_config/storage_proofs {enforcement:"enforce"} once clients
+        // implement the spec (Phase 5).
+        const enfSnap = await db.collection("system_config").doc("storage_proofs").get();
+        const enforcement = enfSnap.data()?.enforcement === "enforce" ? "enforce" : "observe";
 
         const results = [];
         let passed = 0;
@@ -16111,23 +16348,62 @@ exports.agentGateway = onRequest({
             continue;
           }
 
-          // Accept the proof (in production, we'd verify the hash against stored data)
-          // For now, any non-empty proof_hash is accepted
-          await challengeRef.update({
-            status: "verified",
-            proof_hash: pHash,
-            verified_at: Date.now(),
-          });
+          // Replay guard: each challenge is answerable exactly once
+          if (challenge.status !== "pending") {
+            results.push({ challenge_id: cId, status: "already_answered" });
+            failed++;
+            continue;
+          }
 
-          // Update holder's last_verified timestamp
           const holderRef = db.collection("chunk_registry")
             .doc(challenge.chunk_hash)
             .collection("holders")
             .doc(nodeId);
-          await holderRef.update({ last_verified: Date.now() });
 
-          results.push({ challenge_id: cId, status: "verified" });
-          passed++;
+          // Phase 2: verify the answer against the server-side expected proof.
+          // Challenges created before Phase 2 have no expected_proof — expire
+          // them instead of rubber-stamping.
+          if (!challenge.expected_proof) {
+            await challengeRef.update({ status: "expired", expired_reason: "pre_phase2_unverifiable" });
+            results.push({ challenge_id: cId, status: "expired" });
+            failed++;
+            continue;
+          }
+
+          const answer = String(pHash).toLowerCase().replace(/^0x/, "");
+          if (answer === challenge.expected_proof) {
+            await challengeRef.update({
+              status: "verified",
+              proof_hash: answer,
+              verified_at: Date.now(),
+            });
+            await holderRef.set({
+              last_verified: Date.now(),
+              consecutive_proof_fails: 0,
+            }, { merge: true });
+            results.push({ challenge_id: cId, status: "verified" });
+            passed++;
+          } else {
+            await challengeRef.update({
+              status: "failed",
+              proof_hash: answer,
+              failed_at: Date.now(),
+            });
+            // Fail-closed: 3 consecutive wrong proofs suspends the holder,
+            // which drops the replica count and triggers re-replication via
+            // storage_node.get_assignments. Suspension only in "enforce" mode
+            // so legacy clients are not mass-deactivated during rollout.
+            const holderSnap = await holderRef.get();
+            const fails = (holderSnap.data()?.consecutive_proof_fails || 0) + 1;
+            const update = { consecutive_proof_fails: fails, last_proof_failed_at: Date.now() };
+            if (fails >= 3 && enforcement === "enforce") {
+              update.status = "inactive";
+              update.suspended_reason = "proof_failures";
+            }
+            await holderRef.set(update, { merge: true });
+            results.push({ challenge_id: cId, status: "failed", consecutive_fails: fails, enforcement });
+            failed++;
+          }
         }
 
         // Update node's proof stats
@@ -16150,7 +16426,12 @@ exports.agentGateway = onRequest({
             const nodeIdBytes = ethers.zeroPadValue(ethers.toUtf8Bytes(nodeId.slice(0, 31)), 32);
             // Record each individual proof result
             for (const r of results) {
-              if (r.status === "verified" || r.status === "not_found" || r.status === "expired") {
+              // In observe mode only record successes on-chain — failures are
+              // expected from legacy clients until the proof spec ships.
+              const recordable = enforcement === "enforce"
+                ? (r.status === "verified" || r.status === "failed" || r.status === "not_found" || r.status === "expired")
+                : r.status === "verified";
+              if (recordable) {
                 await registryContract.recordProofResult(nodeIdBytes, r.status === "verified", { gasLimit: 100000, gasPrice: ethers.parseUnits("1", "gwei") });
               }
             }
@@ -16226,6 +16507,10 @@ exports.agentGateway = onRequest({
         const hash = body.hash;
         if (!nodeId || !hash) {
           return res.status(400).json({ error: "node_id and hash required" });
+        }
+
+        if (await chunkUnderChallenge(hash)) {
+          return res.status(423).json({ error: "Chunk locked: proof challenge in progress, retry shortly" });
         }
 
         // Fetch from staging_chunks
@@ -16421,8 +16706,15 @@ exports.agentGateway = onRequest({
         // Chunk the file (same as diskUpload pattern)
         const CHUNK_SIZE = 700 * 1024; // 700KB
         const chunkHashes = [];
-        const chunkBatch = db.batch();
+        // 3 ops per chunk — rotate batches well under the 500-op limit
+        const chunkBatches = [db.batch()];
+        let opsInBatch = 0;
         for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+          if (opsInBatch >= 450) {
+            chunkBatches.push(db.batch());
+            opsInBatch = 0;
+          }
+          const chunkBatch = chunkBatches[chunkBatches.length - 1];
           const chunk = buffer.slice(i, Math.min(i + CHUNK_SIZE, buffer.length));
           const chunkHash = crypto.createHash("sha256").update(chunk).digest("hex");
           chunkHashes.push(chunkHash);
@@ -16443,8 +16735,15 @@ exports.agentGateway = onRequest({
             replicas: 0,
             created_at: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
+          // Phase 2: precompute private storage-proof commitments while bytes are in hand
+          chunkBatch.set(regRef.collection("private").doc("commitments"), {
+            entries: generateProofCommitments(chunk),
+            unverifiable: false,
+            created_at: Date.now(),
+          }, { merge: true });
+          opsInBatch += 3;
         }
-        await chunkBatch.commit();
+        for (const b of chunkBatches) await b.commit();
 
         // Compute merkle root
         const computeMerkleRootLocal = (hashes) => {
@@ -16654,6 +16953,16 @@ exports.agentGateway = onRequest({
 
         const fileMeta = fileSnap.data();
         const chunkHashes = fileMeta.chunkHashes || [];
+
+        // Phase 2: remove private proof commitments first — they contain
+        // plaintext slices of the file and would be orphaned by the registry
+        // delete (doc deletes don't cascade to subcollections).
+        for (let ci = 0; ci < chunkHashes.length; ci += 400) {
+          const commitBatch = db.batch();
+          chunkHashes.slice(ci, ci + 400).forEach((h) =>
+            commitBatch.delete(db.collection("chunk_registry").doc(h).collection("private").doc("commitments")));
+          await commitBatch.commit();
+        }
 
         // Delete chunks
         const batch = db.batch();
@@ -23593,47 +23902,85 @@ exports.purchasePublishedFile = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK"
 });
 
 // ── Cleanup old staging chunks after nodes have replicated them ──
-exports.cleanupStagingChunks = onSchedule({ schedule: "every 24 hours" }, async () => {
+exports.cleanupStagingChunks = onSchedule({ schedule: "every 24 hours", memory: "512MiB", timeoutSeconds: 300 }, async () => {
   console.log("[ChunkCleanup] Starting daily staging_chunks cleanup");
-  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days ago
+  const cutoffMs = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days ago
   let deleted = 0;
   let skipped = 0;
 
   try {
-    // Find old staging chunks
-    const stagingSnap = await db.collection("staging_chunks")
-      .where("created_at", "<", cutoff)
-      .limit(500)
-      .get();
+    // created_at was written as a serverTimestamp on some paths and as a
+    // plain number on others; Firestore range filters are type-scoped, so we
+    // must query both types or one population is never cleaned.
+    const [tsSnap, numSnap] = await Promise.all([
+      db.collection("staging_chunks")
+        .where("created_at", "<", admin.firestore.Timestamp.fromMillis(cutoffMs))
+        .limit(100).get(),
+      db.collection("staging_chunks")
+        .where("created_at", "<", cutoffMs)
+        .limit(100).get(),
+    ]);
+    const stagingDocs = [...tsSnap.docs, ...numSnap.docs];
 
-    if (stagingSnap.empty) {
+    if (stagingDocs.length === 0) {
       console.log("[ChunkCleanup] No old staging chunks to clean up");
       return;
     }
 
     const batch = db.batch();
+    let batchOps = 0;
 
-    for (const chunkDoc of stagingSnap.docs) {
+    for (const chunkDoc of stagingDocs) {
       const hash = chunkDoc.id;
 
       // Check if chunk has been replicated to enough nodes
       const holdersSnap = await db.collection("chunk_registry").doc(hash)
         .collection("holders").where("status", "==", "active").get();
 
-      if (holdersSnap.size >= 2) {
-        // Safe to delete from staging - enough replicas exist
+      // Phase 2: staging bytes are the last chance to derive storage-proof
+      // commitments. Never delete staging data until commitments exist, or
+      // the chunk becomes permanently unverifiable.
+      const commitSnap = await db.collection("chunk_registry").doc(hash)
+        .collection("private").doc("commitments").get();
+      const hasCommitments = commitSnap.exists &&
+        Array.isArray(commitSnap.data().entries) && commitSnap.data().entries.length > 0;
+
+      if (holdersSnap.size >= 2 && hasCommitments) {
+        // Safe to delete from staging - enough replicas + proof commitments exist
         batch.delete(chunkDoc.ref);
+        batchOps++;
         deleted++;
+      } else if (holdersSnap.size >= 2 && !hasCommitments) {
+        // Backfill commitments now, delete on a later run
+        const data = chunkDoc.data().data;
+        if (data) {
+          const buf = Buffer.from(data, "base64");
+          const entries = [];
+          const maxOffset = Math.max(1, buf.length - 32);
+          const used = new Set();
+          while (entries.length < Math.min(16, maxOffset)) {
+            const offset = Math.floor(Math.random() * maxOffset);
+            if (used.has(offset)) continue;
+            used.add(offset);
+            entries.push({ offset, slice_b64: buf.slice(offset, offset + 32).toString("base64") });
+          }
+          batch.set(db.collection("chunk_registry").doc(hash)
+            .collection("private").doc("commitments"), { entries, created_at: Date.now() });
+          batchOps++;
+        }
+        skipped++;
       } else {
         skipped++;
       }
     }
 
-    if (deleted > 0) {
+    // Commit whenever the batch has ANY ops — deletions OR commitment
+    // backfills. (Gating on deleted>0 silently dropped backfill-only runs.)
+    if (batchOps > 0) {
       await batch.commit();
     }
 
-    console.log(`[ChunkCleanup] Done: deleted ${deleted}, skipped ${skipped} (insufficient replicas)`);
+    console.log(`[ChunkCleanup] Done: deleted ${deleted}, skipped ${skipped}, batch ops ${batchOps}`);
   } catch (err) {
     console.error("[ChunkCleanup] Error:", err.message);
   }
