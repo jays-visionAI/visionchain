@@ -785,13 +785,256 @@ const STORAGE_PROOF_ABI = [
 const STORAGE_REWARDS_ABI = [
   "function setNodeWallet(bytes32 nodeId, address wallet) external",
   "function accrueReward(bytes32 nodeId, uint256 uptimeHours, uint256 capacityGB, uint256 proofSuccessRate, uint256 weightBp) external",
+  "function accrueRewardBatch(bytes32[] nodeIds, uint256[] uptimeHours, uint256[] capacityGBs, uint256[] proofRates, uint256[] weights) external",
   "function claimReward(bytes32 nodeId) external",
   "function slashNode(bytes32 nodeId, string reason) external",
   "function getRewardInfo(bytes32 nodeId) external view returns (tuple(uint256,uint256,uint256,uint256,bool))",
   "function calculatePendingReward(bytes32 nodeId) external view returns (uint256)",
   "function getPoolStats() external view returns (uint256,uint256,uint256)",
+  "function isExecutor(address) external view returns (bool)",
   "function fundPool() external payable",
 ];
+
+// Encode a node id string into the bytes32 used across all storage contracts
+const nodeIdToBytes32 = (nodeId) =>
+  ethers.zeroPadValue(ethers.toUtf8Bytes(String(nodeId).slice(0, 31)), 32);
+
+// ── Phase 4: on-chain storage reward accrual ─────────────────────────────
+// Reads real node metrics (heartbeat uptime, proof stats, weight) and
+// accrues rewards on the StorageRewards contract. Shared by the daily
+// scheduled job and the admin-triggered gateway action.
+// Server-side device base weights (bp where 10000 = 1x). Mirrors the
+// heartbeat weight map but is NOT read from the farmable node.weight field.
+const ACCRUAL_BASE_BP = {
+  android: 100,   // 0.01x
+  pwa: 20,        // 0.002x
+  desktop: 200,   // 0.02x
+};
+
+async function runStorageRewardAccrual({ maxNodes = 300, maxWalletTxs = 100 } = {}) {
+  const startedAt = Date.now();
+  const executorPk = process.env.VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
+  if (!executorPk) return { success: false, error: "Executor key not configured" };
+
+  // ── Concurrency lease: exactly one accrual run at a time ──────────────
+  const lockRef = db.collection("system_config").doc("onchain_accrual_lock");
+  const gotLock = await db.runTransaction(async (t) => {
+    const s = await t.get(lockRef);
+    const lockedUntil = s.data()?.locked_until || 0;
+    if (Date.now() < lockedUntil) return false;
+    t.set(lockRef, { locked_until: Date.now() + 15 * 60 * 1000, locked_at: Date.now() });
+    return true;
+  });
+  if (!gotLock) return { success: false, error: "Accrual already running (lease held)" };
+
+  try {
+    const provider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+    const executor = new ethers.Wallet(executorPk, provider);
+    const rewardsContract = new ethers.Contract(STORAGE_REWARDS_ADDRESS, STORAGE_REWARDS_ABI, executor);
+
+    // Self-check: are we authorized on the contract?
+    const authorized = await rewardsContract.isExecutor(executor.address).catch(() => false);
+    const [poolBalance] = await rewardsContract.getPoolStats().catch(() => [0n]);
+    if (!authorized) {
+      const result = {
+        success: false,
+        error: "Executor not authorized on StorageRewards",
+        executor_address: executor.address,
+        fix: `Contract owner must call setExecutor(${executor.address}, true)`,
+      };
+      await db.collection("system_stats").doc("onchain_rewards").set({ last_run: result, last_run_at: startedAt }, { merge: true });
+      return result;
+    }
+
+    // ── Cursor pagination so a fleet larger than maxNodes still gets full
+    //    coverage across successive runs ────────────────────────────────
+    const statsRef = db.collection("system_stats").doc("onchain_rewards");
+    const statsSnap = await statsRef.get();
+    const cursor = statsSnap.data()?.accrual_cursor || "";
+
+    let nodesQuery = db.collection("mobile_nodes")
+      .where("status", "==", "active")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(maxNodes);
+    if (cursor) nodesQuery = nodesQuery.startAfter(cursor);
+    let nodesSnap = await nodesQuery.get();
+    let wrappedCursor = false;
+    if (nodesSnap.empty && cursor) {
+      // wrap around
+      wrappedCursor = true;
+      nodesSnap = await db.collection("mobile_nodes")
+        .where("status", "==", "active")
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(maxNodes)
+        .get();
+    }
+    const activeCountAgg = await db.collection("mobile_nodes")
+      .where("status", "==", "active").count().get();
+
+    const CATCHUP_CAP_SECONDS = 48 * 3600;
+    const entries = [];
+    const walletTxsNeeded = [];
+    const proofRefs = [];
+    const nodeDocs = [];
+
+    nodesSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      const totalUptime = d.total_uptime_seconds || 0;
+      // First accrual: deliberately forgive backlog older than the 48h
+      // catch-up window (pre-Phase-4 uptime was already rewarded off-chain).
+      const lastAccrued = typeof d.last_onchain_accrued_uptime_seconds === "number"
+        ? d.last_onchain_accrued_uptime_seconds
+        : Math.max(0, totalUptime - CATCHUP_CAP_SECONDS);
+      const deltaSeconds = Math.min(CATCHUP_CAP_SECONDS, Math.max(0, totalUptime - lastAccrued));
+      const uptimeHours = Math.floor(deltaSeconds / 3600);
+      if (uptimeHours < 1) return; // remainder carries into the next run
+
+      // Preserve the sub-hour remainder: only mark WHOLE accrued hours
+      // consumed (not the full snapshot).
+      nodeDocs.push({ doc, newBaseline: lastAccrued + uptimeHours * 3600, uptimeHours });
+      proofRefs.push(db.collection("vision_nodes").doc(doc.id));
+      if (!d.onchain_wallet_set && d.wallet_address && walletTxsNeeded.length < maxWalletTxs) {
+        walletTxsNeeded.push({ nodeId: doc.id, wallet: d.wallet_address });
+      }
+    });
+
+    const proofSnaps = proofRefs.length > 0 ? await db.getAll(...proofRefs) : [];
+
+    nodeDocs.forEach(({ doc, uptimeHours }, i) => {
+      const d = doc.data();
+      const ps = proofSnaps[i]?.data()?.proof_stats || {};
+      const passed = ps.total_passed || 0;
+      const failed = ps.total_failed || 0;
+      const proofRateBp = passed + failed > 0 ? Math.round((passed / (passed + failed)) * 10000) : 0;
+
+      // PROOF-GATED weight: device base + bonus per PASSED storage proof.
+      // Deliberately NOT node.weight — that counts self-reported unverified
+      // holders and is trivially farmable (~200x). Passed proofs require
+      // actually storing bytes (Phase 2 verification), so they are the only
+      // storage signal an attacker can't fake.
+      const baseBp = ACCRUAL_BASE_BP[d.device_type] || 20;
+      const proofBonusBp = Math.min(10000, passed * 10); // +0.001x per passed proof, cap +1x
+      const weightBp = Math.max(10, Math.min(20000, baseBp + proofBonusBp));
+
+      entries.push({
+        nodeId: doc.id,
+        idBytes: nodeIdToBytes32(doc.id),
+        uptimeHours,
+        capacityGB: 0, // capacity reporting lands with the Phase 5 clients
+        proofRateBp,
+        weightBp,
+      });
+    });
+
+    const gasPrice = ethers.parseUnits("1", "gwei");
+    let walletsSet = 0;
+    let accrued = 0;
+    const txHashes = [];
+
+    // ── Wallet mapping: nonce-managed, sent without per-tx waits (5s
+    //    blocks make sequential confirmed txs impossibly slow) ───────────
+    let nonce = await provider.getTransactionCount(executor.address, "pending");
+    const walletTxs = [];
+    for (const w of walletTxsNeeded) {
+      try {
+        const tx = await rewardsContract.setNodeWallet(nodeIdToBytes32(w.nodeId), w.wallet, { gasLimit: 150000, gasPrice, nonce: nonce++ });
+        walletTxs.push({ tx, nodeId: w.nodeId });
+      } catch (e) {
+        console.warn(`[OnchainRewards] setNodeWallet send failed for ${w.nodeId}:`, e.message);
+      }
+    }
+    const walletReceipts = await Promise.allSettled(walletTxs.map((w) => w.tx.wait()));
+    const walletFlagBatch = db.batch();
+    walletReceipts.forEach((r, i) => {
+      if (r.status === "fulfilled") {
+        walletFlagBatch.set(db.collection("mobile_nodes").doc(walletTxs[i].nodeId), { onchain_wallet_set: true }, { merge: true });
+        walletsSet++;
+      }
+    });
+    if (walletsSet > 0) await walletFlagBatch.commit();
+
+    // ── Accrual: bookkeeping FIRST, then the tx. If the process dies
+    //    between the two, nodes are under-paid one window (safe) instead
+    //    of double-paid (pool-draining). On tx failure the baseline is
+    //    rolled back best-effort. ───────────────────────────────────────
+    for (let i = 0; i < entries.length; i += 50) {
+      const batch = entries.slice(i, i + 50);
+      const books = batch.map((e) => nodeDocs.find((n) => n.doc.id === e.nodeId)).filter(Boolean);
+
+      const fsBatch = db.batch();
+      for (const nd of books) {
+        fsBatch.set(db.collection("mobile_nodes").doc(nd.doc.id), {
+          last_onchain_accrual_at: Date.now(),
+          last_onchain_accrued_uptime_seconds: nd.newBaseline,
+        }, { merge: true });
+      }
+      try {
+        await fsBatch.commit();
+      } catch (e) {
+        console.error(`[OnchainRewards] bookkeeping commit failed, skipping batch ${i / 50}:`, e.message);
+        continue; // never send a tx whose consumption we failed to record
+      }
+
+      try {
+        const tx = await rewardsContract.accrueRewardBatch(
+          batch.map((e) => e.idBytes),
+          batch.map((e) => BigInt(e.uptimeHours)),
+          batch.map((e) => BigInt(e.capacityGB)),
+          batch.map((e) => BigInt(e.proofRateBp)),
+          batch.map((e) => BigInt(e.weightBp)),
+          { gasLimit: 3_000_000, gasPrice, nonce: nonce++ },
+        );
+        const receipt = await tx.wait();
+        txHashes.push(receipt.hash);
+        accrued += batch.length;
+      } catch (e) {
+        console.error(`[OnchainRewards] accrueRewardBatch failed (batch ${i / 50}), rolling back baselines:`, e.message);
+        // Roll back so the uptime isn't lost (best-effort)
+        const rollback = db.batch();
+        for (const nd of books) {
+          rollback.set(db.collection("mobile_nodes").doc(nd.doc.id), {
+            last_onchain_accrued_uptime_seconds: nd.newBaseline - nd.uptimeHours * 3600,
+          }, { merge: true });
+        }
+        await rollback.commit().catch((re) => console.error("[OnchainRewards] rollback failed:", re.message));
+      }
+    }
+
+    const lastDocId = nodesSnap.empty ? "" : nodesSnap.docs[nodesSnap.docs.length - 1].id;
+    const result = {
+      success: true,
+      executor_address: executor.address,
+      authorized,
+      pool_balance_vcn: Number(ethers.formatEther(poolBalance)),
+      active_nodes_total: activeCountAgg.data().count,
+      nodes_scanned: nodesSnap.size,
+      nodes_accrued: accrued,
+      wallets_mapped: walletsSet,
+      cursor_wrapped: wrappedCursor,
+      tx_hashes: txHashes,
+      run_ms: Date.now() - startedAt,
+    };
+    await statsRef.set({
+      last_run: result,
+      last_run_at: startedAt,
+      accrual_cursor: nodesSnap.size < maxNodes ? "" : lastDocId,
+    }, { merge: true });
+    console.log(`[OnchainRewards] accrued=${accrued}/${nodesSnap.size} (fleet ${result.active_nodes_total}) wallets=${walletsSet} pool=${result.pool_balance_vcn} VCN`);
+    return result;
+  } finally {
+    await lockRef.set({ locked_until: 0, released_at: Date.now() }, { merge: true }).catch(() => { });
+  }
+}
+
+// Daily on-chain accrual
+exports.storageRewardAccrualJob = onSchedule({
+  schedule: "every 24 hours",
+  memory: "512MiB",
+  timeoutSeconds: 540,
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async () => {
+  await runStorageRewardAccrual({ maxNodes: 500 });
+});
 
 // =============================================================================
 // UNIFIED PAYMASTER - Single entry point for all gasless transfers
@@ -9873,6 +10116,7 @@ exports.agentGateway = onRequest({
     const skipAgentAuth = [
       "mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat",
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
+      "mobile_node.claim_onchain", "storage_rewards.status", "storage_rewards.run_accrual",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
       "storage_node.fetch_chunk", "chunk.proof_challenge", "chunk.proof_response",
@@ -14073,6 +14317,121 @@ exports.agentGateway = onRequest({
     }
 
     // --- mobile_node.submit_attestation ---
+    // --- storage_rewards.status (public read-only) ---
+    // On-chain reward economy health: pool balance, executor auth, last run
+    if (action === "storage_rewards.status") {
+      try {
+        const provider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+        const rewardsContract = new ethers.Contract(STORAGE_REWARDS_ADDRESS, STORAGE_REWARDS_ABI, provider);
+        const [poolBalance, distributed, totalNodes] = await rewardsContract.getPoolStats();
+        const statsSnap = await db.collection("system_stats").doc("onchain_rewards").get();
+        return res.json({
+          success: true,
+          contract: STORAGE_REWARDS_ADDRESS,
+          pool_balance_vcn: Number(ethers.formatEther(poolBalance)),
+          total_distributed_vcn: Number(ethers.formatEther(distributed)),
+          rewarded_nodes: Number(totalNodes),
+          last_accrual: statsSnap.data()?.last_run || null,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Rewards status failed: ${e.message}` });
+      }
+    }
+
+    // --- storage_rewards.run_accrual (admin only) ---
+    if (action === "storage_rewards.run_accrual") {
+      try {
+        if (!firebaseIdToken) {
+          return res.status(401).json({ error: "Admin Firebase auth token required" });
+        }
+        const adminUser = await authenticateFirebaseUser(firebaseIdToken);
+        const adminEmails = ["sangky94@gmail.com", "jays@visai.io"];
+        if (!adminUser || !adminEmails.includes((adminUser.email || "").toLowerCase())) {
+          return res.status(403).json({ error: "Not an admin" });
+        }
+        // Gateway timeout is 120s — keep runs small; the daily job covers
+        // the fleet via cursor pagination.
+        const result = await runStorageRewardAccrual({
+          maxNodes: Math.min(parseInt(body.max_nodes, 10) || 100, 100),
+          maxWalletTxs: 20,
+        });
+        return res.status(result.success ? 200 : 500).json(result);
+      } catch (e) {
+        return res.status(500).json({ error: `Accrual failed: ${e.message}` });
+      }
+    }
+
+    // --- mobile_node.claim_onchain ---
+    // Claim accrued on-chain rewards: pays native VCN from the StorageRewards
+    // pool to the node's wallet via claimReward(nodeId).
+    if (action === "mobile_node.claim_onchain") {
+      try {
+        const mnApiKey = apiKeyParam;
+        if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
+          return res.status(401).json({ error: "Invalid mobile node API key" });
+        }
+        const mnSnap = await db.collection("mobile_nodes")
+          .where("api_key", "==", mnApiKey)
+          .limit(1)
+          .get();
+        if (mnSnap.empty) {
+          return res.status(401).json({ error: "Mobile node not found" });
+        }
+        const mnDoc = mnSnap.docs[0];
+        const mn = mnDoc.data();
+        if (!mn.wallet_address) {
+          return res.status(400).json({ error: "Node has no wallet address" });
+        }
+
+        const executorPk = process.env.VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
+        if (!executorPk) {
+          return res.status(500).json({ error: "Executor key not configured" });
+        }
+        const provider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+        const executor = new ethers.Wallet(executorPk, provider);
+        const rewardsContract = new ethers.Contract(STORAGE_REWARDS_ADDRESS, STORAGE_REWARDS_ABI, executor);
+        const idBytes = nodeIdToBytes32(mnDoc.id);
+
+        const pending = await rewardsContract.calculatePendingReward(idBytes);
+        if (pending === 0n) {
+          return res.status(400).json({ error: "No on-chain rewards pending" });
+        }
+        const [poolBalance] = await rewardsContract.getPoolStats();
+        if (poolBalance < pending) {
+          return res.status(503).json({
+            error: "Reward pool underfunded — try again later",
+            pending_vcn: Number(ethers.formatEther(pending)),
+            pool_balance_vcn: Number(ethers.formatEther(poolBalance)),
+          });
+        }
+
+        const tx = await rewardsContract.claimReward(idBytes, { gasLimit: 200000, gasPrice: ethers.parseUnits("1", "gwei") });
+        const receipt = await tx.wait();
+        const amountVcn = Number(ethers.formatEther(pending));
+
+        await mnDoc.ref.collection("claims").add({
+          amount: amountVcn.toFixed(6),
+          tx_hash: receipt.hash,
+          source: "onchain_storage_rewards",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await mnDoc.ref.update({
+          last_onchain_claim_at: Date.now(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`[OnchainRewards] Claimed ${amountVcn} VCN for ${mnDoc.id} | tx: ${receipt.hash}`);
+        return res.json({
+          success: true,
+          claimed_vcn: amountVcn,
+          tx_hash: receipt.hash,
+          paid_to: mn.wallet_address,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `On-chain claim failed: ${e.message}` });
+      }
+    }
+
     if (action === "mobile_node.submit_attestation") {
       try {
         const mnApiKey = apiKeyParam;
