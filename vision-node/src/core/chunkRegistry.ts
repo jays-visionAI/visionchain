@@ -269,13 +269,15 @@ class ChunkRegistryClient {
                         continue;
                     }
 
-                    // Read the requested bytes at offset and hash them
+                    // Read the requested bytes at offset and hash them.
+                    // Phase 2 proof spec:
+                    //   proof_hash = sha256(utf8(challenge_id) || chunk_bytes[offset .. offset+read_bytes])
                     const start = Math.min(challenge.offset, chunk.length - 1);
                     const end = Math.min(start + challenge.read_bytes, chunk.length);
                     const slice = chunk.subarray(start, end);
 
                     const proofHash = createHash('sha256')
-                        .update(slice)
+                        .update(Buffer.concat([Buffer.from(challenge.challenge_id, 'utf8'), slice]))
                         .digest('hex');
 
                     responses.push({

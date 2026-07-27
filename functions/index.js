@@ -9875,6 +9875,8 @@ exports.agentGateway = onRequest({
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
+      "storage_node.fetch_chunk", "chunk.proof_challenge", "chunk.proof_response",
+      "chunk.status", "chunk.fetch",
       "chunk.register", "chunk.assignments", "chunk.stored", "chunk.fetch_staging",
       "reward_policy.get_active", "reward_policy.list", "reward_policy.create", "reward_policy.activate",
       "reward_policy.update", "reward_policy.deactivate",
@@ -9925,6 +9927,47 @@ exports.agentGateway = onRequest({
           lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => { });
       }
+    }
+
+    // === STORAGE NODE AUTH (Phase 3) ===
+    // storage_node.* / chunk.* actions previously trusted a client-supplied
+    // node_id. Now they require a mobile-node api_key (vcn_mn_) and the
+    // canonical node identity is derived server-side from the key — the
+    // client's node_id is overwritten, killing impersonation/griefing.
+    const STORAGE_NODE_ACTIONS = new Set([
+      "storage_node.register_chunks", "chunk.register",
+      "storage_node.get_assignments", "chunk.assignments",
+      "storage_node.chunk_stored", "chunk.stored",
+      "storage_node.proof_challenge", "chunk.proof_challenge",
+      "storage_node.proof_response", "chunk.proof_response",
+      "storage_node.chunk_status", "chunk.status",
+      "storage_node.fetch_chunk", "chunk.fetch",
+      "chunk.fetch_staging",
+      // NOTE: chunk.locations intentionally excluded — its callers are
+      // downloaders (disk clients), not storage nodes.
+    ]);
+    if (STORAGE_NODE_ACTIONS.has(action)) {
+      const snKey = apiKeyParam;
+      if (!snKey || !String(snKey).startsWith("vcn_mn_")) {
+        return res.status(401).json({ error: "Storage actions require a node api_key (vcn_mn_...)" });
+      }
+      const snSnap = await db.collection("mobile_nodes")
+        .where("api_key", "==", snKey)
+        .limit(1)
+        .get();
+      if (snSnap.empty) {
+        return res.status(401).json({ error: "Unknown node api_key" });
+      }
+      const snDoc = snSnap.docs[0];
+      if (snDoc.data().status === "banned") {
+        return res.status(403).json({ error: "Node is banned" });
+      }
+      // Canonical identity: ignore whatever node_id the client sent
+      if (body.node_id && body.node_id !== snDoc.id) {
+        console.warn(`[Storage Auth] node_id mismatch: claimed ${body.node_id}, key resolves ${snDoc.id}`);
+      }
+      body.node_id = snDoc.id;
+      body._storage_node_email = snDoc.data().email || "";
     }
 
     // === API FEE DEDUCTION MIDDLEWARE ===
@@ -16002,27 +16045,60 @@ exports.agentGateway = onRequest({
         // Phase 2: self-reporting must not overwrite proof state. Existing
         // holder docs keep their status (a suspended holder stays suspended)
         // and last_verified is ONLY ever set by a passed storage proof.
-        const capped = chunks.slice(0, 100).filter((c) => c && c.hash);
+        // Dedupe client-supplied hashes so one call can't double-increment
+        const seenHashes = new Set();
+        const capped = chunks.slice(0, 100).filter((c) => {
+          if (!c || !c.hash || seenHashes.has(c.hash)) return false;
+          seenHashes.add(c.hash);
+          return true;
+        });
         const holderRefs = capped.map((c) =>
           db.collection("chunk_registry").doc(c.hash).collection("holders").doc(nodeId));
-        const existingHolders = holderRefs.length > 0 ? await db.getAll(...holderRefs) : [];
+        const chunkRefs = capped.map((c) => db.collection("chunk_registry").doc(c.hash));
+        const [existingHolders, existingChunks] = await Promise.all([
+          holderRefs.length > 0 ? db.getAll(...holderRefs) : [],
+          chunkRefs.length > 0 ? db.getAll(...chunkRefs) : [],
+        ]);
 
         capped.forEach((chunk, i) => {
           const chunkHash = chunk.hash;
           const fileKey = chunk.file_key;
 
-          // Register in chunk_registry collection
-          const chunkRef = db.collection("chunk_registry").doc(chunkHash);
-          batch.set(chunkRef, {
-            hash: chunkHash,
-            file_key: fileKey || "",
-            size: chunk.size || 0,
-            index: chunk.index || 0,
-            updated_at: now,
-          }, { merge: true });
+          const chunkRef = chunkRefs[i];
+          const isNewHolder = !(existingHolders[i] && existingHolders[i].exists);
+          const chunkSnap = existingChunks[i];
+          const chunkExists = chunkSnap && chunkSnap.exists;
+          const priorCount = chunkExists ? chunkSnap.data().replica_count : undefined;
+
+          if (!chunkExists) {
+            // First sighting of this chunk — this node is replica #1
+            batch.set(chunkRef, {
+              hash: chunkHash,
+              file_key: fileKey || "",
+              size: chunk.size || 0,
+              index: chunk.index || 0,
+              updated_at: now,
+              replica_count: 1,
+              assignable: false, // no staging bytes known — monitor will flip if fetchable
+            }, { merge: true });
+          } else if (isNewHolder && typeof priorCount === "number") {
+            // Known chunk gains a holder — safe to increment
+            const newCount = priorCount + 1;
+            batch.set(chunkRef, {
+              updated_at: now,
+              replica_count: admin.firestore.FieldValue.increment(1),
+              ...(newCount >= 3 ? { assignable: false } : {}),
+            }, { merge: true });
+          } else if (isNewHolder) {
+            // Legacy doc without replica_count: DON'T increment (it would
+            // initialize to 1 and flood the queue with well-replicated
+            // chunks) — the replicationMonitor recounts it properly.
+            batch.set(chunkRef, { updated_at: now }, { merge: true });
+          }
+          // Existing holder + existing doc: no registry write (hot-doc relief)
 
           const holderRef = holderRefs[i];
-          if (existingHolders[i] && existingHolders[i].exists) {
+          if (!isNewHolder) {
             batch.set(holderRef, { last_seen_at: now }, { merge: true });
           } else {
             batch.set(holderRef, {
@@ -16060,32 +16136,40 @@ exports.agentGateway = onRequest({
           return res.status(400).json({ error: "node_id required" });
         }
 
-        // Find under-replicated chunks (less than 3 holders)
+        // Phase 3: single equality query over the maintained `assignable`
+        // flag (true = replicas < 3 AND staging bytes still fetchable).
+        // Fetch a wider window and shuffle so the fleet doesn't thunder-herd
+        // the same deterministic top of the queue. Dead chunks self-evict:
+        // a 404 on fetch flips assignable=false. The replicationMonitor
+        // backfills legacy docs and heals drift — no per-request fallback
+        // scan (the old empty-queue fallback burned 100 reads per node per
+        // cycle in the healthy steady state).
         const underReplicated = [];
-        const chunksSnap = await db.collection("chunk_registry")
-          .orderBy("updated_at", "desc")
-          .limit(100)
+        const urSnap = await db.collection("chunk_registry")
+          .where("assignable", "==", true)
+          .limit(40)
           .get();
 
-        for (const doc of chunksSnap.docs) {
-          const holdersSnap = await doc.ref.collection("holders")
-            .where("status", "==", "active")
-            .get();
-
-          if (holdersSnap.size < 3) {
-            // Check if this node already holds it
-            const alreadyHolds = holdersSnap.docs.some((h) => h.id === nodeId);
-            if (!alreadyHolds) {
-              underReplicated.push({
-                hash: doc.id,
-                file_key: doc.data().file_key,
-                size: doc.data().size,
-                current_replicas: holdersSnap.size,
-                target_replicas: 3,
-              });
-            }
-          }
-          if (underReplicated.length >= 20) break;
+        if (!urSnap.empty) {
+          const shuffled = urSnap.docs
+            .map((d) => ({ d, r: Math.random() }))
+            .sort((a, b) => a.r - b.r)
+            .map((x) => x.d);
+          // Exclude chunks this node already holds — one batched read
+          const holderRefs = shuffled.map((d) => d.ref.collection("holders").doc(nodeId));
+          const holderSnaps = await db.getAll(...holderRefs);
+          shuffled.forEach((doc, i) => {
+            if (underReplicated.length >= 10) return;
+            const h = holderSnaps[i];
+            if (h.exists && h.data().status === "active") return; // already holds
+            underReplicated.push({
+              hash: doc.id,
+              file_key: doc.data().file_key,
+              size: doc.data().size,
+              current_replicas: doc.data().replica_count || 0,
+              target_replicas: 3,
+            });
+          });
         }
 
         return res.json({
@@ -16116,8 +16200,9 @@ exports.agentGateway = onRequest({
 
         // Phase 2: don't resurrect suspended holders or fake verification —
         // last_verified is set only by a passed storage proof.
-        const existingHolder = await holderRef.get();
-        if (existingHolder.exists) {
+        const [existingHolder, chunkSnap] = await Promise.all([holderRef.get(), chunkRef.get()]);
+        const isNewHolder = !existingHolder.exists;
+        if (!isNewHolder) {
           await holderRef.set({ last_seen_at: now, size: body.size || 0 }, { merge: true });
         } else {
           await holderRef.set({
@@ -16131,17 +16216,37 @@ exports.agentGateway = onRequest({
           }, { merge: true });
         }
 
-        // Count total holders
-        const holdersSnap = await chunkRef.collection("holders")
-          .where("status", "==", "active")
-          .get();
+        // Phase 3: maintain the denormalized replica count without the
+        // O(holders) recount on every confirmation (hot-doc + read blowup at
+        // scale). Increment when the count is known; recount once for legacy
+        // docs that never had the field.
+        const priorCount = chunkSnap.exists ? chunkSnap.data().replica_count : undefined;
+        let currentReplicas;
+        if (isNewHolder && typeof priorCount === "number") {
+          currentReplicas = priorCount + 1;
+          await chunkRef.set({
+            replica_count: admin.firestore.FieldValue.increment(1),
+            ...(currentReplicas >= 3 ? { assignable: false } : {}),
+          }, { merge: true });
+        } else if (typeof priorCount === "number") {
+          currentReplicas = priorCount;
+        } else {
+          const holdersSnap = await chunkRef.collection("holders")
+            .where("status", "==", "active")
+            .get();
+          currentReplicas = holdersSnap.size;
+          await chunkRef.set({
+            replica_count: currentReplicas,
+            ...(currentReplicas >= 3 ? { assignable: false } : {}),
+          }, { merge: true });
+        }
 
         return res.json({
           success: true,
           hash,
-          current_replicas: holdersSnap.size,
+          current_replicas: currentReplicas,
           target_replicas: 3,
-          fully_replicated: holdersSnap.size >= 3,
+          fully_replicated: currentReplicas >= 3,
         });
       } catch (e) {
         console.error("[Chunk Registry] chunk_stored error:", e);
@@ -16177,6 +16282,10 @@ exports.agentGateway = onRequest({
 
         const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
         if (!stagingDoc.exists) {
+          // Phase 3: staging is gone — this chunk can never be fetched again,
+          // so evict it from the assignment queue.
+          await db.collection("chunk_registry").doc(hash)
+            .set({ assignable: false, staging_missing: true }, { merge: true }).catch(() => { });
           return res.status(404).json({ error: "Chunk not found in staging", hash });
         }
 
@@ -16399,6 +16508,15 @@ exports.agentGateway = onRequest({
             if (fails >= 3 && enforcement === "enforce") {
               update.status = "inactive";
               update.suspended_reason = "proof_failures";
+              // Phase 3: keep the denormalized replica count honest so the
+              // assignment queue re-replicates this chunk (only if its
+              // staging bytes are still fetchable).
+              const suspChunkRef = db.collection("chunk_registry").doc(challenge.chunk_hash);
+              const suspChunkSnap = await suspChunkRef.get();
+              await suspChunkRef.set({
+                replica_count: admin.firestore.FieldValue.increment(-1),
+                ...(suspChunkSnap.data()?.staging_missing ? {} : { assignable: true }),
+              }, { merge: true });
             }
             await holderRef.set(update, { merge: true });
             results.push({ challenge_id: cId, status: "failed", consecutive_fails: fails, enforcement });
@@ -16516,6 +16634,9 @@ exports.agentGateway = onRequest({
         // Fetch from staging_chunks
         const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
         if (!stagingDoc.exists || !stagingDoc.data().data) {
+          // Phase 3: unfetchable — evict from the assignment queue
+          await db.collection("chunk_registry").doc(hash)
+            .set({ assignable: false, staging_missing: true }, { merge: true }).catch(() => { });
           return res.status(404).json({ error: "Chunk not found in staging" });
         }
 
@@ -16733,6 +16854,9 @@ exports.agentGateway = onRequest({
             size: chunk.length,
             file_key: `${tenantEmail}/${fileName}`,
             replicas: 0,
+            // Phase 3: fields the assignment queue actually queries
+            replica_count: 0,
+            assignable: true,
             created_at: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
           // Phase 2: precompute private storage-proof commitments while bytes are in hand
@@ -23945,12 +24069,15 @@ exports.cleanupStagingChunks = onSchedule({ schedule: "every 24 hours", memory: 
       const hasCommitments = commitSnap.exists &&
         Array.isArray(commitSnap.data().entries) && commitSnap.data().entries.length > 0;
 
-      if (holdersSnap.size >= 2 && hasCommitments) {
-        // Safe to delete from staging - enough replicas + proof commitments exist
+      // Phase 3: staging is the ONLY replication source (no peer fetch yet),
+      // so keep it until the full replication target (3) is met — deleting at
+      // 2 made the third replica permanently impossible.
+      if (holdersSnap.size >= 3 && hasCommitments) {
+        // Safe to delete from staging - target replicas + proof commitments exist
         batch.delete(chunkDoc.ref);
         batchOps++;
         deleted++;
-      } else if (holdersSnap.size >= 2 && !hasCommitments) {
+      } else if (holdersSnap.size >= 3 && !hasCommitments) {
         // Backfill commitments now, delete on a later run
         const data = chunkDoc.data().data;
         if (data) {
@@ -23984,6 +24111,98 @@ exports.cleanupStagingChunks = onSchedule({ schedule: "every 24 hours", memory: 
   } catch (err) {
     console.error("[ChunkCleanup] Error:", err.message);
   }
+});
+
+// ── Phase 3: Replication monitor ─────────────────────────────────────────
+// Pages through chunk_registry recomputing the denormalized replica_count
+// from active holders (backfills pre-Phase3 docs, heals drift) and records
+// a fleet-health summary. Cursor persists across runs.
+exports.replicationMonitor = onSchedule({ schedule: "every 6 hours", memory: "512MiB", timeoutSeconds: 300 }, async () => {
+  const PAGE = 200;
+  const TIME_BUDGET_MS = 240 * 1000; // leave headroom under the 300s timeout
+  const startedAt = Date.now();
+  const cursorRef = db.collection("system_config").doc("replication_monitor");
+  const cursorSnap = await cursorRef.get();
+  let cursor = cursorSnap.data()?.last_doc_id || "";
+
+  let scanned = 0;
+  let underReplicated = 0;
+  let zeroReplica = 0;
+  let healed = 0;
+  let wrapped = false;
+
+  // Existence probe without downloading the (large) staging payload
+  const stagingExists = async (hash) => {
+    const s = await db.collection("staging_chunks")
+      .where(admin.firestore.FieldPath.documentId(), "==", hash)
+      .select()
+      .get();
+    return !s.empty;
+  };
+
+  while (Date.now() - startedAt < TIME_BUDGET_MS) {
+    let query = db.collection("chunk_registry")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(PAGE);
+    if (cursor) query = query.startAfter(cursor);
+
+    const snap = await query.get();
+    if (snap.empty) { wrapped = true; break; }
+
+    // Parallel holder counts + staging probes for the whole page
+    const results = await Promise.all(snap.docs.map(async (doc) => {
+      const holdersSnap = await doc.ref.collection("holders")
+        .where("status", "==", "active")
+        .get();
+      const actual = holdersSnap.size;
+      const needsStaging = actual < 3;
+      const fetchable = needsStaging ? await stagingExists(doc.id) : false;
+      return { doc, actual, fetchable };
+    }));
+
+    const writes = [];
+    for (const { doc, actual, fetchable } of results) {
+      scanned++;
+      if (actual < 3) underReplicated++;
+      if (actual === 0) zeroReplica++;
+
+      const d = doc.data();
+      const wantAssignable = actual < 3 && fetchable;
+      const drifted = d.replica_count !== actual ||
+        d.under_replicated !== (actual < 3) ||
+        (d.assignable === true) !== wantAssignable;
+      if (drifted) {
+        healed++;
+        writes.push(doc.ref.set({
+          replica_count: actual,
+          under_replicated: actual < 3,
+          assignable: wantAssignable,
+          ...(actual < 3 && !fetchable ? { staging_missing: true } : {}),
+        }, { merge: true }));
+      }
+    }
+    await Promise.all(writes);
+
+    cursor = snap.docs[snap.docs.length - 1].id;
+    if (snap.size < PAGE) { wrapped = true; break; }
+  }
+
+  await cursorRef.set({
+    last_doc_id: wrapped ? "" : cursor,
+    ...(wrapped ? { wrapped_at: Date.now() } : {}),
+  }, { merge: true });
+
+  await db.collection("system_stats").doc("replication").set({
+    last_run_at: Date.now(),
+    scanned,
+    under_replicated: underReplicated,
+    zero_replica: zeroReplica,
+    counts_healed: healed,
+    cursor_wrapped: wrapped,
+    run_ms: Date.now() - startedAt,
+  }, { merge: true });
+
+  console.log(`[ReplicationMonitor] scanned=${scanned} under=${underReplicated} zero=${zeroReplica} healed=${healed} wrapped=${wrapped}`);
 });
 
 // Daily Cron Job for Disk Subscriptions
@@ -24440,6 +24659,9 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540,
         file_key: fileKey,
         size: chunkInfo.size,
         index: chunkInfo.index,
+        // Phase 3: enter the assignment queue
+        replica_count: 0,
+        assignable: true,
         updated_at: Date.now(),
       }, { merge: true });
       opCount++;

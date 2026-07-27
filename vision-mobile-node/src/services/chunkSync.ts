@@ -109,6 +109,7 @@ class ChunkSyncService {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'chunk.register',
+                        api_key: this.apiKey,
                         node_id: this.nodeId,
                         chunks: batch,
                     }),
@@ -135,6 +136,7 @@ class ChunkSyncService {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'chunk.assignments',
+                    api_key: this.apiKey,
                     node_id: this.nodeId,
                     capacity: remainingCapacity,
                 }),
@@ -154,12 +156,13 @@ class ChunkSyncService {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             action: 'chunk.fetch_staging',
+                            api_key: this.apiKey,
                             hash: a.hash,
                         }),
                     });
 
                     if (chunkResp.ok) {
-                        const chunkData = (await chunkResp.json()) as { data?: string };
+                        const chunkData = (await chunkResp.json()) as { data?: string; size?: number };
                         if (chunkData.data) {
                             const stored = await chunkStorage.storeChunk(
                                 a.hash,
@@ -170,6 +173,19 @@ class ChunkSyncService {
                             if (stored) {
                                 this.stats.chunksFetched++;
                                 console.log(`[ChunkSync] Fetched chunk: ${a.hash.slice(0, 12)}...`);
+                                // Confirm storage so the registry's replica
+                                // count includes this mobile replica
+                                await fetch(getApiUrl(), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'chunk.stored',
+                                        api_key: this.apiKey,
+                                        node_id: this.nodeId,
+                                        hash: a.hash,
+                                        size: chunkData.size || 0,
+                                    }),
+                                }).catch(() => { /* non-critical */ });
                             }
                         }
                     }
