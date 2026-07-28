@@ -916,10 +916,12 @@ async function runStorageRewardAccrual({ maxNodes = 300, maxWalletTxs = 100 } = 
       const proofBonusBp = Math.min(10000, passed * 10); // +0.001x per passed proof, cap +1x
       const weightBp = Math.max(10, Math.min(20000, baseBp + proofBonusBp));
 
-      // Phase 5: capacity bonus from heartbeat-reported allocation, hard-
-      // capped at 20 GB (+20%) because the figure is self-reported. Raising
-      // the cap requires verified-bytes gating (Phase 6).
-      const capacityGB = Math.min(20, Math.floor(d.storage_allocated_gb || 0));
+      // Phase 6: capacity bonus gated by VERIFIED bytes. Self-reported
+      // allocation counts up to a cap of 20 GB base + 4x the bytes this node
+      // has actually proven it stores (Phase 2 verified proofs), max 500 GB.
+      const verifiedGB = (ps.verified_bytes || 0) / (1024 ** 3);
+      const capacityCap = Math.min(500, 20 + Math.floor(verifiedGB * 4));
+      const capacityGB = Math.min(capacityCap, Math.floor(d.storage_allocated_gb || 0));
 
       entries.push({
         nodeId: doc.id,
@@ -1039,6 +1041,147 @@ exports.storageRewardAccrualJob = onSchedule({
   secrets: ["VCN_EXECUTOR_PK"],
 }, async () => {
   await runStorageRewardAccrual({ maxNodes: 500 });
+});
+
+// ── Phase 6: fleet health observability ─────────────────────────────────
+// Aggregates node fleet / proofs / replication / rewards into a single
+// system_stats/fleet_health doc. Powers the admin Storage Fleet tab and
+// the enforcement-readiness decision.
+const UPDATED_CLIENT_MIN = { major: 1, minor: 1 }; // proof-spec clients: >=1.1.0
+
+async function computeFleetHealth() {
+  const startedAt = Date.now();
+
+  // Fleet composition (field-masked scan, capped)
+  const nodesSnap = await db.collection("mobile_nodes")
+    .where("status", "==", "active")
+    .select("device_type", "client_version", "storage_allocated_gb", "last_heartbeat")
+    .limit(2000)
+    .get();
+
+  const byDevice = {};
+  const byVersion = {};
+  let updatedClients = 0;
+  let allocatedGbTotal = 0;
+  let heartbeat24h = 0;
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  nodesSnap.docs.forEach((doc) => {
+    const d = doc.data();
+    byDevice[d.device_type || "unknown"] = (byDevice[d.device_type || "unknown"] || 0) + 1;
+    const v = d.client_version || "unknown";
+    byVersion[v] = (byVersion[v] || 0) + 1;
+    const m = /^(\d+)\.(\d+)/.exec(v);
+    if (m && (parseInt(m[1], 10) > UPDATED_CLIENT_MIN.major ||
+      (parseInt(m[1], 10) === UPDATED_CLIENT_MIN.major && parseInt(m[2], 10) >= UPDATED_CLIENT_MIN.minor))) {
+      updatedClients++;
+    }
+    allocatedGbTotal += d.storage_allocated_gb || 0;
+    const hb = d.last_heartbeat?.toMillis ? d.last_heartbeat.toMillis() : 0;
+    if (hb > dayAgo) heartbeat24h++;
+  });
+
+  // Proof outcomes, last 24h (single range query, statuses counted in-memory).
+  // Unanswered-but-expired challenges count as EVADED — ignoring a challenge
+  // must never look better than failing it.
+  const proofsSnap = await db.collection("proof_challenges")
+    .where("created_at", ">", dayAgo)
+    .select("status", "expires_at")
+    .limit(5000)
+    .get();
+  const proofCounts = { pending: 0, verified: 0, failed: 0, expired: 0, abandoned: 0, other: 0 };
+  const abandonedRefs = [];
+  proofsSnap.docs.forEach((doc) => {
+    const d = doc.data();
+    if (d.status === "pending" && (d.expires_at || 0) < Date.now()) {
+      proofCounts.abandoned++;
+      if (abandonedRefs.length < 400) abandonedRefs.push(doc.ref);
+    } else if (proofCounts[d.status] !== undefined) {
+      proofCounts[d.status]++;
+    } else {
+      proofCounts.other++;
+    }
+  });
+  // Bounded sweep: persist abandoned ones as expired so they stop polluting
+  // the pending pool
+  if (abandonedRefs.length > 0) {
+    const sweepBatch = db.batch();
+    abandonedRefs.forEach((r) => sweepBatch.update(r, { status: "expired", expired_reason: "unanswered" }));
+    await sweepBatch.commit().catch(() => { });
+  }
+  const judged = proofCounts.verified + proofCounts.failed + proofCounts.abandoned;
+  const proofPassRate = judged > 0 ? proofCounts.verified / judged : null;
+
+  // Enforcement config + readiness
+  const enfSnap = await db.collection("system_config").doc("storage_proofs").get();
+  const enforcement = enfSnap.data()?.enforcement === "enforce" ? "enforce" : "observe";
+  const updatedPct = nodesSnap.size > 0 ? updatedClients / nodesSnap.size : 0;
+  const fleetTruncated = nodesSnap.size >= 2000;
+  const enforceReady = !fleetTruncated &&
+    updatedPct >= 0.8 &&
+    judged >= 20 &&
+    proofPassRate !== null && proofPassRate >= 0.9;
+
+  // Replication + rewards summaries (already maintained by their monitors)
+  const [replSnap, rewardsSnap, stagingCount, registryCount] = await Promise.all([
+    db.collection("system_stats").doc("replication").get(),
+    db.collection("system_stats").doc("onchain_rewards").get(),
+    db.collection("staging_chunks").count().get(),
+    db.collection("chunk_registry").count().get(),
+  ]);
+
+  // Live pool balance (read-only RPC)
+  let poolBalanceVcn = null;
+  try {
+    const provider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+    const rc = new ethers.Contract(STORAGE_REWARDS_ADDRESS, STORAGE_REWARDS_ABI, provider);
+    const [pool] = await rc.getPoolStats();
+    poolBalanceVcn = Number(ethers.formatEther(pool));
+  } catch (e) { /* keep null */ }
+
+  const health = {
+    computed_at: startedAt,
+    fleet: {
+      active_nodes: nodesSnap.size,
+      truncated: fleetTruncated,
+      heartbeat_24h: heartbeat24h,
+      by_device: byDevice,
+      by_version: byVersion,
+      allocated_gb_total: Math.round(allocatedGbTotal),
+    },
+    proofs_24h: {
+      ...proofCounts,
+      judged,
+      pass_rate: proofPassRate,
+    },
+    enforcement: {
+      mode: enforcement,
+      updated_client_pct: Math.round(updatedPct * 100),
+      ready_to_enforce: enforceReady,
+      criteria: ">=80% clients on 1.1.0+, >=90% pass rate over >=20 judged proofs incl. abandoned (24h)",
+    },
+    replication: replSnap.data() || null,
+    onchain_rewards: {
+      pool_balance_vcn: poolBalanceVcn,
+      last_run: rewardsSnap.data()?.last_run || null,
+    },
+    storage: {
+      staging_chunks: stagingCount.data().count,
+      registry_chunks: registryCount.data().count,
+    },
+    compute_ms: Date.now() - startedAt,
+  };
+
+  await db.collection("system_stats").doc("fleet_health").set(health);
+  return health;
+}
+
+exports.nodeFleetHealthMonitor = onSchedule({
+  schedule: "every 6 hours",
+  memory: "512MiB",
+  timeoutSeconds: 300,
+}, async () => {
+  const h = await computeFleetHealth();
+  console.log(`[FleetHealth] nodes=${h.fleet.active_nodes} passRate=${h.proofs_24h.pass_rate} enforceReady=${h.enforcement.ready_to_enforce}`);
 });
 
 // =============================================================================
@@ -10122,6 +10265,7 @@ exports.agentGateway = onRequest({
       "mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat",
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
       "mobile_node.claim_onchain", "storage_rewards.status", "storage_rewards.run_accrual",
+      "node_fleet.health",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
       "storage_node.fetch_chunk", "chunk.proof_challenge", "chunk.proof_response",
@@ -14363,6 +14507,38 @@ exports.agentGateway = onRequest({
     }
 
     // --- mobile_node.submit_attestation ---
+    // --- node_fleet.health (public read-only aggregate) ---
+    // Serves the cached fleet-health doc; computes once on demand if absent.
+    if (action === "node_fleet.health") {
+      try {
+        const fhSnap = await db.collection("system_stats").doc("fleet_health").get();
+        let health = fhSnap.exists ? fhSnap.data() : null;
+        if (!health) {
+          // Cold cache: this endpoint is public — the full compute is a
+          // ~7k-read scan, so serialize behind a lease and 503 everyone else
+          // instead of letting a request burst stampede N parallel scans.
+          const fhLockRef = db.collection("system_config").doc("fleet_health_lock");
+          const gotFhLock = await db.runTransaction(async (t) => {
+            const s = await t.get(fhLockRef);
+            if (Date.now() < (s.data()?.locked_until || 0)) return false;
+            t.set(fhLockRef, { locked_until: Date.now() + 2 * 60 * 1000 });
+            return true;
+          }).catch(() => false);
+          if (!gotFhLock) {
+            return res.status(503).json({ error: "Fleet health warming up, retry shortly" });
+          }
+          try {
+            health = await computeFleetHealth();
+          } finally {
+            await fhLockRef.set({ locked_until: 0 }, { merge: true }).catch(() => { });
+          }
+        }
+        return res.json({ success: true, health });
+      } catch (e) {
+        return res.status(500).json({ error: `Fleet health failed: ${e.message}` });
+      }
+    }
+
     // --- storage_rewards.status (public read-only) ---
     // On-chain reward economy health: pool balance, executor auth, last run
     if (action === "storage_rewards.status") {
@@ -16747,6 +16923,12 @@ exports.agentGateway = onRequest({
             retry_after_seconds: Math.ceil((lastIssued + CHALLENGE_COOLDOWN_MS - Date.now()) / 1000),
           });
         }
+        // Stamp the cooldown IMMEDIATELY (not after issuing) so two
+        // concurrent requests can't both pass the check and mint duplicate
+        // challenges for the same chunk.
+        await nodeStatsRef.set({
+          proof_stats: { last_challenge_issued_at: Date.now() },
+        }, { merge: true });
 
         // Find random chunks this node holds
         const holdingsSnap = await db.collectionGroup("holders")
@@ -16807,10 +16989,6 @@ exports.agentGateway = onRequest({
             read_bytes: PROOF_READ_BYTES,
           });
         }
-
-        await nodeStatsRef.set({
-          proof_stats: { last_challenge_issued_at: Date.now() },
-        }, { merge: true });
 
         return res.json({
           success: true,
@@ -16903,23 +17081,59 @@ exports.agentGateway = onRequest({
 
           const answer = String(pHash).toLowerCase().replace(/^0x/, "");
           if (answer === challenge.expected_proof) {
-            await challengeRef.update({
-              status: "verified",
-              proof_hash: answer,
-              verified_at: Date.now(),
+            // Phase 6: single transaction — atomic replay guard (pending ->
+            // verified), holder update, and once-per-chunk verified-bytes
+            // credit. Parallel duplicate submissions cannot double count.
+            const chunkMetaRef = db.collection("chunk_registry").doc(challenge.chunk_hash);
+            const visionNodeRef = db.collection("vision_nodes").doc(nodeId);
+            const txOutcome = await db.runTransaction(async (t) => {
+              const chSnap = await t.get(challengeRef);
+              if (chSnap.data()?.status !== "pending") return { won: false };
+              const hSnap = await t.get(holderRef);
+              const alreadyCounted = !!hSnap.data()?.verified_bytes_counted;
+              let chunkSize = 0;
+              if (!alreadyCounted) {
+                const cSnap = await t.get(chunkMetaRef);
+                chunkSize = cSnap.data()?.size || 0;
+              }
+              t.update(challengeRef, { status: "verified", proof_hash: answer, verified_at: Date.now() });
+              t.set(holderRef, {
+                last_verified: Date.now(),
+                consecutive_proof_fails: 0,
+                verified_bytes_counted: true,
+                verified_bytes_size: chunkSize || hSnap.data()?.verified_bytes_size || 0,
+              }, { merge: true });
+              if (!alreadyCounted && chunkSize > 0) {
+                t.set(visionNodeRef, {
+                  proof_stats: { verified_bytes: admin.firestore.FieldValue.increment(chunkSize) },
+                }, { merge: true });
+              }
+              return { won: true };
+            }).catch((txErr) => {
+              console.warn("[Storage Proof] verified tx failed:", txErr.message);
+              return { won: false };
             });
-            await holderRef.set({
-              last_verified: Date.now(),
-              consecutive_proof_fails: 0,
-            }, { merge: true });
+
+            if (!txOutcome.won) {
+              results.push({ challenge_id: cId, status: "already_answered" });
+              failed++;
+              continue;
+            }
             results.push({ challenge_id: cId, status: "verified" });
             passed++;
           } else {
-            await challengeRef.update({
-              status: "failed",
-              proof_hash: answer,
-              failed_at: Date.now(),
-            });
+            // Atomic pending -> failed flip (parallel dupes counted once)
+            const failFlip = await db.runTransaction(async (t) => {
+              const chSnap = await t.get(challengeRef);
+              if (chSnap.data()?.status !== "pending") return false;
+              t.update(challengeRef, { status: "failed", proof_hash: answer, failed_at: Date.now() });
+              return true;
+            }).catch(() => false);
+            if (!failFlip) {
+              results.push({ challenge_id: cId, status: "already_answered" });
+              failed++;
+              continue;
+            }
             // Fail-closed: 3 consecutive wrong proofs suspends the holder,
             // which drops the replica count and triggers re-replication via
             // storage_node.get_assignments. Suspension only in "enforce" mode
@@ -16927,6 +17141,19 @@ exports.agentGateway = onRequest({
             const holderSnap = await holderRef.get();
             const fails = (holderSnap.data()?.consecutive_proof_fails || 0) + 1;
             const update = { consecutive_proof_fails: fails, last_proof_failed_at: Date.now() };
+
+            // Phase 6: a failed proof revokes this chunk's verified-bytes
+            // credit — the capacity gate reflects CURRENT proven storage,
+            // not a lifetime high-water mark. Re-proving re-credits it.
+            if (holderSnap.data()?.verified_bytes_counted) {
+              const creditedSize = holderSnap.data()?.verified_bytes_size || 0;
+              update.verified_bytes_counted = false;
+              if (creditedSize > 0) {
+                await db.collection("vision_nodes").doc(nodeId).set({
+                  proof_stats: { verified_bytes: admin.firestore.FieldValue.increment(-creditedSize) },
+                }, { merge: true });
+              }
+            }
             if (fails >= 3 && enforcement === "enforce") {
               update.status = "inactive";
               update.suspended_reason = "proof_failures";
