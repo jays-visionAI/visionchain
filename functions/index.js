@@ -916,11 +916,16 @@ async function runStorageRewardAccrual({ maxNodes = 300, maxWalletTxs = 100 } = 
       const proofBonusBp = Math.min(10000, passed * 10); // +0.001x per passed proof, cap +1x
       const weightBp = Math.max(10, Math.min(20000, baseBp + proofBonusBp));
 
+      // Phase 5: capacity bonus from heartbeat-reported allocation, hard-
+      // capped at 20 GB (+20%) because the figure is self-reported. Raising
+      // the cap requires verified-bytes gating (Phase 6).
+      const capacityGB = Math.min(20, Math.floor(d.storage_allocated_gb || 0));
+
       entries.push({
         nodeId: doc.id,
         idBytes: nodeIdToBytes32(doc.id),
         uptimeHours,
-        capacityGB: 0, // capacity reporting lands with the Phase 5 clients
+        capacityGB,
         proofRateBp,
         weightBp,
       });
@@ -14106,6 +14111,19 @@ exports.agentGateway = onRequest({
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         };
 
+        // Phase 5: capacity reporting — clients already send storage_max_gb
+        // (and desktop sends storage_stats); store sanitized values so the
+        // on-chain accrual can apply a (capped) capacity bonus.
+        const reportedGb = parseFloat(req.body.storage_max_gb);
+        if (Number.isFinite(reportedGb) && reportedGb >= 0) {
+          updateData.storage_allocated_gb = Math.min(2000, reportedGb);
+        }
+        const stats = req.body.storage_stats;
+        const usedBytes = stats ? parseFloat(stats.totalSizeBytes) : NaN;
+        if (Number.isFinite(usedBytes) && usedBytes >= 0) {
+          updateData.storage_used_gb = Math.min(2000, usedBytes / (1024 ** 3));
+        }
+
         // Track battery if provided
         if (batteryPct !== undefined) updateData.last_battery_pct = batteryPct;
         if (dataUsedMb !== undefined) updateData.last_data_used_mb = dataUsedMb;
@@ -14214,12 +14232,40 @@ exports.agentGateway = onRequest({
           .get();
         const rank = higherRankSnap.data().count + 1;
 
+        // Phase 5: optional on-chain reward info (3 eth_calls — opt-in only)
+        let onchain = null;
+        if (req.body.include_onchain) {
+          try {
+            const provider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+            const rc = new ethers.Contract(STORAGE_REWARDS_ADDRESS, STORAGE_REWARDS_ABI, provider);
+            const idBytes = nodeIdToBytes32(mnDoc.id);
+            const [pending, info, pool] = await Promise.all([
+              rc.calculatePendingReward(idBytes),
+              rc.getRewardInfo(idBytes),
+              rc.getPoolStats(),
+            ]);
+            onchain = {
+              pending_vcn: Number(ethers.formatEther(pending)),
+              total_claimed_vcn: Number(ethers.formatEther(info[1])),
+              slashed: Boolean(info[4]),
+              wallet_mapped: !!mn.onchain_wallet_set,
+              pool_balance_vcn: Number(ethers.formatEther(pool[0])),
+              // claim reverts on-chain without a wallet mapping — gate it here
+              claimable: pending > 0n && pool[0] >= pending && !!mn.onchain_wallet_set,
+            };
+          } catch (ocErr) {
+            onchain = { error: "onchain read failed" };
+          }
+        }
+
         return res.status(200).json({
           success: true,
           node_id: mnDoc.id,
           email: mn.email,
           device_type: mn.device_type,
           wallet_address: mn.wallet_address,
+          storage_allocated_gb: mn.storage_allocated_gb || 0,
+          onchain,
           status: mn.status,
           current_mode: mn.current_mode || "offline",
           weight: mn.weight || 0,
@@ -14379,6 +14425,10 @@ exports.agentGateway = onRequest({
         }
         const mnDoc = mnSnap.docs[0];
         const mn = mnDoc.data();
+        // Banned/deactivated nodes must not drain previously accrued rewards
+        if (mn.status !== "active") {
+          return res.status(403).json({ error: "Node is not active" });
+        }
         if (!mn.wallet_address) {
           return res.status(400).json({ error: "Node has no wallet address" });
         }
@@ -14405,7 +14455,20 @@ exports.agentGateway = onRequest({
           });
         }
 
-        const tx = await rewardsContract.claimReward(idBytes, { gasLimit: 200000, gasPrice: ethers.parseUnits("1", "gwei") });
+        // Send with one retry — a concurrently running accrual job manages
+        // executor nonces manually, so a first attempt can hit a nonce clash.
+        const sendClaim = () => rewardsContract.claimReward(idBytes, { gasLimit: 200000, gasPrice: ethers.parseUnits("1", "gwei") });
+        let tx;
+        try {
+          tx = await sendClaim();
+        } catch (sendErr) {
+          if (/nonce/i.test(sendErr.message || "")) {
+            await new Promise((r) => setTimeout(r, 2000));
+            tx = await sendClaim();
+          } else {
+            throw sendErr;
+          }
+        }
         const receipt = await tx.wait();
         const amountVcn = Number(ethers.formatEther(pending));
 

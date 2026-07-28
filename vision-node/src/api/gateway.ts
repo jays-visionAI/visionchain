@@ -68,7 +68,7 @@ export class GatewayClient {
             device_type: 'desktop',
             platform: process.platform,
             node_class: configManager.get().nodeClass,
-            version: '1.0.0',
+            version: '1.1.0',
         };
 
         if (referralCode) {
@@ -95,7 +95,7 @@ export class GatewayClient {
             platform: process.platform,
             node_class: config.nodeClass,
             storage_max_gb: config.storageMaxGB,
-            version: '1.0.0',
+            version: '1.1.0',
             system_info: this.getSystemInfo(),
             // Report chunk serving endpoint for direct downloads
             chunk_endpoint: `http://${osHostname()}:${config.dashboardPort}`,

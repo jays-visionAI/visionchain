@@ -179,6 +179,15 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
     const [claiming, setClaiming] = createSignal(false);
     const [claimResult, setClaimResult] = createSignal('');
 
+    // On-chain rewards (Phase 5)
+    const [onchain, setOnchain] = createSignal<{
+        pending_vcn: number; total_claimed_vcn: number; pool_balance_vcn: number;
+        claimable: boolean; wallet_mapped: boolean; error?: string;
+    } | null>(null);
+    const [onchainLoading, setOnchainLoading] = createSignal(false);
+    const [onchainClaiming, setOnchainClaiming] = createSignal(false);
+    const [onchainResult, setOnchainResult] = createSignal('');
+
     // Version update
     const [latestVersion, setLatestVersion] = createSignal('');
     const [updateAvailable, setUpdateAvailable] = createSignal(false);
@@ -351,6 +360,33 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
             setClaimResult(e.message || 'Claim failed');
         }
         setClaiming(false);
+    };
+
+    // ---------- On-chain rewards (Phase 5) ----------
+    const fetchOnchain = async () => {
+        setOnchainLoading(true);
+        try {
+            const result = await api('mobile_node.status', { include_onchain: true }, apiKey());
+            if (result.success) setOnchain(result.onchain);
+        } catch (_) { /* ignore */ }
+        setOnchainLoading(false);
+    };
+
+    const handleClaimOnchain = async () => {
+        setOnchainClaiming(true);
+        setOnchainResult('');
+        try {
+            const result = await api('mobile_node.claim_onchain', {}, apiKey());
+            if (result.success) {
+                setOnchainResult(`Claimed ${result.claimed_vcn} VCN on-chain`);
+                fetchOnchain();
+            } else {
+                setOnchainResult(result.error || 'On-chain claim failed');
+            }
+        } catch (e: any) {
+            setOnchainResult(e.message || 'On-chain claim failed');
+        }
+        setOnchainClaiming(false);
     };
 
     // ---------- Leaderboard ----------
@@ -722,6 +758,59 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                 {claimResult()}
                             </div>
                         </Show>
+                    </Show>
+
+                    {/* On-chain Rewards Card (Phase 5) */}
+                    <Show when={nodeStatus()}>
+                        <div class="bg-[#111113] border border-purple-500/20 rounded-2xl p-5 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-lg bg-purple-500/15 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                    </div>
+                                    <span class="text-xs font-black text-purple-200 uppercase tracking-widest">On-chain Rewards</span>
+                                </div>
+                                <button
+                                    onClick={fetchOnchain}
+                                    disabled={onchainLoading()}
+                                    class="px-3 py-1.5 text-[10px] font-bold text-purple-200 bg-purple-500/15 hover:bg-purple-500/25 rounded-lg transition-all disabled:opacity-40"
+                                >
+                                    {onchainLoading() ? '...' : onchain() ? 'Refresh' : 'Load'}
+                                </button>
+                            </div>
+                            <Show when={onchain()}>
+                                <Show when={!onchain()!.error} fallback={<div class="text-[11px] text-gray-300">온체인 조회 실패 — 잠시 후 다시 시도해주세요</div>}>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div class="bg-black/30 rounded-xl p-3">
+                                            <div class="text-[8px] font-black text-gray-400 uppercase tracking-widest">Pending</div>
+                                            <div class="text-sm font-bold text-purple-200 mt-0.5">{onchain()!.pending_vcn.toFixed(4)} VCN</div>
+                                        </div>
+                                        <div class="bg-black/30 rounded-xl p-3">
+                                            <div class="text-[8px] font-black text-gray-400 uppercase tracking-widest">Claimed</div>
+                                            <div class="text-sm font-bold text-white mt-0.5">{onchain()!.total_claimed_vcn.toFixed(4)} VCN</div>
+                                        </div>
+                                        <div class="bg-black/30 rounded-xl p-3">
+                                            <div class="text-[8px] font-black text-gray-400 uppercase tracking-widest">Pool</div>
+                                            <div class="text-sm font-bold text-white mt-0.5">{onchain()!.pool_balance_vcn.toFixed(2)} VCN</div>
+                                        </div>
+                                    </div>
+                                    <Show when={onchain()!.pending_vcn > 0}>
+                                        <button
+                                            onClick={handleClaimOnchain}
+                                            disabled={onchainClaiming() || !onchain()!.claimable}
+                                            class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-30 active:scale-[0.98]"
+                                        >
+                                            {onchainClaiming() ? 'Claiming...' : onchain()!.claimable ? 'Claim On-chain' : 'Pool underfunded — claim unavailable'}
+                                        </button>
+                                    </Show>
+                                    <Show when={onchainResult()}>
+                                        <div class={`text-xs text-center px-3 py-2 rounded-lg ${onchainResult().startsWith('Claimed') ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            {onchainResult()}
+                                        </div>
+                                    </Show>
+                                </Show>
+                            </Show>
+                        </div>
                     </Show>
 
                     {/* Node Info Card */}

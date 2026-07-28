@@ -71,7 +71,7 @@ function acquireLock() {
         pid: process.pid,
         client: 'app',
         startedAt: new Date().toISOString(),
-        version: '1.1.1-beta',
+        version: '1.2.0',
     };
     fs.writeFileSync(LOCK_PATH, JSON.stringify(lock, null, 2), 'utf-8');
     return null; // success
@@ -139,7 +139,7 @@ async function registerNode(email, nodeClass, storageGB, environment, referralCo
         device_type: 'desktop',
         platform: process.platform,
         node_class: nodeClass,
-        version: '1.1.1-beta',
+        version: '1.2.0',
     };
     if (referralCode) body.referral_code = referralCode;
 
@@ -188,7 +188,7 @@ async function sendHeartbeat() {
             platform: process.platform,
             node_class: config.nodeClass,
             storage_max_gb: config.storageMaxGB,
-            version: '1.1.1-beta',
+            version: '1.2.0',
             chunk_endpoint: `http://${os.hostname()}:${CHUNK_PORT}`,
         });
 
@@ -805,6 +805,47 @@ function setupIPC() {
                 sendToRenderer('node:stats', getNodeStatus());
             }
             return { success: true, ...data };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
+
+    // Phase 5: on-chain StorageRewards — pending/claim via the gateway
+    ipcMain.handle('node:getOnchainRewards', async () => {
+        if (!config?.apiKey) return { success: false, error: 'Not registered' };
+        try {
+            const apiUrl = config.apiUrl || PRODUCTION_API;
+            const resp = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mobile_node.status',
+                    api_key: config.apiKey,
+                    include_onchain: true,
+                }),
+            });
+            const data = await resp.json();
+            return { success: !!data.success, onchain: data.onchain || null };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
+
+    ipcMain.handle('node:claimOnchain', async () => {
+        if (!config?.apiKey) return { success: false, error: 'Not registered' };
+        try {
+            const apiUrl = config.apiUrl || PRODUCTION_API;
+            const resp = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mobile_node.claim_onchain',
+                    api_key: config.apiKey,
+                }),
+            });
+            const data = await resp.json();
+            if (data.success) sendToRenderer('node:stats', getNodeStatus());
+            return data;
         } catch (e) {
             return { success: false, error: e.message };
         }

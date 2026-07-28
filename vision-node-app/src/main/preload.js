@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('visionNode', {
     // Leaderboard & Rewards
     getLeaderboard: () => ipcRenderer.invoke('node:getLeaderboard'),
     claimVCN: () => ipcRenderer.invoke('node:claimVCN'),
+    getOnchainRewards: () => ipcRenderer.invoke('node:getOnchainRewards'),
+    claimOnchain: () => ipcRenderer.invoke('node:claimOnchain'),
 
     // Events from main process
     onStarted: (cb) => ipcRenderer.on('node:started', (_, data) => cb(data)),
