@@ -11,7 +11,7 @@ const Logo = (props: LogoProps): JSX.Element => {
     <div class="flex items-center gap-2.5 select-none">
       {/* Vision Chain Icon — node-network "V" mark */}
       <svg
-        viewBox="0 0 100 100"
+        viewBox="11 8 80 80"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         class={props.class ?? "w-8 h-8"}

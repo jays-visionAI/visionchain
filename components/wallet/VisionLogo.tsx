@@ -3,7 +3,7 @@ import { JSX } from 'solid-js';
 export const VisionLogo = (props: { class?: string }) => {
     return (
         <svg
-            viewBox="0 0 100 100"
+            viewBox="11 8 80 80"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             class={props.class}

@@ -5,7 +5,7 @@ export const VisionFullLogo = (props: { class?: string }) => {
         <div class={`flex items-center gap-[5px] select-none ${props.class}`}>
             {/* Node-network "V" mark */}
             <svg
-                viewBox="0 0 100 100"
+                viewBox="11 8 80 80"
                 class="h-[1.45em] w-auto overflow-visible"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
