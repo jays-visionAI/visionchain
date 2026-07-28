@@ -10265,7 +10265,7 @@ exports.agentGateway = onRequest({
       "mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat",
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
       "mobile_node.claim_onchain", "storage_rewards.status", "storage_rewards.run_accrual",
-      "node_fleet.health",
+      "node_fleet.health", "game.submit", "game.state",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
       "storage_node.fetch_chunk", "chunk.proof_challenge", "chunk.proof_response",
@@ -14507,6 +14507,126 @@ exports.agentGateway = onRequest({
     }
 
     // --- mobile_node.submit_attestation ---
+    // ── Game reward pipeline (server-authoritative) ──────────────────────
+    // Games previously credited RP by writing user_reward_points/rp_history
+    // and mini_game_plays DIRECTLY from the client, with client-side RNG and
+    // client-enforced daily caps — trivially forgeable, and RP is the
+    // pre-listing VCN substitute. These actions move crediting + cap
+    // enforcement server-side with per-play bounds and idempotency. (Client
+    // migration + a firestore.rules lock on the reward collections complete
+    // the fix.)
+    const GAME_KEYS = ["spin", "block", "scratch", "memory", "falling", "predict", "tower", "mine", "flappy", "slots", "crash"];
+    const GAME_USED_FIELD = { spin: "spinsUsed", block: "blocksUsed", scratch: "scratchUsed", memory: "memoryUsed", falling: "fallingUsed", predict: "predictUsed", tower: "towerUsed", mine: "mineUsed", flappy: "flappyUsed", slots: "slotsUsed", crash: "crashUsed" };
+    const GAME_DAILY_KEY = { spin: "game_daily_spins", block: "game_daily_blocks", scratch: "game_daily_scratch", memory: "game_daily_memory", falling: "game_daily_falling", predict: "game_daily_predict", tower: "game_daily_tower", mine: "game_daily_mine", flappy: "game_daily_flappy", slots: "game_daily_slots", crash: "game_daily_crash" };
+    const GAME_DAILY_DEFAULT = { spin: 3, block: 2, scratch: 3, memory: 3, falling: 3, predict: 3, tower: 3, mine: 3, flappy: 3, slots: 3, crash: 3 };
+    // Hard ceiling per single play (RP headroom includes a legit dice x10)
+    const GAME_MAX = {
+      spin: { vcn: 25, rp: 1000 }, block: { vcn: 8, rp: 200 }, scratch: { vcn: 25, rp: 500 },
+      memory: { vcn: 5, rp: 400 }, falling: { vcn: 5, rp: 400 }, predict: { vcn: 10, rp: 400 },
+      tower: { vcn: 37, rp: 3100 }, mine: { vcn: 60, rp: 2000 }, flappy: { vcn: 5, rp: 400 },
+      slots: { vcn: 10, rp: 500 }, crash: { vcn: 110, rp: 5500 },
+    };
+    const gameServerDate = () => new Date().toISOString().slice(0, 10);
+
+    if (action === "game.submit") {
+      try {
+        if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
+        const gu = await authenticateFirebaseUser(firebaseIdToken);
+        if (!gu || !gu.email) return res.status(401).json({ error: "Invalid auth token" });
+        const email = gu.email.toLowerCase();
+
+        const game = String(body.game || "");
+        if (!GAME_KEYS.includes(game)) return res.status(400).json({ error: "Unknown game" });
+        const playToken = String(body.play_token || "").slice(0, 64);
+        if (!playToken) return res.status(400).json({ error: "play_token required" });
+
+        const cfg = await getRPConfig();
+        const cap = cfg[GAME_DAILY_KEY[game]] || GAME_DAILY_DEFAULT[game];
+        const max = GAME_MAX[game] || { vcn: 50, rp: 1000 };
+        // Clamp client-proposed reward to the game's per-play ceiling — a
+        // forged score can never mint more than one legit max play.
+        const reqVcn = Math.max(0, Math.min(max.vcn, Number(body.vcn) || 0));
+        const reqRp = Math.max(0, Math.min(max.rp, Number(body.rp) || 0));
+        const usedField = GAME_USED_FIELD[game];
+
+        const today = gameServerDate();
+        let date = String(body.date || "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+        if (Math.abs(Date.parse(date + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) > 86400000) date = today;
+
+        const docRef = db.collection("mini_game_plays").doc(`${date}_${email}`);
+        const outcome = await db.runTransaction(async (t) => {
+          const s = await t.get(docRef);
+          const d = s.exists ? s.data() : {};
+          const tokens = Array.isArray(d.play_tokens) ? d.play_tokens : [];
+          if (tokens.includes(playToken)) {
+            return { dedup: true, used: d[usedField] || 0, cap, creditedRp: 0, creditedVcn: 0, totalRP: d.totalRP || 0, totalVCN: d.totalVCN || 0 };
+          }
+          const used = d[usedField] || 0;
+          if (used >= cap) return { capExceeded: true, used, cap };
+          const games = (Array.isArray(d.games) ? d.games : []).slice(-199);
+          games.push({ game, vcn: reqVcn, rp: reqRp, score: Number(body.score) || 0, timestamp: new Date().toISOString() });
+          const newTokens = tokens.slice(-199);
+          newTokens.push(playToken);
+          t.set(docRef, {
+            date, email,
+            [usedField]: used + 1,
+            totalVCN: (d.totalVCN || 0) + reqVcn,
+            totalRP: (d.totalRP || 0) + reqRp,
+            games, play_tokens: newTokens,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          return { used: used + 1, cap, creditedRp: reqRp, creditedVcn: reqVcn, totalRP: (d.totalRP || 0) + reqRp, totalVCN: (d.totalVCN || 0) + reqVcn };
+        });
+
+        if (outcome.capExceeded) {
+          return res.status(429).json({ error: "Daily limit reached", used: outcome.used, cap: outcome.cap });
+        }
+        // Credit bounded RP server-side (no referral propagation for games)
+        if (!outcome.dedup && outcome.creditedRp > 0) {
+          await db.collection("user_reward_points").doc(email).set({
+            userId: email,
+            totalRP: admin.firestore.FieldValue.increment(outcome.creditedRp),
+            availableRP: admin.firestore.FieldValue.increment(outcome.creditedRp),
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          await db.collection("rp_history").add({
+            userId: email, type: "mini_game", amount: outcome.creditedRp,
+            source: `game:${game}`, timestamp: new Date().toISOString(),
+          });
+        }
+        return res.json({
+          success: true, game,
+          credited_vcn: outcome.creditedVcn, credited_rp: outcome.creditedRp,
+          used: outcome.used, cap: outcome.cap, remaining: Math.max(0, outcome.cap - outcome.used),
+          total_vcn: outcome.totalVCN, total_rp: outcome.totalRP, dedup: !!outcome.dedup,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `game.submit failed: ${e.message}` });
+      }
+    }
+
+    if (action === "game.state") {
+      try {
+        if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
+        const gu = await authenticateFirebaseUser(firebaseIdToken);
+        if (!gu || !gu.email) return res.status(401).json({ error: "Invalid auth token" });
+        const email = gu.email.toLowerCase();
+        const cfg = await getRPConfig();
+        const today = gameServerDate();
+        const s = await db.collection("mini_game_plays").doc(`${today}_${email}`).get();
+        const d = s.exists ? s.data() : {};
+        const remaining = {};
+        for (const g of GAME_KEYS) {
+          const cap = cfg[GAME_DAILY_KEY[g]] || GAME_DAILY_DEFAULT[g];
+          remaining[g] = Math.max(0, cap - (d[GAME_USED_FIELD[g]] || 0));
+        }
+        return res.json({ success: true, date: today, remaining, total_vcn: d.totalVCN || 0, total_rp: d.totalRP || 0, games: (d.games || []).slice(-50) });
+      } catch (e) {
+        return res.status(500).json({ error: `game.state failed: ${e.message}` });
+      }
+    }
+
     // --- node_fleet.health (public read-only aggregate) ---
     // Serves the cached fleet-health doc; computes once on demand if absent.
     if (action === "node_fleet.health") {

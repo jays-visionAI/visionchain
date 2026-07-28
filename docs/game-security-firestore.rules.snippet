@@ -1,0 +1,43 @@
+// ─────────────────────────────────────────────────────────────────────────
+// Vision Chain — Game reward lockdown (Firestore rules)
+//
+// WHY: RP is the pre-listing VCN substitute. Games currently credit RP by
+// writing these collections DIRECTLY from the browser, so any signed-in user
+// can mint unlimited RP from the devtools console. These rules make the three
+// reward collections SERVER-ONLY (writable only by the Admin SDK / Cloud
+// Functions, which bypass rules). Reads stay allowed so the wallet + daily
+// leaderboard keep working.
+//
+// HOW TO APPLY (do NOT let me deploy a full ruleset blind — it would replace
+// your existing console rules and could break the app):
+//   1. Firebase Console → Firestore → Rules.
+//   2. Paste the three `match` blocks below INSIDE your existing
+//      `match /databases/{database}/documents { ... }` block, replacing any
+//      existing rules for these same collections.
+//   3. Publish.
+//
+// ORDER MATTERS: apply this ONLY AFTER the game clients are migrated to the
+// server `game.submit` action (Games Phase 2). If you lock first, the current
+// client (which writes directly) will fail to record plays/credit RP.
+// ─────────────────────────────────────────────────────────────────────────
+
+// RP balances — server writes only; owner may read their own.
+match /user_reward_points/{email} {
+  allow read: if request.auth != null
+              && request.auth.token.email.lower() == email;
+  allow write: if false; // Cloud Functions (Admin SDK) bypass this
+}
+
+// RP ledger — server writes only; owner may read their own entries.
+match /rp_history/{entryId} {
+  allow read: if request.auth != null
+              && request.auth.token.email.lower() == resource.data.userId;
+  allow write: if false;
+}
+
+// Daily game plays / caps / leaderboard source — server writes only.
+// Reads stay open to signed-in users so the daily leaderboard works.
+match /mini_game_plays/{docId} {
+  allow read: if request.auth != null;
+  allow write: if false;
+}
