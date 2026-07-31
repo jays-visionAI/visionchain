@@ -1,7 +1,7 @@
 // Service Worker for Vision Chain PWA
-// Version: 1.0.0 - Cache control for proper data fetching
+// Version: 1.0.1 - bump cache to evict stale asset caches on stuck clients
 
-const CACHE_NAME = 'vision-chain-v4';
+const CACHE_NAME = 'vision-chain-v5';
 const STATIC_ASSETS = [
     '/pwa-icon-192.png',
     '/pwa-icon-512.png',
