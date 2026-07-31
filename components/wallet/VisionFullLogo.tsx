@@ -28,7 +28,7 @@ export const VisionFullLogo = (props: { class?: string }) => {
                 </defs>
                 <circle cx="256" cy="256" r="256" fill="url(#coinFull)" />
                 <circle cx="256" cy="256" r="256" fill="url(#coinFullGlow)" />
-                <g transform="translate(93 101) scale(3.2)">
+                <g transform="translate(57 68) scale(3.9)">
                     <g stroke="url(#vcFull)" stroke-width="8" stroke-linecap="round">
                         <line x1="49" y1="22.9" x2="34.4" y2="51.3" />
                         <line x1="81.3" y1="21" x2="73.3" y2="46" />
