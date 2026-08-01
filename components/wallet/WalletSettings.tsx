@@ -598,6 +598,76 @@ export function WalletSettings(props: { onBack?: () => void }) {
         }
     };
 
+    // === Recovery Phrase reveal / backup (Phase 0) ===
+    const backupFlagKey = () => `vcn_bak_${btoa(auth.user()?.email || '').substring(0, 16)}`;
+    const [hasBackedUp, setHasBackedUp] = createSignal(false);
+    onMount(() => { try { setHasBackedUp(localStorage.getItem(backupFlagKey()) === '1'); } catch { } });
+    const [revealOpen, setRevealOpen] = createSignal(false);
+    const [revealPw, setRevealPw] = createSignal('');
+    const [reveal2FA, setReveal2FA] = createSignal('');
+    const [reveal2FABackup, setReveal2FABackup] = createSignal(false);
+    const [revealWords, setRevealWords] = createSignal<string[] | null>(null);
+    const [revealError, setRevealError] = createSignal('');
+    const [revealLoading, setRevealLoading] = createSignal(false);
+    const [revealCopied, setRevealCopied] = createSignal(false);
+
+    const closeReveal = () => {
+        // Clear plaintext seed from memory + clipboard-copy state promptly
+        setRevealWords(null);
+        setRevealPw('');
+        setReveal2FA('');
+        setRevealError('');
+        setRevealOpen(false);
+    };
+
+    const handleReveal = async (e: Event) => {
+        e.preventDefault();
+        setRevealError('');
+        setRevealLoading(true);
+        try {
+            const email = auth.user()?.email || '';
+            if (!email) { setRevealError('User not found.'); setRevealLoading(false); return; }
+            const encrypted = WalletService.getEncryptedWallet(email);
+            if (!encrypted) {
+                setRevealError('This device has no local wallet copy. Restore your wallet on this device first, then back it up.');
+                setRevealLoading(false); return;
+            }
+            if (totpEnabled()) {
+                const totp = await CloudWalletService.verifyTOTP(reveal2FA(), reveal2FABackup());
+                if (!totp.success) { setRevealError(totp.error || 'Invalid 2FA code.'); setRevealLoading(false); return; }
+            }
+            let mnemonic: string;
+            try {
+                mnemonic = await WalletService.decrypt(encrypted, revealPw());
+            } catch {
+                setRevealError('Incorrect spending password.'); setRevealLoading(false); return;
+            }
+            setRevealWords(mnemonic.split(' '));
+        } catch (err: any) {
+            setRevealError(err?.message || 'Failed to reveal recovery phrase.');
+        } finally {
+            setRevealLoading(false);
+        }
+    };
+
+    const copyRevealPhrase = async () => {
+        const w = revealWords();
+        if (!w) return;
+        try {
+            await navigator.clipboard.writeText(w.join(' '));
+            setRevealCopied(true);
+            // Auto-clear the clipboard after 60s to reduce exposure
+            setTimeout(() => { navigator.clipboard.writeText('').catch(() => { }); }, 60000);
+            setTimeout(() => setRevealCopied(false), 2500);
+        } catch { /* ignore */ }
+    };
+
+    const confirmBackedUp = () => {
+        try { localStorage.setItem(backupFlagKey(), '1'); } catch { }
+        setHasBackedUp(true);
+        closeReveal();
+    };
+
     return (
         <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <Show when={props.onBack}>
@@ -1667,6 +1737,88 @@ export function WalletSettings(props: { onBack?: () => void }) {
                             </button>
                         </form>
                     </div>
+
+                    {/* Section 3: Recovery Phrase (backup / self-custody export) */}
+                    <div class="bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden">
+                        <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                            <div class={`p-2 rounded-lg ${hasBackedUp() ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
+                                <Key class={`w-5 h-5 ${hasBackedUp() ? 'text-green-400' : 'text-amber-400'}`} />
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h2 class="text-lg font-semibold text-white">Recovery Phrase</h2>
+                                <p class="text-xs text-gray-400 mt-0.5">
+                                    {hasBackedUp()
+                                        ? 'Backed up. You can view it again anytime.'
+                                        : 'Save your recovery phrase to fully own your wallet — works even without email/password.'}
+                                </p>
+                            </div>
+                            <Show when={hasBackedUp()}>
+                                <span class="text-[10px] font-black uppercase tracking-widest text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full">Saved</span>
+                            </Show>
+                        </div>
+
+                        <div class="p-6">
+                            <Show when={!revealOpen()} fallback={
+                                <form onSubmit={handleReveal} class="space-y-4">
+                                    <Show when={!revealWords()} fallback={
+                                        <div class="space-y-4">
+                                            <div class="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
+                                                Write these 15 words down in order and store them offline. Anyone with this phrase controls your wallet — never share it or type it into a website.
+                                            </div>
+                                            <div class="grid grid-cols-3 gap-2">
+                                                <For each={revealWords()!}>{(word, i) => (
+                                                    <div class="flex items-center gap-2 bg-[#0d0d0f] border border-white/10 rounded-lg px-3 py-2">
+                                                        <span class="text-[10px] text-gray-500 tabular-nums w-4">{i() + 1}</span>
+                                                        <span class="text-sm text-white font-mono">{word}</span>
+                                                    </div>
+                                                )}</For>
+                                            </div>
+                                            <div class="flex flex-wrap gap-2">
+                                                <button type="button" onClick={copyRevealPhrase} class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-xl transition-all">
+                                                    <Show when={revealCopied()} fallback={<>Copy phrase</>}><Check class="w-4 h-4 text-green-400" /> Copied (auto-clears in 60s)</Show>
+                                                </button>
+                                                <button type="button" onClick={confirmBackedUp} class="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-bold rounded-xl transition-all">
+                                                    <Check class="w-4 h-4" /> I've saved it
+                                                </button>
+                                                <button type="button" onClick={closeReveal} class="px-4 py-2 text-gray-400 hover:text-white text-sm rounded-xl transition-all">Hide</button>
+                                            </div>
+                                        </div>
+                                    }>
+                                        <div>
+                                            <label class="text-gray-400 text-sm mb-2 block">Spending Password</label>
+                                            <input type="password" value={revealPw()} onInput={(e) => setRevealPw(e.currentTarget.value)} placeholder="Enter your spending password" autocomplete="off"
+                                                class="w-full bg-[#0d0d0f] border border-white/20 rounded-xl py-3 px-4 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 transition-all" />
+                                        </div>
+                                        <Show when={totpEnabled()}>
+                                            <div>
+                                                <label class="text-gray-400 text-sm mb-2 block">{reveal2FABackup() ? 'Backup Code' : '2FA Code'}</label>
+                                                <input type="text" inputmode="numeric" value={reveal2FA()} onInput={(e) => setReveal2FA(e.currentTarget.value)} placeholder={reveal2FABackup() ? 'Backup code' : '6-digit code'} autocomplete="off"
+                                                    class="w-full bg-[#0d0d0f] border border-white/20 rounded-xl py-3 px-4 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 transition-all font-mono tracking-widest" />
+                                                <button type="button" onClick={() => setReveal2FABackup(!reveal2FABackup())} class="text-[11px] text-blue-400 hover:underline mt-1">
+                                                    {reveal2FABackup() ? 'Use authenticator code instead' : 'Use a backup code instead'}
+                                                </button>
+                                            </div>
+                                        </Show>
+                                        <Show when={revealError()}>
+                                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{revealError()}</div>
+                                        </Show>
+                                        <div class="flex gap-2">
+                                            <button type="button" onClick={closeReveal} class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition-all">Cancel</button>
+                                            <button type="submit" disabled={revealLoading() || !revealPw()} class="flex-[2] flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl transition-all disabled:opacity-40">
+                                                <Show when={revealLoading()} fallback={<>Reveal phrase</>}><RefreshCw class="w-4 h-4 animate-spin" /> Verifying...</Show>
+                                            </button>
+                                        </div>
+                                    </Show>
+                                </form>
+                            }>
+                                <button type="button" onClick={() => { setRevealOpen(true); setRevealWords(null); setRevealError(''); }}
+                                    class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 transition-all">
+                                    <Key class="w-4 h-4" /> {hasBackedUp() ? 'View recovery phrase' : 'Back up now'}
+                                </button>
+                            </Show>
+                        </div>
+                    </div>
+
                     <div class="h-40" />
                 </div>
             </Show>

@@ -2483,6 +2483,16 @@ const Wallet = (): JSX.Element => {
             return;
         }
 
+        // Phase 0 safety: the spending password is the ONLY key that decrypts
+        // the wallet (local AND cloud), and the cloud backup requires a strong
+        // password. Enforce it at creation so every new wallet gets a cloud
+        // recovery copy — otherwise a weak password silently skipped the cloud
+        // backup and left a single local-only copy (permanent-loss risk).
+        if (!calculatePasswordStrength(walletPassword()).isStrongEnough) {
+            alert("Please choose a stronger spending password:\n• at least 10 characters\n• at least 3 of: uppercase, lowercase, number, symbol");
+            return;
+        }
+
         try {
             setIsLoading(true);
             console.log("Finalizing wallet creation...");
@@ -2518,21 +2528,21 @@ const Wallet = (): JSX.Element => {
                 await updateWalletStatus(user.email, address, true);
             }
 
-            // 4. Cloud Sync (for cross-browser access) - Non-blocking
-            const passwordStrength = calculatePasswordStrength(walletPassword());
-            if (passwordStrength.isStrongEnough) {
-                CloudWalletService.saveToCloud(mnemonic, walletPassword(), address, userProfile().email)
-                    .then(result => {
-                        if (result.success) {
-                            console.log("[Wallet] Cloud sync successful - wallet accessible from any browser");
-                        } else {
-                            console.warn("[Wallet] Cloud sync skipped:", result.error);
-                        }
-                    })
-                    .catch(err => console.warn("[Wallet] Cloud sync error (non-critical):", err));
-            } else {
-                console.log("[Wallet] Password not strong enough for cloud sync - local only");
-            }
+            // 4. Cloud backup (cross-browser access + recovery). Password is
+            // guaranteed strong above, so this backup is expected to succeed
+            // — it is the recovery copy that makes deferring the seed write
+            // -down safe. Non-blocking, but failures are surfaced so a later
+            // load can retry rather than silently leaving a local-only wallet.
+            CloudWalletService.saveToCloud(mnemonic, walletPassword(), address, userProfile().email)
+                .then(result => {
+                    if (result.success) {
+                        console.log("[Wallet] Cloud backup successful");
+                        try { localStorage.setItem(`vcn_cloud_bak_${btoa(userEmail).substring(0, 16)}`, '1'); } catch { }
+                    } else {
+                        console.warn("[Wallet] Cloud backup failed:", result.error);
+                    }
+                })
+                .catch(err => console.warn("[Wallet] Cloud backup error:", err));
 
             // 5. Update User State & Signals
             setWalletAddressSignal(address); // Force update the signal
@@ -4964,9 +4974,6 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     {t('profile.setupWallet')}
                                                                     <ArrowRight class="w-4 h-4" />
                                                                 </button>
-                                                                <button onClick={() => setOnboardingStep(3)} class="ml-4 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs rounded-2xl hover:bg-red-500/20 transition-all">
-                                                                    [Debug] Skip
-                                                                </button>
                                                             </Show>
                                                         </div>
                                                     </div>
@@ -6137,6 +6144,12 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                 </div>
                                             </Show>
 
+                                            <Show when={passwordMode() === 'setup' && walletPassword().length > 0 && !calculatePasswordStrength(walletPassword()).isStrongEnough}>
+                                                <p class="text-[10px] text-amber-400 text-center leading-relaxed">
+                                                    Use 10+ characters with at least 3 of: uppercase, lowercase, number, symbol — this password also unlocks cloud recovery.
+                                                </p>
+                                            </Show>
+
                                             <div class="flex items-center justify-center gap-2">
                                                 <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
                                                 <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
@@ -6154,7 +6167,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                             </button>
                                             <button
                                                 onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
-                                                disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword())}
+                                                disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword()) || (passwordMode() === 'setup' && !calculatePasswordStrength(walletPassword()).isStrongEnough)}
                                                 class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
                                             >
                                                 <Show when={isLoading()} fallback={isRestoring() ? "Restore Wallet" : (passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment")}>
