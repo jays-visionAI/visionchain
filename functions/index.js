@@ -56,52 +56,72 @@ admin.initializeApp();
 //   2. Server master key (for server-side decryption)
 // =============================================================================
 
-// Server-side master key - in production, use Secret Manager
-const SERVER_ENCRYPTION_KEY = process.env.WALLET_ENCRYPTION_KEY ||
-  "vcn-server-key-2026-very-secure-32b"; // MUST be 32 bytes for AES-256
+// Server-side master key (envelope layer).
+//
+// DUAL-KEY MIGRATION: the real key comes from the WALLET_ENCRYPTION_KEY secret
+// (Secret Manager, wired only on the functions that declare it). The legacy
+// constant below was the previous hardcoded key and now survives ONLY as a
+// decrypt fallback so data encrypted before the secret existed still opens.
+//   • NEW encryption uses the real key when configured, else the legacy key.
+//   • Decryption tries the real key first, then falls back to the legacy key.
+// If no secret is configured (REAL_SERVER_KEY === null) behaviour is IDENTICAL
+// to before this change — safe to deploy before the secret is set.
+const LEGACY_SERVER_KEY = "vcn-server-key-2026-very-secure-32b"; // pre-migration constant
+const REAL_SERVER_KEY = process.env.WALLET_ENCRYPTION_KEY || null;
+const ACTIVE_SERVER_KEY = REAL_SERVER_KEY || LEGACY_SERVER_KEY;
+
+const _serverKeyBuf = (k) => Buffer.from(k.padEnd(32, "0").slice(0, 32)); // MUST be 32 bytes
 
 /**
- * Server-side AES-256-GCM encryption
+ * Server-side AES-256-GCM encryption (uses the active/real key).
  * @param {string} data - Data to encrypt (already client-encrypted)
- * @return {string} Base64 encoded encrypted data with IV prepended
+ * @return {string} Base64: IV(16) + AuthTag(16) + ciphertext
  */
 function serverEncrypt(data) {
   const iv = crypto.randomBytes(16);
-  const key = Buffer.from(SERVER_ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32));
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-
+  const cipher = crypto.createCipheriv("aes-256-gcm", _serverKeyBuf(ACTIVE_SERVER_KEY), iv);
   let encrypted = cipher.update(data, "utf8", "base64");
   encrypted += cipher.final("base64");
   const authTag = cipher.getAuthTag();
-
-  // Format: IV (16 bytes) + AuthTag (16 bytes) + Encrypted Data
   const combined = Buffer.concat([iv, authTag, Buffer.from(encrypted, "base64")]);
   return combined.toString("base64");
 }
 
+function _serverDecryptWithKey(encryptedBase64, keyStr) {
+  const combined = Buffer.from(encryptedBase64, "base64");
+  if (combined.length < 33) { // IV(16) + AuthTag(16) + at least 1 byte
+    throw new Error("Invalid encrypted data format");
+  }
+  const iv = combined.slice(0, 16);
+  const authTag = combined.slice(16, 32);
+  const encryptedData = combined.slice(32);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", _serverKeyBuf(keyStr), iv);
+  decipher.setAuthTag(authTag);
+  let decrypted = decipher.update(encryptedData, undefined, "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
 /**
- * Server-side AES-256-GCM decryption
+ * Dual-key decrypt. Returns { data, legacy } — legacy=true means it opened
+ * with the old constant and should be re-wrapped with the real key.
+ */
+function serverDecryptMeta(encryptedBase64) {
+  if (REAL_SERVER_KEY) {
+    try {
+      return { data: _serverDecryptWithKey(encryptedBase64, REAL_SERVER_KEY), legacy: false };
+    } catch (e) { /* not real-key data — fall back to legacy */ }
+  }
+  return { data: _serverDecryptWithKey(encryptedBase64, LEGACY_SERVER_KEY), legacy: true };
+}
+
+/**
+ * Server-side AES-256-GCM decryption (dual-key). Signature unchanged.
  * @param {string} encryptedBase64 - Base64 encoded encrypted data
  * @return {string} Decrypted data (still client-encrypted)
  */
 function serverDecrypt(encryptedBase64) {
-  const combined = Buffer.from(encryptedBase64, "base64");
-
-  if (combined.length < 33) { // IV(16) + AuthTag(16) + at least 1 byte
-    throw new Error("Invalid encrypted data format");
-  }
-
-  const iv = combined.slice(0, 16);
-  const authTag = combined.slice(16, 32);
-  const encryptedData = combined.slice(32);
-
-  const key = Buffer.from(SERVER_ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32));
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(authTag);
-
-  let decrypted = decipher.update(encryptedData, undefined, "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+  return serverDecryptMeta(encryptedBase64).data;
 }
 
 // =============================================================================
@@ -3261,7 +3281,7 @@ exports.updateWalletAddress = onCall({ cors: true }, async (request) => {
  * Server adds: server-side AES-256-GCM encryption layer
  * Stored in Firestore: double-encrypted wallet
  */
-exports.saveWalletToCloud = onCall({ cors: true }, async (request) => {
+exports.saveWalletToCloud = onCall({ cors: true, secrets: ["WALLET_ENCRYPTION_KEY"] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -3324,7 +3344,7 @@ exports.saveWalletToCloud = onCall({ cors: true }, async (request) => {
  * - Device Fingerprint: New devices require email verification
  * - IP Anomaly Detection: Alerts on suspicious access patterns
  */
-exports.loadWalletFromCloud = onCall({ cors: true }, async (request) => {
+exports.loadWalletFromCloud = onCall({ cors: true, secrets: ["WALLET_ENCRYPTION_KEY"] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -3478,8 +3498,19 @@ exports.loadWalletFromCloud = onCall({ cors: true }, async (request) => {
       return { exists: false, needsMigration: true };
     }
 
-    // Server-side decryption (removes our layer, keeps client layer)
-    const clientEncryptedWallet = serverDecrypt(data.encryptedWallet);
+    // Server-side decryption (removes our layer, keeps client layer). Dual-key.
+    const walletDec = serverDecryptMeta(data.encryptedWallet);
+    const clientEncryptedWallet = walletDec.data;
+
+    // Lazy key migration: if this blob was still wrapped with the legacy
+    // server key and a real key is now configured, re-wrap it with the real
+    // key (non-blocking — the client layer / password is untouched).
+    if (walletDec.legacy && REAL_SERVER_KEY) {
+      db.collection("wallets_encrypted").doc(email)
+        .update({ encryptedWallet: serverEncrypt(clientEncryptedWallet), serverKeyMigratedAt: Date.now() })
+        .then(() => console.log(`[CloudSync] Re-wrapped wallet with real server key for ${email}`))
+        .catch((e) => console.warn("[CloudSync] Key re-wrap failed (non-critical):", e.message));
+    }
 
     // Clear rate limit on successful load
     await clearRateLimit(email, db);
