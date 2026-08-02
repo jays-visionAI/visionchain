@@ -5147,7 +5147,18 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         <button
-                                                            onClick={() => { generateSeedPhrase(); setIsRestoring(false); setOnboardingStep(1); }}
+                                                            onClick={() => {
+                                                                // Model B: generate the recovery phrase internally, but don't
+                                                                // force the user through the seed write-down + quiz. Just set a
+                                                                // spending password — the wallet is cloud-backed for recovery,
+                                                                // and the phrase can be exported later in Settings.
+                                                                generateSeedPhrase();
+                                                                setIsRestoring(false);
+                                                                setWalletPassword('');
+                                                                setConfirmWalletPassword('');
+                                                                setPasswordMode('setup');
+                                                                setShowPasswordModal(true);
+                                                            }}
                                                             class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-blue-500/50 transition-all group relative overflow-hidden"
                                                         >
                                                             <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -5157,7 +5168,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                 <Plus class="w-6 h-6 text-blue-400" />
                                                             </div>
                                                             <div class="text-xl font-bold text-white mb-2">Create New</div>
-                                                            <p class="text-sm text-gray-500 leading-relaxed">Generate a new 15-word recovery phrase for your account.</p>
+                                                            <p class="text-sm text-gray-500 leading-relaxed">Just set a spending password. Recover anytime with your email &amp; password — save a recovery phrase later if you want full self-custody.</p>
                                                         </button>
 
                                                         <button
@@ -5620,15 +5631,16 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                 </button>
                                                             </div>
 
-                                                            <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl space-y-2">
-                                                                <div class="flex items-center gap-2 text-amber-500 font-black uppercase tracking-widest text-[10px]">
-                                                                    <AlertTriangle class="w-3 h-3" />
-                                                                    Security Reminder
+                                                            <div class="p-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl space-y-2">
+                                                                <div class="flex items-center gap-2 text-cyan-400 font-black uppercase tracking-widest text-[10px]">
+                                                                    <ShieldCheck class="w-3 h-3" />
+                                                                    How recovery works
                                                                 </div>
-                                                                <ul class="text-[11px] font-medium text-amber-500/80 space-y-1">
-                                                                    <li>• Your wallet is now eligible for token distribution</li>
-                                                                    <li>• Keep your recovery phrase and keystore file safe</li>
-                                                                    <li>• Never share your private keys with anyone</li>
+                                                                <ul class="text-[11px] font-medium text-gray-400 space-y-1">
+                                                                    <li>• Recover this wallet anytime with your <strong class="text-gray-300">email + spending password</strong>.</li>
+                                                                    <li>• Enable <strong class="text-gray-300">2-Factor Authentication</strong> in Settings › Security for extra protection.</li>
+                                                                    <li>• Want full self-custody? Save your <strong class="text-gray-300">recovery phrase</strong> anytime in Settings › Recovery Phrase (optional).</li>
+                                                                    <li>• Never share your password or recovery phrase with anyone.</li>
                                                                 </ul>
                                                             </div>
 
