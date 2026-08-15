@@ -1,7 +1,11 @@
 // Service Worker for Vision Chain PWA
 // Version: 1.0.1 - bump cache to evict stale asset caches on stuck clients
 
-const CACHE_NAME = 'vision-chain-v5';
+// Bumped for the P0 reward-ledger lock: a client cached from before that
+// release still tries to write user_reward_points / user_streaks directly and
+// will just fail (silently, from the user's side — no RP) once the Firestore
+// rules land. Invalidating the cache shortens that window.
+const CACHE_NAME = 'vision-chain-v6';
 const STATIC_ASSETS = [
     '/pwa-icon-192.png',
     '/pwa-icon-512.png',
