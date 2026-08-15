@@ -72,6 +72,11 @@ const ACTIVE_SERVER_KEY = REAL_SERVER_KEY || LEGACY_SERVER_KEY;
 
 const _serverKeyBuf = (k) => Buffer.from(k.padEnd(32, "0").slice(0, 32)); // MUST be 32 bytes
 
+// Single source of truth for admin identities. Used by the agentGateway admin
+// gate (ADMIN_ONLY_ACTIONS) and storage_rewards.run_accrual. Adding an admin
+// must happen HERE, not by re-hardcoding a list at a call site.
+const VCN_ADMIN_EMAILS = ["sangky94@gmail.com", "jays@visai.io"];
+
 /**
  * Server-side AES-256-GCM encryption (uses the active/real key).
  * @param {string} data - Data to encrypt (already client-encrypted)
@@ -9276,157 +9281,12 @@ async function performCexSync(uid, credentialId) {
  * Requires admin role.
  */
 
-// =============================================================================
-// BACKFILL RP - One-time admin function to retroactively award RP
-// =============================================================================
-const RP_PER_REFERRAL_BF = 10;
-const RP_LEVELUP_BONUS_BF = 100;
-const LEVELUP_INTERVAL_BF = 10;
+// P0 SECURITY: the one-time `backfillRP` endpoint was removed. It was
+// onRequest({ invoker: "public" }) guarded only by a plaintext admin key
+// committed to this file, and it could mint RP for every user in the
+// database. Its helper constants went with it. Re-running a backfill is a
+// deliberate, reviewed migration script — not a live public endpoint.
 
-function calcLevelFromRefs(count) {
-  return Math.min(Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2), 100);
-}
-
-exports.backfillRP = onRequest({ cors: true, invoker: "public", timeoutSeconds: 300 }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") return res.status(204).send("");
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-  // Simple admin protection
-  const { adminKey, dryRun } = req.body;
-  if (adminKey !== "visionchain-backfill-2026") {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
-
-  try {
-    const usersSnapshot = await db.collection("users").get();
-    console.log(`[RP Backfill] Total users: ${usersSnapshot.size}`);
-
-    let processed = 0;
-    let awarded = 0;
-    let skipped = 0;
-    let totalRPAwarded = 0;
-    const details = [];
-
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      const email = userDoc.id;
-      const referralCount = userData.referralCount || 0;
-
-      if (referralCount <= 0) {
-        skipped++;
-        continue;
-      }
-
-      processed++;
-
-      // Calculate expected referral RP
-      const referralRP = referralCount * RP_PER_REFERRAL_BF;
-
-      // Calculate level & level-up bonuses
-      const currentLevel = calcLevelFromRefs(referralCount);
-      let levelupRP = 0;
-      for (let lvl = 1; lvl <= currentLevel; lvl++) {
-        if (lvl % LEVELUP_INTERVAL_BF === 0) {
-          levelupRP += RP_LEVELUP_BONUS_BF;
-        }
-      }
-
-      const expectedTotalRP = referralRP + levelupRP;
-
-      // Check existing RP
-      const rpDocSnap = await db.collection("user_reward_points").doc(email).get();
-      const existingRP = rpDocSnap.exists ? (rpDocSnap.data().totalRP || 0) : 0;
-      const existingAvailable = rpDocSnap.exists ? (rpDocSnap.data().availableRP || 0) : 0;
-
-      const rpToAward = expectedTotalRP - existingRP;
-
-      if (rpToAward <= 0) {
-        skipped++;
-        details.push({ email, referrals: referralCount, level: currentLevel, existing: existingRP, expected: expectedTotalRP, awarded: 0, status: "SKIP" });
-        continue;
-      }
-
-      const backfillReferralRP = Math.max(0, referralRP - existingRP);
-      const backfillLevelupRP = rpToAward - Math.max(0, backfillReferralRP);
-
-      if (!dryRun) {
-        const now = new Date().toISOString();
-
-        // Add referral RP history
-        if (backfillReferralRP > 0) {
-          await db.collection("rp_history").add({
-            userId: email,
-            type: "referral",
-            amount: backfillReferralRP,
-            source: `Backfill: ${referralCount} referrals`,
-            timestamp: now,
-          });
-        }
-
-        // Add level-up RP history
-        if (backfillLevelupRP > 0) {
-          await db.collection("rp_history").add({
-            userId: email,
-            type: "levelup",
-            amount: backfillLevelupRP,
-            source: `Backfill: Level milestones up to LVL ${currentLevel}`,
-            timestamp: now,
-          });
-        }
-
-        // Update user_reward_points
-        if (rpDocSnap.exists) {
-          await db.collection("user_reward_points").doc(email).update({
-            totalRP: existingRP + rpToAward,
-            availableRP: existingAvailable + rpToAward,
-            updatedAt: now,
-          });
-        } else {
-          await db.collection("user_reward_points").doc(email).set({
-            userId: email,
-            totalRP: rpToAward,
-            claimedRP: 0,
-            availableRP: rpToAward,
-            createdAt: now,
-            updatedAt: now,
-          });
-        }
-      }
-
-      awarded++;
-      totalRPAwarded += rpToAward;
-      details.push({
-        email,
-        referrals: referralCount,
-        level: currentLevel,
-        existing: existingRP,
-        expected: expectedTotalRP,
-        awarded: rpToAward,
-        refRP: backfillReferralRP,
-        lvlRP: backfillLevelupRP,
-        status: dryRun ? "WOULD_AWARD" : "AWARDED",
-      });
-
-      console.log(`[RP Backfill] ${email}: ${referralCount} refs, LVL ${currentLevel}, +${rpToAward} RP`);
-    }
-
-    console.log(`[RP Backfill] Complete: processed=${processed}, awarded=${awarded}, skipped=${skipped}, totalRP=${totalRPAwarded}`);
-
-    return res.status(200).json({
-      success: true,
-      dryRun: !!dryRun,
-      summary: { processed, awarded, skipped, totalRPAwarded },
-      details,
-    });
-  } catch (err) {
-    console.error("[RP Backfill] Failed:", err);
-    return res.status(500).json({ error: err.message || "Backfill failed" });
-  }
-});
 
 // =============================================================================
 // AGENT GATEWAY - AI Agent Onboarding & Interaction API
@@ -9609,39 +9469,176 @@ async function getRPConfig() {
   }
 }
 
+// ── P0: RP daily caps — ONE control point ───────────────────────────────
+// Every server-side RP credit goes through `creditRP` below, which enforces
+// a per-account daily hard cap inside the same transaction that writes the
+// balance. The cap lives here rather than at each call site because a sum of
+// per-action limits silently raises the ceiling every time an action is added.
+//
+// Category sub-caps bound any single earning surface; the global cap bounds
+// the account. A normal engaged user earns 110~180 RP/day, so 300 leaves
+// 1.7~2.7x headroom and only binds abusers.
+const RP_DAILY_HARDCAP = 300;
+const RP_CATEGORY_CAPS = { game: 120, referral: 200, propagation: 100, storage: 100, action: 150 };
+
+/** Which sub-cap bucket an RP type spends from. */
+function rpCategoryOf(type) {
+  if (type === "mini_game") return "game";
+  if (type === "referral_tier1_rp" || type === "referral_tier2_rp") return "propagation";
+  if (type === "referral" || type === "levelup" || String(type).startsWith("agent_referral")) return "referral";
+  if (type === "storage_contribution" || type === "mobile_node_daily") return "storage";
+  return "action";
+}
+
+const rpDayKey = () => new Date().toISOString().slice(0, 10); // UTC day
+
 /**
- * Server-side RP award with referral propagation (mirrors client addRewardPoints).
- * Awards RP to a user and propagates to Tier 1 & Tier 2 referrers.
+ * Transactionally credit RP with daily caps + optional idempotency.
+ *
+ * Returns { awarded, requested, capped, newTotal, dedup }. `awarded` may be
+ * less than `requested` (partial credit up to the cap) or 0 (cap reached).
+ * Callers MUST treat 0 as "nothing was granted" rather than assuming success.
+ *
+ * @param {object} p
+ * @param {string} p.email  - user id (lowercased email)
+ * @param {number} p.amount - requested RP (> 0)
+ * @param {string} p.type   - RP action type (drives the sub-cap bucket)
+ * @param {string} p.source - human-readable description for rp_history
+ * @param {string} [p.idemKey] - dedup key; a repeat within the day is a no-op
+ * @return {Promise<object>} credit outcome
+ */
+async function creditRP({ email, amount, type, source, idemKey }) {
+  const db2 = admin.firestore();
+  const uid = String(email || "").toLowerCase();
+  const want = Math.floor(Number(amount) || 0);
+  if (!uid || want <= 0) return { awarded: 0, requested: 0, capped: false, newTotal: 0 };
+
+  const day = rpDayKey();
+  const cat = rpCategoryOf(type);
+  const counterRef = db2.collection("rp_daily_counters").doc(`${day}_${uid}`);
+  const rpRef = db2.collection("user_reward_points").doc(uid);
+  const historyRef = db2.collection("rp_history").doc();
+  const now = new Date().toISOString();
+
+  return db2.runTransaction(async (t) => {
+    const [cSnap, rSnap] = await Promise.all([t.get(counterRef), t.get(rpRef)]);
+    const c = cSnap.exists ? cSnap.data() : {};
+    const keys = Array.isArray(c.idem_keys) ? c.idem_keys : [];
+    if (idemKey && keys.includes(idemKey)) {
+      return { awarded: 0, requested: want, capped: false, dedup: true, newTotal: (rSnap.exists ? rSnap.data().totalRP : 0) || 0 };
+    }
+
+    const usedTotal = c.total || 0;
+    const usedCat = (c.byCategory || {})[cat] || 0;
+    const room = Math.min(RP_DAILY_HARDCAP - usedTotal, (RP_CATEGORY_CAPS[cat] ?? RP_DAILY_HARDCAP) - usedCat);
+    const grant = Math.max(0, Math.min(want, room));
+
+    if (grant > 0) {
+      if (rSnap.exists) {
+        t.update(rpRef, {
+          totalRP: admin.firestore.FieldValue.increment(grant),
+          availableRP: admin.firestore.FieldValue.increment(grant),
+          updatedAt: now,
+        });
+      } else {
+        t.set(rpRef, {
+          userId: uid, totalRP: grant, claimedRP: 0, availableRP: grant,
+          createdAt: now, updatedAt: now,
+        });
+      }
+      t.set(historyRef, { userId: uid, type, amount: grant, source, timestamp: now });
+    }
+
+    const newKeys = idemKey ? keys.slice(-199).concat(idemKey) : keys;
+    t.set(counterRef, {
+      day, userId: uid,
+      total: usedTotal + grant,
+      byCategory: { ...(c.byCategory || {}), [cat]: usedCat + grant },
+      idem_keys: newKeys,
+      updatedAt: now,
+    }, { merge: true });
+
+    const prevTotal = (rSnap.exists ? rSnap.data().totalRP : 0) || 0;
+    return { awarded: grant, requested: want, capped: grant < want, newTotal: prevTotal + grant };
+  });
+}
+
+/**
+ * Advance the user's login streak. Server-side port of the logic that used to
+ * run in the browser (services/firebaseService.ts trackUserLogin), which wrote
+ * user_streaks directly and is therefore blocked once the rules lock lands.
+ *
+ * Day boundaries stay on KST to match the original behaviour — moving users to
+ * UTC would silently break streaks for anyone playing in the evening.
+ *
+ * @param {string} email - user id (lowercased email)
+ * @return {Promise<object>} { currentStreak, longestStreak, milestone, alreadyToday }
+ */
+async function updateStreakServerSide(email) {
+  const db2 = admin.firestore();
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const today = kstNow.toISOString().slice(0, 10);
+  const y = new Date(kstNow.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const ref = db2.collection("user_streaks").doc(email);
+  return db2.runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists) {
+      const doc = {
+        userId: email, currentStreak: 1, longestStreak: 1,
+        lastActiveDate: today, streakStartDate: today, totalActiveDays: 1,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      t.set(ref, doc);
+      return { currentStreak: 1, longestStreak: 1, milestone: true, alreadyToday: false };
+    }
+    const d = s.data();
+    if (d.lastActiveDate === today) {
+      return {
+        currentStreak: d.currentStreak || 1,
+        longestStreak: d.longestStreak || 1,
+        milestone: false, alreadyToday: true,
+      };
+    }
+    const next = d.lastActiveDate === y ? (d.currentStreak || 0) + 1 : 1;
+    const longest = Math.max(next, d.longestStreak || 0);
+    t.update(ref, {
+      currentStreak: next,
+      longestStreak: longest,
+      lastActiveDate: today,
+      totalActiveDays: (d.totalActiveDays || 0) + 1,
+      updatedAt: new Date().toISOString(),
+    });
+    return { currentStreak: next, longestStreak: longest, milestone: true, alreadyToday: false };
+  });
+}
+
+/**
+ * Server-side RP award with referral propagation.
+ * Awards RP through the capped, transactional `creditRP` and propagates
+ * Tier 1 / Tier 2 shares of what was ACTUALLY granted.
+ *
+ * NOTE: the referrer lookup reads `users.referredBy`, but registration writes
+ * `users.referrerId` — so server-side propagation is currently inert. That is
+ * deliberately NOT fixed here: repointing it is a ~+12% issuance change, and
+ * the plan pairs it with the propagation sub-cap in a later phase. The cap
+ * infrastructure it needs now exists (RP_CATEGORY_CAPS.propagation).
+ *
  * @param {string} email - User email
  * @param {number} amount - RP amount
  * @param {string} type - RP action type
  * @param {string} source - Description
  * @param {object} rpCfg - RP config (from getRPConfig)
+ * @param {object} [opts] - { idemKey } dedup key for replay-prone callers
+ * @return {Promise<void>} resolves when the award + propagation settle
  */
-async function serverAddRewardPoints(email, amount, type, source, rpCfg) {
+async function serverAddRewardPoints(email, amount, type, source, rpCfg, opts = {}) {
   if (!email || amount <= 0) return;
   const db2 = admin.firestore();
-  const now = new Date().toISOString();
   try {
-    // 1. Award RP to user
-    const rpRef = db2.collection("user_reward_points").doc(email);
-    const rpSnap = await rpRef.get();
-    if (rpSnap.exists) {
-      await rpRef.update({
-        totalRP: admin.firestore.FieldValue.increment(amount),
-        availableRP: admin.firestore.FieldValue.increment(amount),
-        updatedAt: now,
-      });
-    } else {
-      await rpRef.set({
-        userId: email, totalRP: amount, claimedRP: 0, availableRP: amount,
-        createdAt: now, updatedAt: now,
-      });
-    }
-    // Log history
-    await db2.collection("rp_history").add({
-      userId: email, type, amount, source, timestamp: now,
-    });
+    // 1. Award RP to user (capped, transactional)
+    const primary = await creditRP({ email, amount, type, source, idemKey: opts.idemKey });
+    if (primary.awarded <= 0) return; // daily cap reached — nothing to propagate
 
     // 2. Referral propagation (skip for referral-derived types to prevent loops)
     const SKIP_TYPES = ["referral_tier1_rp", "referral_tier2_rp", "referral", "levelup"];
@@ -9660,27 +9657,14 @@ async function serverAddRewardPoints(email, amount, type, source, rpCfg) {
     const referredBy = userData.referredBy;
     if (!referredBy) return;
 
-    // Tier 1: direct referrer
-    const tier1Amount = Math.floor(amount * tier1Rate);
+    // Tier 1: direct referrer. Propagate off what was ACTUALLY granted, not
+    // the requested amount — otherwise a capped user still mints full
+    // downline RP for their referrer.
+    const tier1Amount = Math.floor(primary.awarded * tier1Rate);
     if (tier1Amount > 0) {
-      const t1Ref = db2.collection("user_reward_points").doc(referredBy);
-      const t1Snap = await t1Ref.get();
-      if (t1Snap.exists) {
-        await t1Ref.update({
-          totalRP: admin.firestore.FieldValue.increment(tier1Amount),
-          availableRP: admin.firestore.FieldValue.increment(tier1Amount),
-          updatedAt: now,
-        });
-      } else {
-        await t1Ref.set({
-          userId: referredBy, totalRP: tier1Amount, claimedRP: 0, availableRP: tier1Amount,
-          createdAt: now, updatedAt: now,
-        });
-      }
-      await db2.collection("rp_history").add({
-        userId: referredBy, type: "referral_tier1_rp", amount: tier1Amount,
+      await creditRP({
+        email: referredBy, amount: tier1Amount, type: "referral_tier1_rp",
         source: `Tier1 ${Math.round(tier1Rate * 100)}% from ${email}: ${source}`,
-        timestamp: now,
       });
 
       // Tier 2: grand referrer
@@ -9692,26 +9676,11 @@ async function serverAddRewardPoints(email, amount, type, source, rpCfg) {
         const t1UserData = t1UserSnap.docs[0].data();
         const grandReferrer = t1UserData.referredBy;
         if (grandReferrer && grandReferrer !== email) {
-          const tier2Amount = Math.floor(amount * tier2Rate);
+          const tier2Amount = Math.floor(primary.awarded * tier2Rate);
           if (tier2Amount > 0) {
-            const t2Ref = db2.collection("user_reward_points").doc(grandReferrer);
-            const t2Snap = await t2Ref.get();
-            if (t2Snap.exists) {
-              await t2Ref.update({
-                totalRP: admin.firestore.FieldValue.increment(tier2Amount),
-                availableRP: admin.firestore.FieldValue.increment(tier2Amount),
-                updatedAt: now,
-              });
-            } else {
-              await t2Ref.set({
-                userId: grandReferrer, totalRP: tier2Amount, claimedRP: 0, availableRP: tier2Amount,
-                createdAt: now, updatedAt: now,
-              });
-            }
-            await db2.collection("rp_history").add({
-              userId: grandReferrer, type: "referral_tier2_rp", amount: tier2Amount,
+            await creditRP({
+              email: grandReferrer, amount: tier2Amount, type: "referral_tier2_rp",
               source: `Tier2 ${Math.round(tier2Rate * 100)}% from ${email}: ${source}`,
-              timestamp: now,
             });
           }
         }
@@ -10296,16 +10265,24 @@ exports.agentGateway = onRequest({
       "mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat",
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
       "mobile_node.claim_onchain", "storage_rewards.status", "storage_rewards.run_accrual",
-      "node_fleet.health", "game.submit", "game.state",
+      "node_fleet.health", "game.start", "game.submit", "game.state", "rp.award",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
       "storage_node.fetch_chunk", "chunk.proof_challenge", "chunk.proof_response",
       "chunk.status", "chunk.fetch",
       "chunk.register", "chunk.assignments", "chunk.stored", "chunk.fetch_staging",
-      "reward_policy.get_active", "reward_policy.list", "reward_policy.create", "reward_policy.activate",
-      "reward_policy.update", "reward_policy.deactivate",
-      "node_metrics.ingest", "node_metrics.query", "node_metrics.aggregate_month",
-      "node_metrics.get_monthly", "node_metrics.list_monthly",
+    ];
+    // P0 SECURITY: the reward-settlement / ops actions used to live in
+    // skipAgentAuth, i.e. anyone with curl could set revenue, move the FX rate,
+    // run the reward engine, approve their own snapshot and generate a payout.
+    // They now require (a) *some* credential via the check below, and (b) an
+    // admin Firebase identity via ADMIN_ONLY_ACTIONS. Per-node read actions
+    // (my_rewards.*, node_metrics.ingest) only need a credential so node
+    // clients and the wallet keep working.
+    const ADMIN_ONLY_ACTIONS = new Set([
+      "reward_policy.create", "reward_policy.activate", "reward_policy.update", "reward_policy.deactivate",
+      "reward_policy.get_active", "reward_policy.list",
+      "node_metrics.query", "node_metrics.aggregate_month", "node_metrics.get_monthly", "node_metrics.list_monthly",
       "reward_engine.run", "reward_engine.get_snapshot", "reward_engine.list_snapshots", "reward_engine.update_status",
       "revenue.set", "revenue.confirm", "revenue.get", "revenue.list",
       "snapshot.approve", "snapshot.reject",
@@ -10314,9 +10291,8 @@ exports.agentGateway = onRequest({
       "rollover.get", "rollover.list", "rollover.apply",
       "bootstrap.get", "bootstrap.set",
       "abuse.scan", "abuse.list", "abuse.exclude", "abuse.resolve",
-      "ops.monthly_report",
-      "metrics.sync_from_nodes", "my_rewards.summary", "my_rewards.quality",
-    ];
+      "ops.monthly_report", "metrics.sync_from_nodes",
+    ]);
 
     // Detect Firebase ID token (non-vcn_ bearer tokens)
     let firebaseIdToken = null;
@@ -10329,6 +10305,19 @@ exports.agentGateway = onRequest({
 
     if (!apiKeyParam && !firebaseIdToken && !skipAgentAuth.includes(action)) {
       return res.status(401).json({ error: "Missing api_key or Firebase auth token. Register first or use Authorization: Bearer <firebase_id_token>." });
+    }
+
+    // P0 SECURITY: single admin gate for settlement/ops actions. Mirrors the
+    // existing storage_rewards.run_accrual pattern (Firebase ID token + email
+    // whitelist) so there is one place to audit instead of ~30 call sites.
+    if (ADMIN_ONLY_ACTIONS.has(action)) {
+      if (!firebaseIdToken) {
+        return res.status(401).json({ error: "Admin Firebase auth token required for this action" });
+      }
+      const adminUser = await authenticateFirebaseUser(firebaseIdToken);
+      if (!adminUser || !VCN_ADMIN_EMAILS.includes((adminUser.email || "").toLowerCase())) {
+        return res.status(403).json({ error: "Not an admin" });
+      }
     }
 
     let agent = null; // Can be agent context OR user context (with _isUser flag)
@@ -14324,11 +14313,22 @@ exports.agentGateway = onRequest({
         }
 
         // Also award storage contribution RP via rp_history (for daily digest email)
+        //
+        // P0: this fires on EVERY heartbeat (wifi ~5 min, cellular ~30 min).
+        // With no bound, a node holding 1,000 chunks minted 100 RP x 288
+        // heartbeats = 28,800 RP/day — by far the largest single-account
+        // issuance path in the system, and there was no config key to turn it
+        // off. It is now bounded twice: the `storage` category sub-cap inside
+        // creditRP (100 RP/day, shared with mobile_node_daily) and a per-node
+        // idempotency key so a client replaying heartbeats cannot stack
+        // credits within the same hour.
         if (rpStorageBonus > 0 && mnData.email) {
+          const hourKey = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
           serverAddRewardPoints(
             mnData.email, rpStorageBonus,
-            "storage_contribution", `Storage contribution: ${chunksHeld} chunks`, rpCfg
-          ).catch(() => { });
+            "storage_contribution", `Storage contribution: ${chunksHeld} chunks`, rpCfg,
+            { idemKey: `storage:${mnDoc.id}:${hourKey}` }
+          ).catch((e) => console.warn("[Mobile Node] storage RP award failed:", e.message));
         }
 
         // Log heartbeat to subcollection for analytics
@@ -14539,27 +14539,66 @@ exports.agentGateway = onRequest({
 
     // --- mobile_node.submit_attestation ---
     // ── Game reward pipeline (server-authoritative) ──────────────────────
-    // Games previously credited RP by writing user_reward_points/rp_history
-    // and mini_game_plays DIRECTLY from the client, with client-side RNG and
-    // client-enforced daily caps — trivially forgeable, and RP is the
-    // pre-listing VCN substitute. These actions move crediting + cap
-    // enforcement server-side with per-play bounds and idempotency. (Client
-    // migration + a firestore.rules lock on the reward collections complete
-    // the fix.)
+    // P0 REWRITE. The previous version accepted the client's own reward:
+    //   const reqRp = Math.max(0, Math.min(max.rp, Number(body.rp) || 0));
+    // clamping to a per-play ceiling but otherwise trusting it, recording
+    // `body.score` without checking it, and deduping on a CLIENT-generated
+    // play_token. Because the ceilings were sized for a legit dice x10
+    // (crash 5,500 / tower 3,100 / mine 2,000), anyone holding a Firebase ID
+    // token could POST game.submit and mint ~43,000 RP/day — no game code
+    // required. The in-app game centre never calls this endpoint at all, so
+    // the entire exploit surface was direct API access.
+    //
+    // Now: `game.start` issues the play token AND decides the reward with a
+    // server-side roll; `game.submit` only redeems a token the server itself
+    // issued. The client cannot propose a number, so per-play ceilings are a
+    // backstop rather than the control. Daily RP from games is additionally
+    // bounded by the `game` category sub-cap in creditRP (120 RP/day).
     const GAME_KEYS = ["spin", "block", "scratch", "memory", "falling", "predict", "tower", "mine", "flappy", "slots", "crash"];
     const GAME_USED_FIELD = { spin: "spinsUsed", block: "blocksUsed", scratch: "scratchUsed", memory: "memoryUsed", falling: "fallingUsed", predict: "predictUsed", tower: "towerUsed", mine: "mineUsed", flappy: "flappyUsed", slots: "slotsUsed", crash: "crashUsed" };
     const GAME_DAILY_KEY = { spin: "game_daily_spins", block: "game_daily_blocks", scratch: "game_daily_scratch", memory: "game_daily_memory", falling: "game_daily_falling", predict: "game_daily_predict", tower: "game_daily_tower", mine: "game_daily_mine", flappy: "game_daily_flappy", slots: "game_daily_slots", crash: "game_daily_crash" };
     const GAME_DAILY_DEFAULT = { spin: 3, block: 2, scratch: 3, memory: 3, falling: 3, predict: 3, tower: 3, mine: 3, flappy: 3, slots: 3, crash: 3 };
-    // Hard ceiling per single play (RP headroom includes a legit dice x10)
+    // Per-play ceiling. Backstop only — the server picks the actual reward.
     const GAME_MAX = {
-      spin: { vcn: 25, rp: 1000 }, block: { vcn: 8, rp: 200 }, scratch: { vcn: 25, rp: 500 },
-      memory: { vcn: 5, rp: 400 }, falling: { vcn: 5, rp: 400 }, predict: { vcn: 10, rp: 400 },
-      tower: { vcn: 37, rp: 3100 }, mine: { vcn: 60, rp: 2000 }, flappy: { vcn: 5, rp: 400 },
-      slots: { vcn: 10, rp: 500 }, crash: { vcn: 110, rp: 5500 },
+      spin: { vcn: 25, rp: 60 }, block: { vcn: 8, rp: 40 }, scratch: { vcn: 25, rp: 60 },
+      memory: { vcn: 5, rp: 50 }, falling: { vcn: 5, rp: 50 }, predict: { vcn: 10, rp: 50 },
+      tower: { vcn: 37, rp: 80 }, mine: { vcn: 60, rp: 70 }, flappy: { vcn: 5, rp: 50 },
+      slots: { vcn: 10, rp: 60 }, crash: { vcn: 110, rp: 90 },
     };
+    // Server reward roll. Weighted so the expected value of one play is a
+    // small fraction of the ceiling (3 plays ≈ 90 RP against the 120 cap),
+    // and a jackpot is rare rather than the default outcome.
+    const GAME_RP_ROLL = {
+      spin: [[0.50, 3], [0.30, 8], [0.15, 20], [0.05, 60]],
+      block: [[0.55, 3], [0.30, 8], [0.15, 40]],
+      scratch: [[0.60, 4], [0.25, 12], [0.12, 30], [0.03, 60]],
+      memory: [[0.50, 4], [0.35, 10], [0.15, 50]],
+      falling: [[0.50, 4], [0.35, 10], [0.15, 50]],
+      predict: [[0.50, 3], [0.35, 10], [0.15, 50]],
+      tower: [[0.45, 5], [0.35, 12], [0.15, 30], [0.05, 80]],
+      mine: [[0.45, 5], [0.35, 12], [0.15, 28], [0.05, 70]],
+      flappy: [[0.50, 4], [0.35, 10], [0.15, 50]],
+      slots: [[0.60, 3], [0.28, 10], [0.10, 25], [0.02, 60]],
+      crash: [[0.45, 4], [0.33, 10], [0.17, 30], [0.05, 90]],
+    };
+    /**
+     * Pick this play's RP with a server-side weighted roll.
+     * @param {string} game - game key
+     * @return {number} RP for this play, bounded by GAME_MAX
+     */
+    function rollGameRp(game) {
+      const table = GAME_RP_ROLL[game] || [[1, 3]];
+      let r = crypto.randomInt(0, 10000) / 10000;
+      for (const [p, rp] of table) {
+        if (r < p) return Math.min(rp, (GAME_MAX[game] || { rp: 50 }).rp);
+        r -= p;
+      }
+      return Math.min(table[table.length - 1][1], (GAME_MAX[game] || { rp: 50 }).rp);
+    }
     const gameServerDate = () => new Date().toISOString().slice(0, 10);
 
-    if (action === "game.submit") {
+    // --- game.start (server issues the play token AND the reward) ---
+    if (action === "game.start") {
       try {
         if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
         const gu = await authenticateFirebaseUser(firebaseIdToken);
@@ -14568,69 +14607,115 @@ exports.agentGateway = onRequest({
 
         const game = String(body.game || "");
         if (!GAME_KEYS.includes(game)) return res.status(400).json({ error: "Unknown game" });
-        const playToken = String(body.play_token || "").slice(0, 64);
-        if (!playToken) return res.status(400).json({ error: "play_token required" });
 
         const cfg = await getRPConfig();
         const cap = cfg[GAME_DAILY_KEY[game]] || GAME_DAILY_DEFAULT[game];
-        const max = GAME_MAX[game] || { vcn: 50, rp: 1000 };
-        // Clamp client-proposed reward to the game's per-play ceiling — a
-        // forged score can never mint more than one legit max play.
-        const reqVcn = Math.max(0, Math.min(max.vcn, Number(body.vcn) || 0));
-        const reqRp = Math.max(0, Math.min(max.rp, Number(body.rp) || 0));
         const usedField = GAME_USED_FIELD[game];
-
-        const today = gameServerDate();
-        let date = String(body.date || "");
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
-        if (Math.abs(Date.parse(date + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) > 86400000) date = today;
-
+        const date = gameServerDate();
         const docRef = db.collection("mini_game_plays").doc(`${date}_${email}`);
+
+        // Consume the play up-front so an abandoned round still costs an
+        // attempt — otherwise "start, discard bad roll, restart" is free.
+        const playToken = crypto.randomBytes(24).toString("hex");
+        const rp = rollGameRp(game);
+
         const outcome = await db.runTransaction(async (t) => {
           const s = await t.get(docRef);
           const d = s.exists ? s.data() : {};
-          const tokens = Array.isArray(d.play_tokens) ? d.play_tokens : [];
-          if (tokens.includes(playToken)) {
-            return { dedup: true, used: d[usedField] || 0, cap, creditedRp: 0, creditedVcn: 0, totalRP: d.totalRP || 0, totalVCN: d.totalVCN || 0 };
-          }
           const used = d[usedField] || 0;
           if (used >= cap) return { capExceeded: true, used, cap };
-          const games = (Array.isArray(d.games) ? d.games : []).slice(-199);
-          games.push({ game, vcn: reqVcn, rp: reqRp, score: Number(body.score) || 0, timestamp: new Date().toISOString() });
-          const newTokens = tokens.slice(-199);
-          newTokens.push(playToken);
           t.set(docRef, {
             date, email,
             [usedField]: used + 1,
-            totalVCN: (d.totalVCN || 0) + reqVcn,
-            totalRP: (d.totalRP || 0) + reqRp,
-            games, play_tokens: newTokens,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          return { used: used + 1, cap, creditedRp: reqRp, creditedVcn: reqVcn, totalRP: (d.totalRP || 0) + reqRp, totalVCN: (d.totalVCN || 0) + reqVcn };
+          return { used: used + 1, cap };
         });
-
         if (outcome.capExceeded) {
           return res.status(429).json({ error: "Daily limit reached", used: outcome.used, cap: outcome.cap });
         }
-        // Credit bounded RP server-side (no referral propagation for games)
-        if (!outcome.dedup && outcome.creditedRp > 0) {
-          await db.collection("user_reward_points").doc(email).set({
-            userId: email,
-            totalRP: admin.firestore.FieldValue.increment(outcome.creditedRp),
-            availableRP: admin.firestore.FieldValue.increment(outcome.creditedRp),
-            updatedAt: new Date().toISOString(),
+
+        await db.collection("mini_game_tokens").doc(playToken).set({
+          email, game, rp, date,
+          issued_at: Date.now(),
+          consumed: false,
+        });
+
+        return res.json({
+          success: true, game, play_token: playToken,
+          rp, // the client renders THIS outcome; it cannot propose another
+          used: outcome.used, cap: outcome.cap,
+          remaining: Math.max(0, outcome.cap - outcome.used),
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `game.start failed: ${e.message}` });
+      }
+    }
+
+    if (action === "game.submit") {
+      try {
+        if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
+        const gu = await authenticateFirebaseUser(firebaseIdToken);
+        if (!gu || !gu.email) return res.status(401).json({ error: "Invalid auth token" });
+        const email = gu.email.toLowerCase();
+
+        const playToken = String(body.play_token || "").slice(0, 64);
+        if (!playToken) return res.status(400).json({ error: "play_token required" });
+
+        // The token is the ONLY source of truth for game + reward. Anything
+        // the caller puts in body.rp / body.vcn / body.score is ignored.
+        const tokRef = db.collection("mini_game_tokens").doc(playToken);
+        const redeemed = await db.runTransaction(async (t) => {
+          const ts = await t.get(tokRef);
+          if (!ts.exists) return { invalid: "Unknown play_token — call game.start first" };
+          const tk = ts.data();
+          if (tk.email !== email) return { invalid: "play_token does not belong to this account" };
+          if (tk.consumed) return { dedup: true, game: tk.game, rp: 0 };
+          if (Date.now() - (tk.issued_at || 0) > 10 * 60 * 1000) {
+            return { invalid: "play_token expired" };
+          }
+          t.update(tokRef, { consumed: true, consumed_at: Date.now() });
+          return { game: tk.game, rp: tk.rp, date: tk.date };
+        });
+        if (redeemed.invalid) return res.status(400).json({ error: redeemed.invalid });
+
+        const game = redeemed.game;
+        const date = redeemed.date || gameServerDate();
+        const docRef = db.collection("mini_game_plays").doc(`${date}_${email}`);
+
+        // Record the play for the daily leaderboard / history. The attempt
+        // itself was already counted in game.start, so this only appends.
+        if (!redeemed.dedup) {
+          await docRef.set({
+            date, email,
+            totalRP: admin.firestore.FieldValue.increment(redeemed.rp),
+            games: admin.firestore.FieldValue.arrayUnion({
+              game, rp: redeemed.rp, timestamp: new Date().toISOString(),
+            }),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          await db.collection("rp_history").add({
-            userId: email, type: "mini_game", amount: outcome.creditedRp,
-            source: `game:${game}`, timestamp: new Date().toISOString(),
+        }
+
+        // Credit through the shared capped path (game sub-cap 120 RP/day).
+        // play_token doubles as the idempotency key.
+        let credited = 0;
+        let capReached = false;
+        if (!redeemed.dedup && redeemed.rp > 0) {
+          const r = await creditRP({
+            email, amount: redeemed.rp, type: "mini_game",
+            source: `game:${game}`, idemKey: `game:${playToken}`,
           });
+          credited = r.awarded;
+          capReached = r.capped;
         }
         return res.json({
           success: true, game,
-          credited_vcn: outcome.creditedVcn, credited_rp: outcome.creditedRp,
-          used: outcome.used, cap: outcome.cap, remaining: Math.max(0, outcome.cap - outcome.used),
-          total_vcn: outcome.totalVCN, total_rp: outcome.totalRP, dedup: !!outcome.dedup,
+          credited_rp: credited,
+          rolled_rp: redeemed.rp || 0,
+          // Surfaced so the client can say "daily cap reached" instead of
+          // silently showing 0 — a silent 0 is the worst possible feedback.
+          cap_reached: capReached,
+          dedup: !!redeemed.dedup,
         });
       } catch (e) {
         return res.status(500).json({ error: `game.submit failed: ${e.message}` });
@@ -14655,6 +14740,148 @@ exports.agentGateway = onRequest({
         return res.json({ success: true, date: today, remaining, total_vcn: d.totalVCN || 0, total_rp: d.totalRP || 0, games: (d.games || []).slice(-50) });
       } catch (e) {
         return res.status(500).json({ error: `game.state failed: ${e.message}` });
+      }
+    }
+
+    // --- rp.award (single gateway for all non-game RP) ---
+    // P0. Replaces the client-side `addRewardPoints` in
+    // services/firebaseService.ts, which wrote user_reward_points and
+    // rp_history straight from the browser. The caller names an ACTION; the
+    // server decides the amount from config/rp_rewards. There is deliberately
+    // no `amount` parameter.
+    //
+    // addRewardPoints was not just a credit — it also raised the RP toast,
+    // detected balance milestones (writing user_milestones and popping a
+    // modal) and propagated to referrers. Those must survive the move or the
+    // whole feedback loop the daily habit depends on dies silently, so the
+    // response carries { awarded, newTotal, milestone, streak } for the client
+    // to render.
+    const RP_ACTION_WHITELIST = {
+      // type -> { cfgKey, perDay }
+      daily_login: { cfgKey: "daily_login", perDay: 1 },
+      profile_update: { cfgKey: "profile_update", perDay: 1 },
+      cex_connect: { cfgKey: "cex_connect", perDay: 1 },
+      quant_strategy_setup: { cfgKey: "quant_strategy_setup", perDay: 1 },
+      agent_create: { cfgKey: "agent_create", perDay: 5 },
+      staking_deposit: { cfgKey: "staking_deposit", perDay: 5 },
+      market_purchase: { cfgKey: "market_purchase", perDay: 10 },
+      market_publish: { cfgKey: "market_publish", perDay: 10 },
+      transfer_send: { cfgKey: "transfer_send", perDay: 10 },
+      disk_upload: { cfgKey: "disk_upload", perDay: 20 },
+      disk_download: { cfgKey: "disk_download", perDay: 20 },
+      ai_chat: { cfgKey: "ai_chat", perDay: 20 },
+    };
+    // Balance milestones (mirrors the old client behaviour: celebrate at each
+    // threshold, but only 10k carries a bonus).
+    const RP_MILESTONES = [
+      { at: 100, bonus: 0 }, { at: 500, bonus: 0 }, { at: 1000, bonus: 0 },
+      { at: 5000, bonus: 0 }, { at: 10000, bonus: 50 },
+    ];
+    const STREAK_BONUS_DEFAULT = { 3: 20, 7: 50, 14: 100, 30: 300, 60: 500, 100: 1000 };
+
+    if (action === "rp.award") {
+      try {
+        if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
+        const ru = await authenticateFirebaseUser(firebaseIdToken);
+        if (!ru || !ru.email) return res.status(401).json({ error: "Invalid auth token" });
+        const email = ru.email.toLowerCase();
+
+        const type = String(body.type || "");
+        const spec = RP_ACTION_WHITELIST[type];
+        if (!spec) return res.status(400).json({ error: `RP action not allowed: ${type}` });
+
+        const cfg = await getRPConfig();
+        const amount = Math.max(0, Math.floor(Number(cfg[spec.cfgKey]) || 0));
+        if (amount <= 0) return res.json({ success: true, awarded: 0, reason: "action_disabled" });
+
+        const day = rpDayKey();
+        const source = String(body.source || type).slice(0, 200);
+
+        // Per-action daily count, on top of the category/global caps.
+        const useRef = db.collection("rp_action_usage").doc(`${day}_${email}`);
+        const allowed = await db.runTransaction(async (t) => {
+          const s = await t.get(useRef);
+          const d = s.exists ? s.data() : {};
+          const used = (d.counts || {})[type] || 0;
+          if (used >= spec.perDay) return false;
+          t.set(useRef, {
+            day, userId: email,
+            counts: { ...(d.counts || {}), [type]: used + 1 },
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          return true;
+        });
+        if (!allowed) {
+          return res.json({ success: true, awarded: 0, reason: "action_daily_limit", type });
+        }
+
+        // daily_login also drives the streak, which used to be maintained by
+        // the browser writing user_streaks directly.
+        let streak = null;
+        if (type === "daily_login") {
+          streak = await updateStreakServerSide(email);
+        }
+
+        const idemKey = body.idem_key ? `rp:${type}:${String(body.idem_key).slice(0, 64)}` : undefined;
+        const credit = await creditRP({ email, amount, type, source, idemKey });
+
+        // Streak milestone bonus, if today's streak crossed a threshold.
+        let streakBonus = 0;
+        if (streak && streak.milestone) {
+          const table = { ...STREAK_BONUS_DEFAULT };
+          for (const k of Object.keys(table)) {
+            const cfgV = Number(cfg[`streak_bonus_${k}`]);
+            if (Number.isFinite(cfgV) && cfgV >= 0) table[k] = cfgV;
+          }
+          const b = table[streak.currentStreak];
+          if (b > 0) {
+            const r = await creditRP({
+              email, amount: b, type: "daily_login",
+              source: `${streak.currentStreak}-day streak bonus`,
+              idemKey: `streak:${email}:${streak.currentStreak}`,
+            });
+            streakBonus = r.awarded;
+          }
+        }
+
+        // Milestone detection on the resulting balance.
+        const newTotal = (credit.newTotal || 0) + streakBonus;
+        let milestone = null;
+        for (const m of RP_MILESTONES) {
+          if (newTotal >= m.at && (credit.newTotal - credit.awarded) < m.at) {
+            const msRef = db.collection("user_milestones").doc(`${email}_rp_${m.at}`);
+            const already = await msRef.get();
+            if (!already.exists) {
+              await msRef.set({ userId: email, threshold: m.at, reachedAt: new Date().toISOString() });
+              milestone = { threshold: m.at, bonus: 0 };
+              if (m.bonus > 0) {
+                const mr = await creditRP({
+                  email, amount: m.bonus, type: "levelup",
+                  source: `RP milestone ${m.at}`, idemKey: `milestone:${email}:${m.at}`,
+                });
+                milestone.bonus = mr.awarded;
+              }
+            }
+            break;
+          }
+        }
+
+        return res.json({
+          success: true,
+          type,
+          awarded: credit.awarded + streakBonus + (milestone?.bonus || 0),
+          base_awarded: credit.awarded,
+          streak_bonus: streakBonus,
+          newTotal: newTotal + (milestone?.bonus || 0),
+          // `capped` lets the UI say "daily cap reached — resets tomorrow"
+          // rather than showing a silent 0.
+          capped: credit.capped,
+          milestone,
+          streak,
+        });
+      } catch (e) {
+        console.error("[rp.award] failed:", e);
+        return res.status(500).json({ error: `rp.award failed: ${e.message}` });
       }
     }
 
@@ -14718,8 +14945,7 @@ exports.agentGateway = onRequest({
           return res.status(401).json({ error: "Admin Firebase auth token required" });
         }
         const adminUser = await authenticateFirebaseUser(firebaseIdToken);
-        const adminEmails = ["sangky94@gmail.com", "jays@visai.io"];
-        if (!adminUser || !adminEmails.includes((adminUser.email || "").toLowerCase())) {
+        if (!adminUser || !VCN_ADMIN_EMAILS.includes((adminUser.email || "").toLowerCase())) {
           return res.status(403).json({ error: "Not an admin" });
         }
         // Gateway timeout is 120s — keep runs small; the daily job covers
@@ -29085,6 +29311,45 @@ exports.dailyRPDigest = onSchedule({
     const rankMap = {};
     userTotals.forEach((u, i) => { rankMap[u.uid] = i + 1; });
     const totalActiveUsers = userTotals.length;
+
+    // 4b. P0 OBSERVABILITY: persist the day's issuance so "did this change
+    // help?" is answerable. Before this there was no aggregate anywhere — the
+    // only way to know how much RP existed was to re-scan rp_history, which is
+    // exactly the scan already done above, so this costs 0 extra reads. It
+    // also gives the rules lock a tripwire: if issuance drops to ~0 the
+    // morning after the lock, a write path was missed.
+    try {
+      const byType = {};
+      let issued = 0;
+      rpSnap.forEach((d) => {
+        const e = d.data();
+        const amt = e.amount || 0;
+        issued += amt;
+        const k = e.type || "unknown";
+        byType[k] = (byType[k] || 0) + amt;
+      });
+      // Distribution top — the mean hides a handful of abusers, the top 1%
+      // share does not.
+      const sorted = userTotals.map((u) => u.total).sort((a, b) => b - a);
+      const top1Count = Math.max(1, Math.ceil(sorted.length * 0.01));
+      const top1Sum = sorted.slice(0, top1Count).reduce((s, v) => s + v, 0);
+
+      await db.collection("rp_daily_stats").doc(todayISO.slice(0, 10)).set({
+        date: todayISO.slice(0, 10),
+        issued,
+        events: rpSnap.size,
+        uniqueRecipients: totalActiveUsers,
+        byType,
+        top1PctShare: issued > 0 ? Math.round((top1Sum / issued) * 1000) / 1000 : 0,
+        maxAccountIssued: sorted[0] || 0,
+        medianAccountIssued: sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0,
+        computedAt: new Date().toISOString(),
+      }, { merge: true });
+      console.log(`[RPStats] ${todayISO.slice(0, 10)} issued=${issued} users=${totalActiveUsers} top1pct=${issued > 0 ? ((top1Sum / issued) * 100).toFixed(1) : 0}%`);
+    } catch (statsErr) {
+      // Never let the stats write block the digest emails.
+      console.error("[RPStats] aggregation failed:", statsErr);
+    }
 
     // 5. Send emails in batches
     let sentCount = 0;

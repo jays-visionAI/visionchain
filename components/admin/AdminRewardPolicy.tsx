@@ -1,7 +1,7 @@
 import { createSignal, onMount, For, Show, createMemo } from 'solid-js';
 import { RefreshCw, ChevronLeft, Plus, Check, X, AlertTriangle, Power, PowerOff, Edit3, Trash2 } from 'lucide-solid';
 
-const GATEWAY = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+import { gatewayCall } from '../../services/gatewayClient';
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface RewardPolicy {
@@ -29,14 +29,8 @@ interface RewardPolicy {
 }
 
 // ─── API Helpers ─────────────────────────────────────────────────────
-async function apiCall(action: string, body: any = {}) {
-    const res = await fetch(GATEWAY, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...body }),
-    });
-    return res.json();
-}
+// Admin-gated server-side (P0): must carry the admin's Firebase ID token.
+const apiCall = (action: string, body: any = {}) => gatewayCall(action, body);
 
 // ─── Default Form Values ─────────────────────────────────────────────
 const defaultForm = (): Omit<RewardPolicy, 'policyId' | 'createdAt' | 'updatedAt'> => ({

@@ -1,11 +1,11 @@
 import { createSignal, onMount, For, Show } from 'solid-js';
 import { RefreshCw, AlertTriangle, TrendingUp, Shield, Zap, ChevronDown, Check, X } from 'lucide-solid';
 
-const GATEWAY = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
-async function api(action: string, body: any = {}) {
-    const res = await fetch(GATEWAY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...body }) });
-    return res.json();
-}
+// Settlement/ops actions are admin-gated server-side (P0), so calls must carry
+// the signed-in admin's Firebase ID token — see services/gatewayClient.ts.
+import { gatewayCall } from '../../services/gatewayClient';
+
+const api = (action: string, body: any = {}) => gatewayCall(action, body);
 
 interface Report {
     revenue: any; snapshot: any;

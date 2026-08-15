@@ -1,12 +1,10 @@
 import { createSignal, onMount, For, Show, createMemo } from 'solid-js';
 import { RefreshCw, ChevronLeft, ChevronDown, ChevronUp, DollarSign, Check, X, AlertTriangle, Eye, Shield, Zap } from 'lucide-solid';
 
-const GATEWAY = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+import { gatewayCall } from '../../services/gatewayClient';
 
-async function api(action: string, body: any = {}) {
-    const res = await fetch(GATEWAY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...body }) });
-    return res.json();
-}
+// Admin-gated server-side (P0): must carry the admin's Firebase ID token.
+const api = (action: string, body: any = {}) => gatewayCall(action, body);
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface Snapshot { snapshotId: string; month: string; policyVersion: number; revenueUSD: number; poolUSD: number; poolAllocUSD: number; poolUseUSD: number; poolQualUSD: number; totalNodesRewarded: number; totalRewardUSD: number; totalRewardVCN: number; status: string; fxRateUsdPerVcn: number; createdAt: string; approvedBy?: string; rejectReason?: string; }

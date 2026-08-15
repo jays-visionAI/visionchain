@@ -1,0 +1,129 @@
+rules_version = '2';
+
+// Vision Chain Firestore security rules.
+//
+// PROVENANCE: this file did not exist before P0. The live rules were managed
+// only in the Firebase console and were exported with the Rules REST API
+// (firebaserules.googleapis.com .../releases -> ruleset source) before being
+// committed here, so this is the deployed ruleset plus the reward lock — NOT
+// a fresh ruleset. That matters because `firebase deploy --only
+// firestore:rules` replaces the live ruleset wholesale: publishing a
+// hand-written file would have revoked access for every collection the app
+// touches, not just the ones named below.
+//
+// WHAT CHANGED: the exported ruleset ended with
+//
+//     match /{document=**} { allow read, write: if request.auth != null; }
+//
+// i.e. ANY signed-in user could read and write ANY document in the project —
+// including the RP ledger. That is why RP could be minted from devtools. A
+// `allow write: if false` on a specific path cannot fix this: Firestore rules
+// are additive, so a deny in one match never overrides an allow in another.
+// The catch-all therefore had to become a match that can *exclude* paths,
+// which is what `isRewardLedger()` below does.
+//
+// Reads are deliberately left as they were. Restricting them to "own document
+// only" would break the referral and game leaderboards, which still scan these
+// collections from the client. Read scoping lands with the server-side
+// leaderboard aggregation; this phase closes the minting hole without
+// regressing features.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Collections that hold reward state. These are written exclusively by
+    // Cloud Functions (the Admin SDK bypasses these rules), via:
+    //   rp.award      -> user_reward_points, rp_history, user_streaks,
+    //                    user_milestones, rp_daily_counters, rp_action_usage
+    //   game.start    -> mini_game_plays, mini_game_tokens
+    //   game.submit   -> mini_game_plays, user_reward_points, rp_history
+    //   dailyRPDigest -> rp_daily_stats
+    // A client write to any of them is a forgery attempt by definition.
+    function isRewardLedger(col) {
+      return col in [
+        'user_reward_points',
+        'rp_history',
+        'rp_daily_counters',
+        'rp_daily_stats',
+        'rp_action_usage',
+        'user_streaks',
+        'user_milestones',
+        'mini_game_plays',
+        'mini_game_tokens',
+        'abuse_flags',
+        'rp_risk_flags',
+        'reward_policies',
+        'reward_snapshots',
+        'reward_snapshot_line_items',
+        'payout_requests',
+        'revenue_monthly',
+        'node_rollover_balances'
+      ];
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email in ['jays@visai.io', 'sangky94@gmail.com'];
+    }
+
+    // Transaction indexing - allow public access for blockchain sync
+    match /transactions/{txId} {
+      allow read, write: if true;
+    }
+
+    // Users collection.
+    //
+    // KNOWN GAP, deliberately left as-is: the owner-only `write` below is not
+    // actually binding, because the generic `/{col}/{docId}` match at the
+    // bottom also covers this path and rules are additive. Tightening it now
+    // would break signup: registerUser writes the REFERRER's document
+    // (referralCount, totalRewardsVCN) and the referrer's contacts
+    // subcollection from the new user's session. That cross-user write has to
+    // move server-side before this can be closed — it is tracked with the
+    // referral settlement work, and it is not an RP-minting path, which is
+    // what this phase is scoped to.
+    match /users/{email} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == email;
+    }
+
+    // Per-user subcollections (notifications, contacts, …).
+    match /users/{email}/{sub=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // RP rates drive every award the server makes, so a client that can write
+    // this document can still inflate its own rewards indirectly. Readable by
+    // the app (getRPConfig), writable only by an admin. The admin RP console
+    // writes config/rp_rewards directly and keeps working.
+    match /config/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Everything else: previous behaviour (any signed-in user), EXCEPT the
+    // reward ledgers (server-write-only) and `config` (admin-write-only).
+    //
+    // `config` MUST be excluded here explicitly. Firestore rules are additive,
+    // so the admin-only `allow write` above grants nothing on its own — this
+    // catch-all would re-open it. Verified by the rules test suite: without
+    // the exclusion, "non-admin writes config/rp_rewards" passes when it
+    // should be denied.
+    function hasDedicatedRule(col) {
+      return col == 'config';
+    }
+
+    match /{col}/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && !isRewardLedger(col)
+        && !hasDedicatedRule(col);
+    }
+
+    match /{col}/{docId}/{sub=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && !isRewardLedger(col)
+        && !hasDedicatedRule(col);
+    }
+  }
+}

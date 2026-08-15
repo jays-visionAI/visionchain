@@ -1,11 +1,10 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 
-const GATEWAY = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+import { gatewayCall } from '../../services/gatewayClient';
 
-async function api(action: string, body: any = {}) {
-    const res = await fetch(GATEWAY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...body }) });
-    return res.json();
-}
+// my_rewards.* left `skipAgentAuth` in P0, so these now need the signed-in
+// user's Firebase ID token.
+const api = (action: string, body: any = {}) => gatewayCall(action, body);
 
 interface RewardSummary {
     totalEarnedUSD: number; totalEarnedVCN: number; totalEarnedRP: number; monthsActive: number;

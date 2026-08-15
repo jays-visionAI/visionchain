@@ -27,6 +27,7 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
 import { getFunctions as getFns, httpsCallable as httpsCallableFn } from 'firebase/functions';
 import { firebaseConfig } from '../config/firebase.config';
+import { gatewayCall } from './gatewayClient';
 
 // --- User Presets (Intent Optimization) ---
 export interface PaymentPreset {
@@ -1302,95 +1303,42 @@ const getTodayKST = (): string => {
 };
 
 /**
- * Track user login event (once per day per user).
- * Writes to: user_activity_daily/{YYYY-MM-DD} with user list and count.
+ * Track user login (once per day per user, KST).
+ * Credits daily-login RP + advances the streak via the server, and records a
+ * per-user activity doc for cohort analysis.
  */
 export const trackUserLogin = async (email: string): Promise<void> => {
     if (!email) return;
+
+    // P0: daily-login RP and the login streak both moved server-side.
+    //
+    // The streak used to be maintained by the browser writing `user_streaks`
+    // directly, and the RP by `addRewardPoints` writing the ledger directly —
+    // both are locked in firestore.rules now. `rp.award` with type
+    // 'daily_login' advances the streak, applies any streak milestone bonus
+    // and credits the login RP in one server round-trip, all idempotent per
+    // KST day, so calling this on every page load is safe.
+    try {
+        await addRewardPoints(email, 0, 'daily_login', 'Daily login');
+    } catch (e) {
+        console.error('[Activity] Daily login award failed:', e);
+    }
+
+    // Cohort/DAU tracking. Kept client-side for now (it holds no reward
+    // value), but written per-user instead of appending to one document per
+    // day: the old `user_activity_daily/{date}.users` array grows without
+    // bound toward Firestore's 1MB document limit and cannot be joined
+    // against signup date, which makes D1/D7/D30 cohorts impossible to
+    // compute. One doc per (user, day) fixes both.
     try {
         const db = getFirebaseDb();
         const today = getTodayKST();
-        const activityRef = doc(db, 'user_activity_daily', today);
-
-        // Check if already tracked today for this user
-        const existing = await getDoc(activityRef);
-        if (existing.exists()) {
-            const data = existing.data();
-            const users: string[] = data.users || [];
-            if (users.includes(email)) return; // already tracked
-            await updateDoc(activityRef, {
-                users: arrayUnion(email),
-                count: increment(1),
-                updatedAt: new Date().toISOString(),
-            });
-        } else {
-            await setDoc(activityRef, {
-                date: today,
-                users: [email],
-                count: 1,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            });
-        }
-        // Award daily login RP (fire-and-forget)
-        getRPConfig().then(rpCfg => {
-            addRewardPoints(email, rpCfg.daily_login, 'daily_login', 'Daily login').catch(() => { });
-        }).catch(() => { });
-
-        // ── Streak Tracking (fire-and-forget) ──
-        (async () => {
-            try {
-                const streakRef = doc(db, 'user_streaks', email.toLowerCase());
-                const streakSnap = await getDoc(streakRef);
-                const todayDate = today; // YYYY-MM-DD
-
-                // Calculate yesterday's date
-                const d = new Date(todayDate + 'T00:00:00+09:00');
-                d.setDate(d.getDate() - 1);
-                const yesterdayDate = d.toISOString().split('T')[0];
-
-                if (streakSnap.exists()) {
-                    const s = streakSnap.data();
-                    const lastDate = s.lastActiveDate || '';
-
-                    if (lastDate === todayDate) return; // already updated today
-
-                    let newStreak = 1;
-                    if (lastDate === yesterdayDate) {
-                        newStreak = (s.currentStreak || 0) + 1;
-                    }
-
-                    const longestStreak = Math.max(newStreak, s.longestStreak || 0);
-                    await updateDoc(streakRef, {
-                        currentStreak: newStreak,
-                        longestStreak,
-                        lastActiveDate: todayDate,
-                        totalActiveDays: (s.totalActiveDays || 0) + 1,
-                        updatedAt: new Date().toISOString(),
-                    });
-
-                    // Streak milestone bonuses
-                    const STREAK_BONUSES: Record<number, number> = { 3: 5, 7: 10, 14: 20, 30: 100, 100: 500 };
-                    const bonus = STREAK_BONUSES[newStreak];
-                    if (bonus) {
-                        addRewardPoints(email, bonus, 'daily_login', `${newStreak}-day streak bonus`).catch(() => { });
-                    }
-                } else {
-                    await setDoc(streakRef, {
-                        userId: email.toLowerCase(),
-                        currentStreak: 1,
-                        longestStreak: 1,
-                        lastActiveDate: todayDate,
-                        streakStartDate: todayDate,
-                        totalActiveDays: 1,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                    });
-                }
-            } catch (e) {
-                console.warn('[Streak] Tracking failed:', e);
-            }
-        })();
+        const uid = email.toLowerCase();
+        await setDoc(
+            doc(db, 'user_activity', `${uid}_${today}`),
+            { userId: uid, date: today, updatedAt: new Date().toISOString() },
+            { merge: true },
+        );
     } catch (e) {
         console.warn('[Activity] Login tracking failed:', e);
     }
@@ -1532,140 +1480,69 @@ export const addRewardPoints = async (
     source: string,
     roundId?: number
 ): Promise<void> => {
-    const db = getFirebaseDb();
-    const userRPRef = doc(db, 'user_reward_points', userId.toLowerCase());
+    // P0: RP is now minted exclusively by the server.
+    //
+    // This function used to write `rp_history` and `user_reward_points`
+    // straight from the browser, so anyone with devtools could grant
+    // themselves an unlimited balance — and every leaderboard, digest and
+    // ranking built on those collections was therefore unverifiable. The
+    // reward collections are locked in firestore.rules; the browser now asks
+    // the server to award a NAMED ACTION and the server decides the amount
+    // from config/rp_rewards.
+    //
+    // `amount` is intentionally ignored (kept in the signature so the ~10
+    // existing call sites keep compiling). `roundId` is likewise unused: the
+    // round ledger moves server-side with the settlement work.
+    //
+    // The side effects that lived here — the RP toast, milestone detection
+    // and the referrer propagation — are NOT dropped: the server performs the
+    // ledger half and returns what happened, and we render it below.
+    void amount;
+    void roundId;
 
-    // Add RP history entry
-    const entry: RPEntry = {
-        userId: userId.toLowerCase(),
-        type,
-        amount,
-        source,
-        ...(roundId !== undefined && { roundId }),
-        timestamp: new Date().toISOString()
-    };
-    await addDoc(collection(db, 'rp_history'), entry);
-
-    // Update user's total RP
-    const userSnap = await getDoc(userRPRef);
-    if (userSnap.exists()) {
-        const data = userSnap.data();
-        await updateDoc(userRPRef, {
-            totalRP: (data.totalRP || 0) + amount,
-            availableRP: (data.availableRP || 0) + amount,
-            updatedAt: new Date().toISOString()
-        });
-    } else {
-        await setDoc(userRPRef, {
-            userId: userId.toLowerCase(),
-            totalRP: amount,
-            claimedRP: 0,
-            availableRP: amount,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        });
-    }
-
-    console.log(`[RP] +${amount} RP to ${userId} (${type}: ${source})`);
-
-    // ── Trigger in-app toast notification ──
     try {
-        const { showRPToast } = await import('../components/ui/RPToast');
-        showRPToast(amount, type, source);
-    } catch { /* Toast not available (SSR or import fail) -- silent */ }
+        const res = await gatewayCall<{
+            success?: boolean;
+            awarded?: number;
+            capped?: boolean;
+            reason?: string;
+            milestone?: { threshold: number; bonus: number } | null;
+            error?: string;
+        }>('rp.award', { type, source });
 
-    // ── Milestone Detection (fire-and-forget) ──
-    const RP_MILESTONES = [100, 500, 1000, 5000, 10000];
-    const MILESTONE_BONUSES: Record<number, number> = { 10000: 50 };
-    const prevTotal = userSnap.exists() ? ((userSnap.data().totalRP || 0) - amount) : 0;
-    const newTotal = prevTotal + amount;
-
-    (async () => {
-        try {
-            for (const threshold of RP_MILESTONES) {
-                if (prevTotal < threshold && newTotal >= threshold) {
-                    // Check if already recorded
-                    const milestoneRef = doc(db, 'user_milestones', `${userId.toLowerCase()}_rp_${threshold}`);
-                    const milestoneSnap = await getDoc(milestoneRef);
-                    if (milestoneSnap.exists()) continue;
-
-                    // Record milestone
-                    await setDoc(milestoneRef, {
-                        userId: userId.toLowerCase(),
-                        type: 'rp',
-                        threshold,
-                        reachedAt: new Date().toISOString(),
-                    });
-
-                    // Award bonus if applicable
-                    const bonus = MILESTONE_BONUSES[threshold];
-                    if (bonus) {
-                        addRewardPoints(userId, bonus, 'levelup', `Reached ${threshold.toLocaleString()} RP milestone`).catch(() => { });
-                    }
-
-                    // Trigger celebration modal
-                    try {
-                        const { showMilestone } = await import('../components/ui/MilestoneModal');
-                        showMilestone(threshold, 'rp', `You reached ${threshold.toLocaleString()} RP!`, bonus);
-                    } catch { /* Modal not available */ }
-
-                    console.log(`[RP] Milestone: ${userId} reached ${threshold} RP`);
-                    break; // Only trigger one milestone per RP award
-                }
-            }
-        } catch (e) {
-            console.warn('[RP] Milestone check failed:', e);
+        if (!res?.success) {
+            console.warn(`[RP] award rejected (${type}):`, res?.error || res?.reason || 'unknown');
+            return;
         }
-    })();
 
-    // ── Referral RP Propagation (fire-and-forget) ──
-    // Skip propagation for referral-derived types to prevent infinite recursion
-    const NON_PROPAGATING_TYPES: RPActionType[] = ['referral_tier1_rp', 'referral_tier2_rp', 'referral', 'levelup'];
-    if (!NON_PROPAGATING_TYPES.includes(type) && amount > 0) {
-        (async () => {
-            try {
-                const rpCfg = await getRPConfig();
-                const tier1Rate = rpCfg.referral_rp_tier1_rate ?? 0.10;
-                const tier2Rate = rpCfg.referral_rp_tier2_rate ?? 0.02;
-
-                // Look up user's referrer chain
-                const userDocRef = doc(db, 'users', userId.toLowerCase());
-                const userSnap2 = await getDoc(userDocRef);
-                if (!userSnap2.exists()) return;
-                const userData = userSnap2.data();
-
-                const referrerId = userData.referrerId;
-                const grandReferrerId = userData.grandReferrerId;
-
-                // Tier 1: Direct referrer gets 10% of earned RP
-                if (referrerId) {
-                    const tier1RP = Math.round(amount * tier1Rate);
-                    if (tier1RP >= 1) {
-                        await addRewardPoints(
-                            referrerId,
-                            tier1RP,
-                            'referral_tier1_rp',
-                            `${userId.split('@')[0]} earned ${amount} RP (${type})`
-                        );
-                    }
-                }
-
-                // Tier 2: Grand referrer gets 2% of earned RP
-                if (grandReferrerId) {
-                    const tier2RP = Math.round(amount * tier2Rate);
-                    if (tier2RP >= 1) {
-                        await addRewardPoints(
-                            grandReferrerId,
-                            tier2RP,
-                            'referral_tier2_rp',
-                            `${userId.split('@')[0]} earned ${amount} RP (${type})`
-                        );
-                    }
-                }
-            } catch (e) {
-                console.warn('[RP] Referral propagation failed (non-blocking):', e);
+        const awarded = res.awarded || 0;
+        if (awarded <= 0) {
+            // Silently granting 0 is the worst feedback: surface WHY.
+            if (res.capped || res.reason === 'action_daily_limit') {
+                console.info(`[RP] ${type}: daily limit reached, resets tomorrow`);
             }
-        })();
+            return;
+        }
+
+        console.log(`[RP] +${awarded} RP to ${userId} (${type}: ${source})`);
+
+        try {
+            const { showRPToast } = await import('../components/ui/RPToast');
+            showRPToast(awarded, type, source);
+        } catch { /* Toast not available (SSR or import fail) -- silent */ }
+
+        if (res.milestone) {
+            try {
+                const { showMilestone } = await import('../components/ui/MilestoneModal');
+                const t = res.milestone.threshold;
+                showMilestone(t, 'rp', `You reached ${t.toLocaleString()} RP!`, res.milestone.bonus || undefined);
+            } catch { /* Modal not available */ }
+        }
+    } catch (e) {
+        // P0: this used to be swallowed at every call site. RP failures are
+        // now visible so a missed write path is caught immediately instead of
+        // showing up as a silent drop in issuance.
+        console.error(`[RP] award failed (${type}):`, e);
     }
 };
 

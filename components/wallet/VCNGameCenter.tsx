@@ -11,9 +11,31 @@ import { FlappyVCNGame } from './FlappyVCNGame';
 import { CryptoSlotsGame } from './CryptoSlotsGame';
 import { CrashGame } from './CrashGame';
 import { useI18n } from '../../i18n/i18nContext';
-import { addRewardPoints, getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
+import { getRPConfig, getFirebaseAuth } from '../../services/firebaseService';
+import { gatewayCall } from '../../services/gatewayClient';
 import { getFirebaseDb } from '../../services/firebaseService';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, increment as firestoreIncrement, arrayRemove } from 'firebase/firestore';
+
+// Map the human label each game passes to `awardRewards` onto the server's
+// game key (functions/index.js GAME_KEYS). Labels carry a suffix — "Scratch
+// Card (gold)", "Tower Climb (F7)" — so match on the prefix. Returns null for
+// anything that isn't a server-rewardable game, which is treated as "no
+// reward" rather than defaulting to some game and minting the wrong payout.
+const GAME_LABEL_MAP: ReadonlyArray<readonly [string, string]> = [
+    ['Lucky Spin', 'spin'],
+    ['Block Breaker', 'block'],
+    ['Scratch Card', 'scratch'],
+    ['Memory Match', 'memory'],
+    ['Falling Coins', 'falling'],
+    ['Price Predict', 'predict'],
+    ['Tower Climb', 'tower'],
+    ['Mine Sweeper', 'mine'],
+    ['Flappy VCN', 'flappy'],
+    ['Crypto Slots', 'slots'],
+    ['Crash Game', 'crash'],
+];
+const GAME_KEY_BY_LABEL = (label: string): string | null =>
+    GAME_LABEL_MAP.find(([prefix]) => label.startsWith(prefix))?.[1] ?? null;
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface GameCenterProps {
@@ -291,6 +313,10 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         games: [],
     });
     const [isLoading, setIsLoading] = createSignal(true);
+    // One-time token issued by `game.start`. It carries the server's reward
+    // decision for this round; `game.submit` redeems it. Null means no round
+    // is in flight (or the round was not started through the server).
+    const [playToken, setPlayToken] = createSignal<string | null>(null);
     const [showJackpotCeremony, setShowJackpotCeremony] = createSignal(false);
     const [jackpotSegment, setJackpotSegment] = createSignal<SpinSegment | null>(null);
     const [inviteCopied, setInviteCopied] = createSignal(false);
@@ -423,30 +449,67 @@ export const VCNGameCenter = (props: GameCenterProps) => {
         }
     };
 
-    const saveDailyData = async (data: DailyGameData) => {
-        try {
-            const auth = getFirebaseAuth();
-            const user = auth.currentUser;
-            if (!user?.email) return;
-
-            const db = getFirebaseDb();
-            const docRef = doc(db, 'mini_game_plays', `${data.date}_${user.email.toLowerCase()}`);
-            await setDoc(docRef, data, { merge: true });
-        } catch (e) {
-            console.error('[Game] Failed to save daily data:', e);
-        }
+    // P0: `mini_game_plays` is server-owned now.
+    //
+    // This used to `setDoc(mini_game_plays/{date}_{email}, data)` straight
+    // from the browser, which meant the per-game daily caps it stored were
+    // enforced by the same client they were meant to limit. The document is
+    // locked in firestore.rules; the server increments the play counters in
+    // `game.start` and appends the result in `game.submit`. Local state is
+    // kept purely so the UI can render without a round-trip.
+    const saveDailyData = async (_data: DailyGameData) => {
+        /* server-owned — see game.start / game.submit */
     };
 
-    const awardRewards = async (vcn: number, rp: number, gameType: string) => {
+    // P0: game rewards are decided by the server.
+    //
+    // `awardRewards(vcn, rp)` used to hand a client-computed number to
+    // `addRewardPoints`, which wrote the RP ledger directly from the browser.
+    // The VCN half never paid out at all — it only accumulated in the
+    // (client-written) `mini_game_plays.totalVCN` for display, so it is
+    // dropped here rather than pretending it is a balance.
+    //
+    // The reward for a play is now drawn server-side in `game.start` and
+    // redeemed with that same one-time token, so a forged call cannot mint
+    // anything: there is no amount field to forge.
+    const awardRewards = async (_vcn: number, _rp: number, gameType: string) => {
+        const game = GAME_KEY_BY_LABEL(gameType);
+        if (!game) return; // not a rewardable round (e.g. practice UI)
         try {
-            const auth = getFirebaseAuth();
-            const user = auth.currentUser;
-            if (!user?.email) return;
-
-            if (rp > 0) {
-                await addRewardPoints(user.email, rp, 'mini_game', `VCN Game: ${gameType}`);
+            // Acquire a play slot if the round didn't already reserve one.
+            // Doing it here rather than in each of the eleven game components
+            // keeps this change to one file; the server still decides both
+            // the daily cap and the reward, so nothing is forgeable either
+            // way. game.start consumes an attempt, so re-rolling for a better
+            // payout costs one of the day's plays.
+            let token = playToken();
+            if (!token) {
+                const started = await gatewayCall<{ success?: boolean; play_token?: string; error?: string }>(
+                    'game.start', { game },
+                );
+                if (!started?.success || !started.play_token) {
+                    console.warn('[Game] start rejected:', started?.error);
+                    return;
+                }
+                token = started.play_token;
             }
-            // VCN rewards tracked in Firestore for batch processing
+
+            const res = await gatewayCall<{ success?: boolean; credited_rp?: number; cap_reached?: boolean; error?: string }>(
+                'game.submit', { play_token: token },
+            );
+            setPlayToken(null);
+            if (!res?.success) {
+                console.warn('[Game] submit rejected:', res?.error);
+                return;
+            }
+            const rp = res.credited_rp || 0;
+            if (rp > 0) {
+                const { showRPToast } = await import('../ui/RPToast');
+                showRPToast(rp, 'mini_game', `VCN Game: ${gameType}`);
+            } else if (res.cap_reached) {
+                console.info('[Game] daily RP cap reached — resets tomorrow');
+            }
+            await loadDailyData();
         } catch (e) {
             console.error('[Game] Award failed:', e);
         }
@@ -2031,14 +2094,20 @@ export const VCNGameCenter = (props: GameCenterProps) => {
                                     <DiceBetGame
                                         rpAmount={bet.rpAmount}
                                         onSkip={() => {
-                                            // Award original RP
+                                            // Take the round's server-rolled reward as-is.
                                             awardRewards(0, bet.rpAmount, bet.gameName);
                                             setDiceBetPending(null);
                                         }}
                                         onResult={(finalRP) => {
-                                            // Award modified RP (0 if lost, multiplied if won)
+                                            // P0: the double-or-nothing multiplier is decided in the
+                                            // browser, so honouring it would hand the client control of
+                                            // the payout again — exactly what this phase removes. Until
+                                            // the roll moves into `game.start`, a win pays the round's
+                                            // server-rolled reward (not the multiple) and a loss still
+                                            // forfeits it. Pass the underlying game name so the label
+                                            // maps to a real game key.
                                             if (finalRP > 0) {
-                                                awardRewards(0, finalRP, `Dice Bet x${Math.round(finalRP / bet.rpAmount)} (${bet.gameName})`);
+                                                awardRewards(0, bet.rpAmount, bet.gameName);
                                             }
                                             setDiceBetPending(null);
                                         }}

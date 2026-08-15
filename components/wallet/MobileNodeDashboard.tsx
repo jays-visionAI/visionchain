@@ -1,25 +1,15 @@
 import { createSignal, onMount, onCleanup, Show, For, createEffect } from 'solid-js';
 
-import { ENV } from '../../services/envConfig';
+import { gatewayCall, gatewayUrl } from '../../services/gatewayClient';
 
 // ---------- API ----------
-const getApiUrl = () => {
-    if (ENV === 'staging') {
-        return 'https://us-central1-visionchain-staging.cloudfunctions.net/agentGateway';
-    }
-    return 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
-};
+const getApiUrl = gatewayUrl;
 
-const api = async (action: string, body: Record<string, unknown> = {}, apiKey?: string) => {
-    const payload: Record<string, unknown> = { action, ...body };
-    if (apiKey) payload.api_key = apiKey;
-    const res = await fetch(getApiUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    });
-    return res.json();
-};
+// Node actions authenticate with the node's own `vcn_mn_*` api_key; the
+// user-scoped ones (my_rewards.*) left `skipAgentAuth` in P0 and now need the
+// signed-in user's Firebase ID token. gatewayCall handles both.
+const api = (action: string, body: Record<string, unknown> = {}, apiKey?: string) =>
+    gatewayCall(action, body, { apiKey });
 
 // ---------- Types ----------
 interface NodeStatus {
