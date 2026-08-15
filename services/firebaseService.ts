@@ -2313,6 +2313,13 @@ export const userRegister = async (email: string, password: string, phone?: stri
                 phoneDuplicateBlockedAt: new Date().toISOString(),
             } : {}),
             createdAt: new Date().toISOString(),
+            // Signup day (KST) as a plain YYYY-MM-DD key. `createdAt` alone
+            // cannot be grouped without parsing every document, so D1/D7/D30
+            // retention is not answerable from it. Paired with the per-user
+            // `user_activity/{email}_{date}` docs written by trackUserLogin,
+            // this makes cohort retention a two-collection join instead of a
+            // full scan.
+            cohortDate: getTodayKST(),
             updatedAt: new Date().toISOString()
         });
     }

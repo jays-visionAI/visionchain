@@ -10292,6 +10292,7 @@ exports.agentGateway = onRequest({
       "bootstrap.get", "bootstrap.set",
       "abuse.scan", "abuse.list", "abuse.exclude", "abuse.resolve",
       "ops.monthly_report", "metrics.sync_from_nodes",
+      "rp.snapshot_legacy",
     ]);
 
     // Detect Firebase ID token (non-vcn_ bearer tokens)
@@ -14882,6 +14883,55 @@ exports.agentGateway = onRequest({
       } catch (e) {
         console.error("[rp.award] failed:", e);
         return res.status(500).json({ error: `rp.award failed: ${e.message}` });
+      }
+    }
+
+    // --- rp.snapshot_legacy (admin, idempotent, additive-only) ---
+    // Marks the balance each account held when the reward ledgers were locked.
+    //
+    // Everything credited before that point was writable from the browser, so
+    // it cannot be treated as earned — but it must not be deleted either, or
+    // long-time users lose a balance they believe is theirs. This records the
+    // pre-lock figure in `legacyRP` WITHOUT touching totalRP / availableRP, so
+    // the RP shop and season scoring can exclude it later while the number
+    // stays visible to the user as "Legacy RP (under review)".
+    //
+    // Additive only: never overwrites an existing legacyRP, so re-running is
+    // safe and cannot double-count. Paginated by document id so it can be
+    // resumed with `after` if it hits the gateway timeout.
+    if (action === "rp.snapshot_legacy") {
+      try {
+        const limit = Math.min(500, parseInt(body.limit, 10) || 300);
+        const after = String(body.after || "");
+        let q = db.collection("user_reward_points").orderBy(admin.firestore.FieldPath.documentId()).limit(limit);
+        if (after) q = q.startAfter(after);
+        const snap = await q.get();
+
+        let marked = 0;
+        let skipped = 0;
+        let lastId = after;
+        const batch = db.batch();
+        snap.forEach((docSnap) => {
+          lastId = docSnap.id;
+          const d = docSnap.data();
+          if (d.legacyRP !== undefined) { skipped++; return; }
+          batch.set(docSnap.ref, {
+            legacyRP: d.totalRP || 0,
+            legacyRPSnapshotAt: new Date().toISOString(),
+          }, { merge: true });
+          marked++;
+        });
+        if (marked > 0) await batch.commit();
+
+        return res.json({
+          success: true,
+          scanned: snap.size,
+          marked, skipped,
+          next_after: snap.size === limit ? lastId : null,
+          done: snap.size < limit,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `rp.snapshot_legacy failed: ${e.message}` });
       }
     }
 
