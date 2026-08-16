@@ -148,3 +148,62 @@ self.addEventListener('message', (event) => {
         });
     }
 });
+
+// ── Web push ────────────────────────────────────────────────────────────
+//
+// The app had no way to bring anyone back. There was no push handler here at
+// all, `firebase/messaging` was never imported, and the settings toggle was a
+// disabled "Coming soon" — so the only outbound channel was Gmail SMTP, which
+// does not survive scale and does not reach a phone. Retention is loop quality
+// multiplied by the ability to summon; the second term was zero.
+//
+// Messages are sent DATA-ONLY from the server and rendered here, rather than
+// as FCM `notification` payloads. That keeps one service worker instead of
+// adding firebase-messaging-sw.js with its importScripts, and it means the
+// click target is decided by us rather than by the payload's default.
+self.addEventListener('push', (event) => {
+    if (!event.data) return;
+
+    let payload = {};
+    try {
+        payload = event.data.json();
+    } catch {
+        payload = { title: 'Vision Chain', body: event.data.text() };
+    }
+    const d = payload.data || payload;
+
+    const title = d.title || 'Vision Chain';
+    const options = {
+        body: d.body || '',
+        icon: '/pwa-icon-192.png',
+        badge: '/pwa-icon-192.png',
+        // Collapse repeats of the same kind: two nudges about the same thing
+        // should replace each other, not stack into a wall of notifications.
+        tag: d.tag || 'vcn-general',
+        renotify: false,
+        data: { url: d.url || '/wallet?view=quest', channel: d.channel || 'push' },
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const data = event.notification.data || {};
+    // Carry the channel through so the deep link can be attributed — a nudge
+    // whose effect cannot be measured cannot be tuned.
+    const target = data.url + (data.url.includes('?') ? '&' : '?') + 'src=' + encodeURIComponent(data.channel || 'push');
+
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+            // Reuse an open tab when there is one; opening a second copy of a
+            // PWA is disorienting.
+            for (const c of list) {
+                if ('focus' in c) {
+                    c.navigate?.(target);
+                    return c.focus();
+                }
+            }
+            return self.clients.openWindow(target);
+        })
+    );
+});

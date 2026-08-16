@@ -9587,6 +9587,60 @@ async function pushUserNotification(email, n) {
   }
 }
 
+/**
+ * Send a web push to every device a user has registered.
+ *
+ * Data-only on purpose: public/sw.js renders the notification, so the click
+ * target and the collapse `tag` are decided here rather than by FCM's default
+ * handling. Dead tokens (uninstalled PWA, cleared browser) are pruned as they
+ * are discovered — otherwise the token list only ever grows and the failure
+ * rate slowly becomes meaningless as a signal.
+ *
+ * @param {string} email - recipient
+ * @param {object} p - { title, body, url, tag, channel }
+ * @return {Promise<number>} number of devices delivered to
+ */
+async function sendPushToUser(email, p) {
+  if (!email) return 0;
+  const db2 = admin.firestore();
+  try {
+    const snap = await db2.collection("fcm_tokens")
+      .where("userId", "==", String(email).toLowerCase())
+      .where("enabled", "==", true)
+      .limit(20)
+      .get();
+    if (snap.empty) return 0;
+
+    const tokens = snap.docs.map((d) => d.id);
+    const message = {
+      tokens,
+      data: {
+        title: String(p.title || "Vision Chain"),
+        body: String(p.body || ""),
+        url: String(p.url || "/wallet?view=quest"),
+        tag: String(p.tag || "vcn-general"),
+        channel: String(p.channel || "push"),
+      },
+      webpush: { headers: { Urgency: "normal", TTL: "43200" } },
+    };
+    const resp = await admin.messaging().sendEachForMulticast(message);
+
+    const dead = [];
+    resp.responses.forEach((r, i) => {
+      const code = r.error && r.error.code;
+      if (code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token") {
+        dead.push(tokens[i]);
+      }
+    });
+    await Promise.all(dead.map((t) => db2.collection("fcm_tokens").doc(t).delete().catch(() => {})));
+    return resp.successCount;
+  } catch (e) {
+    console.warn(`[Push] to ${email} failed:`, e.message);
+    return 0;
+  }
+}
+
 // ── P1: the daily loop ──────────────────────────────────────────────────
 // Five slots a user can complete each day, plus a combo for finishing all of
 // them. The pieces this replaces already existed but were invisible and
@@ -29651,6 +29705,82 @@ function buildDailyDigestEmail(userEmail, events, streak, rank, totalUsers) {
 
   return emailBaseLayout(body, `Your daily RP report: +${totalRP} RP earned`);
 }
+
+// ── Re-engagement nudges ────────────────────────────────────────────────
+// Two pushes a day, both silent for anyone who is already done. A nudge sent
+// to someone who finished is pure annoyance and is how people turn
+// notifications off — which costs the channel permanently, for one message.
+exports.dailyIncompleteNudge = onSchedule({
+  schedule: "0 11 * * *", // 11:00 UTC = 20:00 KST
+  timeZone: "UTC",
+}, async () => {
+  const day = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  try {
+    // Only users who registered a device can be reached at all.
+    const tokenSnap = await db.collection("fcm_tokens").where("enabled", "==", true).get();
+    const emails = [...new Set(tokenSnap.docs.map((d) => (d.data().userId || "").toLowerCase()).filter(Boolean))];
+    let sent = 0;
+
+    for (const email of emails) {
+      const q = await db.collection("daily_quests").doc(`${day}_${email}`).get();
+      const slots = (q.exists ? q.data().slots : {}) || {};
+      const claimed = DAILY_SLOTS.filter((k) => (slots[k] || {}).claimed).length;
+      if (claimed >= DAILY_SLOTS.length) continue; // finished — say nothing
+
+      const left = DAILY_SLOTS.length - claimed;
+      // Name the reward, not the chore: "3 left" is a task list, "3 left,
+      // +35 RP" is a reason.
+      const rp = left * 8 + (claimed === DAILY_SLOTS.length - 1 ? DAILY_COMBO_RP : 0);
+      sent += await sendPushToUser(email, {
+        title: `오늘 ${left}칸 남았어요`,
+        body: `지금 마치면 약 +${rp} RP를 받습니다.`,
+        url: "/wallet?view=quest",
+        tag: "vcn-daily-incomplete",
+        channel: "nudge_incomplete",
+      });
+    }
+    console.log(`[Nudge] incomplete: ${sent} devices across ${emails.length} candidates`);
+  } catch (e) {
+    console.error("[Nudge] incomplete failed:", e);
+  }
+});
+
+exports.streakAtRiskNudge = onSchedule({
+  schedule: "0 14 * * *", // 14:00 UTC = 23:00 KST
+  timeZone: "UTC",
+}, async () => {
+  const day = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  try {
+    const tokenSnap = await db.collection("fcm_tokens").where("enabled", "==", true).get();
+    const emails = [...new Set(tokenSnap.docs.map((d) => (d.data().userId || "").toLowerCase()).filter(Boolean))];
+    let sent = 0;
+
+    for (const email of emails) {
+      const s = await db.collection("user_streaks").doc(email).get();
+      if (!s.exists) continue;
+      const d = s.data();
+      if (d.lastActiveDate === day) continue;      // already checked in
+      const streak = d.currentStreak || 0;
+      if (streak < 2) continue;                     // nothing worth losing yet
+
+      const freezes = d.freezeCount || 0;
+      sent += await sendPushToUser(email, {
+        title: `${streak}일 스트릭이 곧 끊깁니다`,
+        body: freezes > 0
+          // Say the safety net exists. Fear without a way out just makes the
+          // message unpleasant.
+          ? `자정까지 출석하면 유지됩니다. 프리즈 ${freezes}개 보유 중.`
+          : "자정까지 출석 체크하면 유지됩니다.",
+        url: "/wallet?view=quest",
+        tag: "vcn-streak-risk",
+        channel: "nudge_streak",
+      });
+    }
+    console.log(`[Nudge] streak-at-risk: ${sent} devices`);
+  } catch (e) {
+    console.error("[Nudge] streak failed:", e);
+  }
+});
 
 exports.dailyRPDigest = onSchedule({
   schedule: "0 12 * * *", // UTC 12:00 = KST 21:00

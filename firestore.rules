@@ -100,6 +100,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Web push device tokens. Written by the browser when a user enables
+    // push, read only by Cloud Functions when sending. A token is a delivery
+    // address, not a secret, but it does identify a device — so a client may
+    // only touch a document it owns, and may not enumerate anyone else's.
+    // Read/delete check the STORED owner, create/update the INCOMING one —
+    // combining them into a single `write` rule reads `request.resource` on
+    // delete, where it is null, and silently denies.
+    match /fcm_tokens/{token} {
+      allow create, update: if request.auth != null
+        && request.resource.data.userId == request.auth.token.email;
+      allow read, delete: if request.auth != null
+        && resource.data.userId == request.auth.token.email;
+    }
+
     // Everything else: previous behaviour (any signed-in user), EXCEPT the
     // reward ledgers (server-write-only) and `config` (admin-write-only).
     //
@@ -109,18 +123,22 @@ service cloud.firestore {
     // the exclusion, "non-admin writes config/rp_rewards" passes when it
     // should be denied.
     function hasDedicatedRule(col) {
-      return col == 'config';
+      return col == 'config' || col == 'fcm_tokens';
     }
 
+    // `hasDedicatedRule` must gate READ as well as write. Rules are additive,
+    // so an unconditional `allow read` here re-grants read on any collection
+    // that defines a narrower read rule above — which is how a user could
+    // still fetch someone else's push token despite the owner check.
     match /{col}/{docId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && !hasDedicatedRule(col);
       allow write: if request.auth != null
         && !isRewardLedger(col)
         && !hasDedicatedRule(col);
     }
 
     match /{col}/{docId}/{sub=**} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && !hasDedicatedRule(col);
       allow write: if request.auth != null
         && !isRewardLedger(col)
         && !hasDedicatedRule(col);

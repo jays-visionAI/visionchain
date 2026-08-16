@@ -1,4 +1,5 @@
 import { createSignal, For, Show, onMount } from 'solid-js';
+import { pushSupport, enablePush, disablePush, isPushEnabledHere, type PushSupport } from '../../services/pushService';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import {
     Settings,
@@ -61,6 +62,35 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [activeTab, setActiveTab] = createSignal('general');
     const [emailNotifications, setEmailNotifications] = createSignal(true);
     const [pushNotifications, setPushNotifications] = createSignal(false);
+    // Web push. `pushState` distinguishes "you turned it off" from "this build
+    // has no VAPID key" and "the browser blocked it" — collapsing those into a
+    // single dead switch is what the old "Coming soon" toggle did.
+    const [pushState, setPushState] = createSignal<PushSupport>('unsupported');
+    const [pushBusy, setPushBusy] = createSignal(false);
+
+    onMount(() => {
+        setPushState(pushSupport());
+        setPushNotifications(isPushEnabledHere());
+    });
+
+    const togglePush = async () => {
+        if (pushBusy()) return;
+        setPushBusy(true);
+        try {
+            if (pushNotifications()) {
+                await disablePush();
+                setPushNotifications(false);
+            } else {
+                const ok = await enablePush();
+                setPushNotifications(ok);
+                // Denying the browser prompt is a permanent state until the
+                // user changes it in site settings; reflect that immediately.
+                setPushState(pushSupport());
+            }
+        } finally {
+            setPushBusy(false);
+        }
+    };
     const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
     const [darkMode, setDarkMode] = createSignal(true);
     const [showResponseTime, setShowResponseTime] = createSignal(false); // Default Off
@@ -1079,9 +1109,31 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         <p class="text-gray-500 text-sm mt-0.5">{t('settings.notifications.pushNotificationsDesc')}</p>
                                     </div>
                                 </div>
-                                <div class="w-12 h-6 rounded-full bg-white/5 flex items-center px-1 cursor-not-allowed opacity-50" title="Coming soon">
-                                    <div class="w-4 h-4 rounded-full bg-gray-600 shadow-lg" />
-                                </div>
+                                {/* Real toggle. When the build has no VAPID key
+                                    (or the browser cannot do web push) it stays
+                                    visibly off with a reason, rather than
+                                    pretending to work. */}
+                                <Show
+                                    when={pushState() === 'ready' || pushState() === 'prompt'}
+                                    fallback={
+                                        <span class="text-xs text-gray-600 font-medium whitespace-nowrap">
+                                            {pushState() === 'denied'
+                                                ? '브라우저에서 차단됨'
+                                                : '이 기기에서 지원되지 않음'}
+                                        </span>
+                                    }
+                                >
+                                    <button
+                                        onClick={togglePush}
+                                        disabled={pushBusy()}
+                                        aria-pressed={pushNotifications()}
+                                        class={`w-12 h-6 rounded-full flex items-center px-1 transition-colors disabled:opacity-50 ${
+                                            pushNotifications() ? 'bg-cyan-500 justify-end' : 'bg-white/10 justify-start'
+                                        }`}
+                                    >
+                                        <div class="w-4 h-4 rounded-full bg-white shadow-lg" />
+                                    </button>
+                                </Show>
                             </div>
                         </div>
                     </Show>
