@@ -9563,6 +9563,80 @@ async function creditRP({ email, amount, type, source, idemKey }) {
   });
 }
 
+// ── P1: the daily loop ──────────────────────────────────────────────────
+// Five slots a user can complete each day, plus a combo for finishing all of
+// them. The pieces this replaces already existed but were invisible and
+// scattered: streaks were tracked and never displayed, mini-game caps lived in
+// a different screen, and the "quests" tab was five hardcoded cards of which
+// three were placeholders. This is the one screen that answers "what do I do
+// today", which the app has never had.
+const DAILY_SLOTS = ["checkin", "games", "mission", "tip", "share"];
+const DAILY_SLOT_RP = { checkin: 5, games: 15, mission: 10, tip: 5, share: 5 };
+// Deliberately 50% of the sum of the individual slots (40). A small combo
+// makes stopping at three slots rational; a large one makes finishing the set
+// the obvious play.
+const DAILY_COMBO_RP = 20;
+const DAILY_GAMES_TARGET = 3;
+// Streak multiplier. Applies to hub RP only — never to game or referral
+// rewards, so a long streak cannot compound with the other surfaces into
+// something the daily cap has to absorb.
+const STREAK_MULTIPLIERS = [
+  { at: 30, mult: 1.5 }, { at: 14, mult: 1.3 }, { at: 7, mult: 1.2 }, { at: 3, mult: 1.1 },
+];
+/**
+ * Streak multiplier for a given streak length.
+ * @param {number} streak - consecutive active days
+ * @return {number} multiplier in [1.0, 1.5]
+ */
+function streakMultiplier(streak) {
+  for (const s of STREAK_MULTIPLIERS) if (streak >= s.at) return s.mult;
+  return 1.0;
+}
+// The action the "today's mission" slot asks for, rotated by day so the hub
+// isn't the same five taps forever. These are the actions whose standalone RP
+// is being retired: paying them once a day through a named slot removes the
+// unbounded farming (self-transfers, re-downloading your own files, saving the
+// same profile) without needing a cooldown rule per action.
+const DAILY_MISSION_POOL = ["transfer_send", "disk_upload", "staking_deposit", "ai_chat", "market_purchase"];
+/**
+ * Today's rotating mission action. Deterministic from the date so every user
+ * sees the same one and it is stable across requests within a day.
+ * @param {string} day - KST date, YYYY-MM-DD
+ * @return {string} RP action type
+ */
+function missionForDay(day) {
+  const n = parseInt(day.replace(/-/g, ""), 10) || 0;
+  return DAILY_MISSION_POOL[n % DAILY_MISSION_POOL.length];
+}
+/** KST calendar day (YYYY-MM-DD). Day boundaries follow the streak logic. */
+const kstDay = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const dailyQuestRef = (email, day) =>
+  admin.firestore().collection("daily_quests").doc(`${day}_${email}`);
+
+/**
+ * Mark a daily-hub slot as completed, inside the caller's transaction when one
+ * is supplied. Called from rp.award and game.submit so completing the
+ * underlying action IS the completion signal — there is no second query, no
+ * cooldown bookkeeping and no way for the client to assert progress.
+ *
+ * @param {object} t - Firestore transaction, or null to write directly
+ * @param {string} email - user id
+ * @param {string} day - KST day
+ * @param {string} slot - one of DAILY_SLOTS
+ * @param {object} [extra] - extra fields to merge (e.g. games progress)
+ * @return {void}
+ */
+function markSlotDone(t, email, day, slot, extra = {}) {
+  const ref = dailyQuestRef(email, day);
+  const payload = {
+    day, userId: email,
+    slots: { [slot]: { done: true, ...extra } },
+    updatedAt: new Date().toISOString(),
+  };
+  if (t) t.set(ref, payload, { merge: true });
+  else ref.set(payload, { merge: true }).catch((e) => console.warn("[Daily] slot mark failed:", e.message));
+}
+
 /**
  * Advance the user's login streak. Server-side port of the logic that used to
  * run in the browser (services/firebaseService.ts trackUserLogin), which wrote
@@ -10266,6 +10340,7 @@ exports.agentGateway = onRequest({
       "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
       "mobile_node.claim_onchain", "storage_rewards.status", "storage_rewards.run_accrual",
       "node_fleet.health", "game.start", "game.submit", "game.state", "rp.award",
+      "daily.state", "daily.claim",
       "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
       "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
       "storage_node.fetch_chunk", "chunk.proof_challenge", "chunk.proof_response",
@@ -14826,6 +14901,12 @@ exports.agentGateway = onRequest({
         const idemKey = body.idem_key ? `rp:${type}:${String(body.idem_key).slice(0, 64)}` : undefined;
         const credit = await creditRP({ email, amount, type, source, idemKey });
 
+        // Performing the action IS the completion signal for today's mission
+        // slot — no second query, no per-action cooldown table, and nothing
+        // the client can assert on its own.
+        const today = kstDay();
+        if (type === missionForDay(today)) markSlotDone(null, email, today, "mission");
+
         // Streak milestone bonus, if today's streak crossed a threshold.
         let streakBonus = 0;
         if (streak && streak.milestone) {
@@ -14883,6 +14964,186 @@ exports.agentGateway = onRequest({
       } catch (e) {
         console.error("[rp.award] failed:", e);
         return res.status(500).json({ error: `rp.award failed: ${e.message}` });
+      }
+    }
+
+    // --- daily.state (the hub's single read) ---
+    // One call returns everything the daily screen shows: slot status, streak,
+    // multiplier, remaining game plays and whether the combo is claimable.
+    // The hub is the answer to "what do I do today", which previously required
+    // visiting four screens and still didn't show the streak anywhere.
+    if (action === "daily.state") {
+      try {
+        if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
+        const du = await authenticateFirebaseUser(firebaseIdToken);
+        if (!du || !du.email) return res.status(401).json({ error: "Invalid auth token" });
+        const email = du.email.toLowerCase();
+        const day = kstDay();
+        const cfg = await getRPConfig();
+
+        const [qSnap, sSnap, gSnap] = await Promise.all([
+          dailyQuestRef(email, day).get(),
+          db.collection("user_streaks").doc(email).get(),
+          db.collection("mini_game_plays").doc(`${gameServerDate()}_${email}`).get(),
+        ]);
+        const q = qSnap.exists ? qSnap.data() : {};
+        const slotState = q.slots || {};
+        const st = sSnap.exists ? sSnap.data() : {};
+        const gd = gSnap.exists ? gSnap.data() : {};
+
+        // Games slot progress is derived from actual plays, not stored twice.
+        const playsToday = GAME_KEYS.reduce((s, g) => s + (gd[GAME_USED_FIELD[g]] || 0), 0);
+        const gamesDone = playsToday >= DAILY_GAMES_TARGET;
+
+        const currentStreak = st.currentStreak || 0;
+        const mult = streakMultiplier(currentStreak);
+
+        const slots = DAILY_SLOTS.map((key) => {
+          const s = slotState[key] || {};
+          const done = key === "games" ? gamesDone : !!s.done;
+          return {
+            key,
+            done,
+            claimed: !!s.claimed,
+            rp: DAILY_SLOT_RP[key],
+            ...(key === "games" ? { progress: Math.min(playsToday, DAILY_GAMES_TARGET), target: DAILY_GAMES_TARGET } : {}),
+            ...(key === "mission" ? { mission: missionForDay(day) } : {}),
+          };
+        });
+        const allClaimed = slots.every((s) => s.claimed);
+        const remaining = {};
+        for (const g of GAME_KEYS) {
+          const cap = cfg[GAME_DAILY_KEY[g]] || GAME_DAILY_DEFAULT[g];
+          remaining[g] = Math.max(0, cap - (gd[GAME_USED_FIELD[g]] || 0));
+        }
+
+        return res.json({
+          success: true,
+          day,
+          slots,
+          combo: { rp: DAILY_COMBO_RP, available: allClaimed && !q.comboClaimed, claimed: !!q.comboClaimed },
+          streak: {
+            current: currentStreak,
+            longest: st.longestStreak || 0,
+            multiplier: mult,
+            freezes: st.freezeCount || 0,
+            checkedInToday: st.lastActiveDate === day,
+          },
+          games: { remaining, playsToday },
+          earnedToday: q.earnedToday || 0,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `daily.state failed: ${e.message}` });
+      }
+    }
+
+    // --- daily.claim (collect one slot, or the combo) ---
+    // Claiming is an explicit tap rather than a silent background credit. The
+    // old daily_login RP was granted invisibly on page load, which cost real
+    // RP while changing nobody's behaviour — a reward the user never notices
+    // is pure expense.
+    if (action === "daily.claim") {
+      try {
+        if (!firebaseIdToken) return res.status(401).json({ error: "Sign-in required" });
+        const du = await authenticateFirebaseUser(firebaseIdToken);
+        if (!du || !du.email) return res.status(401).json({ error: "Invalid auth token" });
+        const email = du.email.toLowerCase();
+        const slot = String(body.slot || "");
+        const isCombo = slot === "combo";
+        if (!isCombo && !DAILY_SLOTS.includes(slot)) {
+          return res.status(400).json({ error: `Unknown slot: ${slot}` });
+        }
+
+        const day = kstDay();
+        const ref = dailyQuestRef(email, day);
+
+        // Check-in is the one slot whose completion IS the claim.
+        let streak = null;
+        if (slot === "checkin") streak = await updateStreakServerSide(email);
+
+        // Slots the user performs elsewhere must actually be complete. `games`
+        // is verified against the real play counter so the client cannot
+        // assert progress it didn't make; `tip` and `share` are UI
+        // acknowledgements with no external record, bounded to once a day by
+        // the claim flag itself.
+        if (slot === "games") {
+          const gd = (await db.collection("mini_game_plays").doc(`${gameServerDate()}_${email}`).get()).data() || {};
+          const plays = GAME_KEYS.reduce((s, g) => s + (gd[GAME_USED_FIELD[g]] || 0), 0);
+          if (plays < DAILY_GAMES_TARGET) {
+            return res.json({ success: true, awarded: 0, reason: "slot_incomplete", progress: plays, target: DAILY_GAMES_TARGET });
+          }
+        }
+
+        const gate = await db.runTransaction(async (t) => {
+          const s = await t.get(ref);
+          const d = s.exists ? s.data() : {};
+          const slots = d.slots || {};
+          if (isCombo) {
+            if (d.comboClaimed) return { already: true };
+            const all = DAILY_SLOTS.every((k) => (slots[k] || {}).claimed);
+            if (!all) return { incomplete: true };
+            t.set(ref, { day, userId: email, comboClaimed: true, updatedAt: new Date().toISOString() }, { merge: true });
+            return { ok: true };
+          }
+          if ((slots[slot] || {}).claimed) return { already: true };
+          if (slot === "mission" && !(slots.mission || {}).done) return { incomplete: true };
+          t.set(ref, {
+            day, userId: email,
+            slots: { [slot]: { ...(slots[slot] || {}), done: true, claimed: true } },
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          return { ok: true };
+        });
+
+        if (gate.already) return res.json({ success: true, awarded: 0, reason: "already_claimed", slot });
+        if (gate.incomplete) return res.json({ success: true, awarded: 0, reason: "slot_incomplete", slot });
+
+        // Multiplier applies to hub RP only.
+        const stSnap = await db.collection("user_streaks").doc(email).get();
+        const cur = streak ? streak.currentStreak : ((stSnap.data() || {}).currentStreak || 0);
+        const mult = streakMultiplier(cur);
+        const base = isCombo ? DAILY_COMBO_RP : DAILY_SLOT_RP[slot];
+        const amount = Math.round(base * mult);
+
+        const credit = await creditRP({
+          email, amount, type: "daily_login",
+          source: isCombo ? `Daily combo (x${mult})` : `Daily: ${slot} (x${mult})`,
+          idemKey: `daily:${day}:${slot}`,
+        });
+        await ref.set({
+          earnedToday: admin.firestore.FieldValue.increment(credit.awarded),
+        }, { merge: true });
+
+        // Streak milestone, once per streak length.
+        let streakBonus = 0;
+        if (slot === "checkin" && streak && streak.milestone) {
+          const table = { 3: 20, 7: 50, 14: 100, 30: 300, 60: 500, 100: 1000 };
+          const cfg2 = await getRPConfig();
+          for (const k of Object.keys(table)) {
+            const v = Number(cfg2[`streak_bonus_${k}`]);
+            if (Number.isFinite(v) && v >= 0) table[k] = v;
+          }
+          // Repeats every 100 days past 100 so a long streak never flatlines.
+          const b = table[cur] || (cur > 100 && cur % 100 === 0 ? 1000 : 0);
+          if (b > 0) {
+            const r = await creditRP({
+              email, amount: b, type: "daily_login",
+              source: `${cur}-day streak bonus`, idemKey: `streak:${email}:${cur}`,
+            });
+            streakBonus = r.awarded;
+          }
+        }
+
+        return res.json({
+          success: true, slot,
+          awarded: credit.awarded + streakBonus,
+          base, multiplier: mult, streak_bonus: streakBonus,
+          capped: credit.capped,
+          streak: streak || { currentStreak: cur, multiplier: mult },
+        });
+      } catch (e) {
+        console.error("[daily.claim] failed:", e);
+        return res.status(500).json({ error: `daily.claim failed: ${e.message}` });
       }
     }
 
@@ -29326,10 +29587,23 @@ exports.dailyRPDigest = onSchedule({
   console.log("[DailyDigest] Starting daily RP digest...");
 
   try {
-    // 1. Get today's date range
+    // 1. Today's range, in KST.
+    //
+    // This used to be `new Date(y, m, d)` on a UTC-running function, i.e. UTC
+    // midnight. The digest fires at 12:00 UTC, so it only ever covered
+    // 09:00–21:00 KST and every Korean evening and night session was missing
+    // from both the email and the issuance stats built from the same scan —
+    // the report said activity was lower than it was, at exactly the hours
+    // people actually play. The window is now the KST day that just ended at
+    // send time.
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayISO = todayStart.toISOString();
+    const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const kstMidnightUtcMs = Date.UTC(
+      kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(),
+    ) - 9 * 60 * 60 * 1000;
+    const todayISO = new Date(kstMidnightUtcMs).toISOString();
+    // Stats are filed under the KST calendar day, not the UTC one.
+    const statsDay = kstNow.toISOString().slice(0, 10);
 
     // 2. Fetch ALL today's rp_history
     const rpSnap = await db.collection("rp_history")
@@ -29384,8 +29658,8 @@ exports.dailyRPDigest = onSchedule({
       const top1Count = Math.max(1, Math.ceil(sorted.length * 0.01));
       const top1Sum = sorted.slice(0, top1Count).reduce((s, v) => s + v, 0);
 
-      await db.collection("rp_daily_stats").doc(todayISO.slice(0, 10)).set({
-        date: todayISO.slice(0, 10),
+      await db.collection("rp_daily_stats").doc(statsDay).set({
+        date: statsDay,
         issued,
         events: rpSnap.size,
         uniqueRecipients: totalActiveUsers,
@@ -29395,7 +29669,7 @@ exports.dailyRPDigest = onSchedule({
         medianAccountIssued: sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0,
         computedAt: new Date().toISOString(),
       }, { merge: true });
-      console.log(`[RPStats] ${todayISO.slice(0, 10)} issued=${issued} users=${totalActiveUsers} top1pct=${issued > 0 ? ((top1Sum / issued) * 100).toFixed(1) : 0}%`);
+      console.log(`[RPStats] ${statsDay} issued=${issued} users=${totalActiveUsers} top1pct=${issued > 0 ? ((top1Sum / issued) * 100).toFixed(1) : 0}%`);
     } catch (statsErr) {
       // Never let the stats write block the digest emails.
       console.error("[RPStats] aggregation failed:", statsErr);
