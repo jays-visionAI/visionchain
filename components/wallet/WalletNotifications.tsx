@@ -250,15 +250,25 @@ export function WalletNotifications() {
                 ...doc.data()
             } as Notification));
 
-            // Sort by timestamp desc
+            // Sort newest first.
+            //
+            // Server-written notifications are split between two field names —
+            // some stamp `timestamp`, others `createdAt` — so sorting on
+            // `timestamp` alone treated half of them as 0 and buried them at
+            // the bottom of the list regardless of age. Reading whichever is
+            // present fixes every existing writer at once, instead of editing
+            // ~20 call sites and hoping the next one remembers.
             list.sort((a, b) => {
-                const getVal = (v: any) => {
+                const toMs = (v: any) => {
                     if (!v) return 0;
                     if (v?.toMillis) return v.toMillis();
                     if (v?.seconds) return v.seconds * 1000;
-                    return new Date(v).getTime();
+                    const t = new Date(v).getTime();
+                    return Number.isFinite(t) ? t : 0;
                 };
-                return getVal(b.timestamp) - getVal(a.timestamp);
+                const at = toMs(a.timestamp) || toMs((a as any).createdAt);
+                const bt = toMs(b.timestamp) || toMs((b as any).createdAt);
+                return bt - at;
             });
 
             setNotifications(list);

@@ -163,11 +163,20 @@ export const DailyHub = (props: { onNavigate?: (view: string) => void }) => {
                     />
                 </div>
 
-                <Show when={(state()?.streak.multiplier ?? 1) > 1}>
-                    <p class="mt-3 text-xs text-gray-500">
-                        스트릭 배수가 오늘 받는 RP에 적용됩니다. 하루 건너뛰면 배수가 초기화됩니다.
-                    </p>
-                </Show>
+                <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+                    <Show when={(state()?.streak.multiplier ?? 1) > 1}>
+                        <p class="text-xs text-gray-500">
+                            스트릭 배수가 오늘 받는 RP에 적용됩니다.
+                        </p>
+                    </Show>
+                    {/* A freeze is only reassuring if you know you have one
+                        before the day you need it. */}
+                    <Show when={(state()?.streak.freezes ?? 0) > 0}>
+                        <span class="text-[11px] font-bold text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded-lg px-2 py-1">
+                            ❄ 프리즈 {state()!.streak.freezes}개 — 하루 놓쳐도 스트릭 유지
+                        </span>
+                    </Show>
+                </div>
             </div>
 
             {/* Flash message */}

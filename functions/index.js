@@ -1784,13 +1784,10 @@ async function handleTimeLock(req, res, { user, recipient, amount, fee, deadline
 
   // Create notification
   try {
-    await db.collection("notifications").add({
-      userEmail: userEmail,
+    await pushUserNotification(userEmail, {
       type: "transfer_scheduled",
       title: "Time Lock Transfer Scheduled",
       content: `You have scheduled ${ethers.formatUnits(BigInt(amount), 18)} VCN to be sent to ${recipient.slice(0, 10)}...`,
-      createdAt: admin.firestore.Timestamp.now(),
-      read: false,
       data: { scheduleId, jobId: jobRef.id, recipient, amount, unlockTime },
     });
   } catch (notifyErr) {
@@ -1891,13 +1888,10 @@ async function handleBatch(req, res, { user, transactions, fee, deadline, signat
   if (userEmail) {
     try {
       const successCount = results.filter((r) => r.status === "success").length;
-      await db.collection("notifications").add({
-        userEmail: userEmail,
+      await pushUserNotification(userEmail, {
         type: "batch_complete",
         title: "Batch Transfer Complete",
         content: `Successfully sent ${successCount}/${transactions.length} transactions.`,
-        createdAt: admin.firestore.Timestamp.now(),
-        read: false,
         data: { results },
       });
     } catch (e) {
@@ -3834,14 +3828,11 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
             const symbol = data.token || "VCN";
             const recipientShort = (data.to || data.recipient || "").slice(0, 8);
 
-            await db.collection("notifications").add({
-              email: senderEmail.toLowerCase(),
+            await pushUserNotification(senderEmail, {
               type: "transfer_complete",
               title: "TRANSFER SUCCESSFUL",
               content: `Successfully sent ${data.amount} ${symbol} to ${recipientShort}... via Time Lock Agent.`,
               data: { txHash: tx.hash, jobId, amount: data.amount, recipient: data.to || data.recipient },
-              isRead: false,
-              createdAt: admin.firestore.Timestamp.now(),
             });
             console.log(`Notification sent to ${senderEmail}`);
           }
@@ -9563,6 +9554,39 @@ async function creditRP({ email, amount, type, source, idemKey }) {
   });
 }
 
+/**
+ * Deliver an in-app notification to a user.
+ *
+ * Server notifications were not reaching the UI at all. Two independent
+ * mismatches: the server wrote the TOP-LEVEL `notifications` collection while
+ * WalletNotifications subscribes to `users/{email}/notifications`, and it
+ * stamped `createdAt` while the list sorts on `timestamp` (a missing field
+ * sorts as 0, so even a correctly-placed document would have sunk to the
+ * bottom). Both are normalised here so there is one way to send.
+ *
+ * @param {string} email - recipient
+ * @param {object} n - { type, title, content, data }
+ * @return {Promise<void>} resolves when written (never throws)
+ */
+async function pushUserNotification(email, n) {
+  if (!email) return;
+  try {
+    await admin.firestore()
+      .collection("users").doc(String(email).toLowerCase())
+      .collection("notifications").add({
+        type: n.type,
+        title: n.title,
+        content: n.content,
+        // Field name the UI sorts and filters on.
+        timestamp: admin.firestore.Timestamp.now(),
+        read: false,
+        ...(n.data ? { data: n.data } : {}),
+      });
+  } catch (e) {
+    console.warn(`[Notify] ${n.type} to ${email} failed:`, e.message);
+  }
+}
+
 // ── P1: the daily loop ──────────────────────────────────────────────────
 // Five slots a user can complete each day, plus a combo for finishing all of
 // them. The pieces this replaces already existed but were invisible and
@@ -9661,10 +9685,13 @@ async function updateStreakServerSide(email) {
       const doc = {
         userId: email, currentStreak: 1, longestStreak: 1,
         lastActiveDate: today, streakStartDate: today, totalActiveDays: 1,
+        // Start with a freeze in hand: the day most likely to break a new
+        // streak is the second one, before the weekly grant would arrive.
+        freezeCount: 1, freezeGrantedWeek: isoWeekKey(kstNow),
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
       t.set(ref, doc);
-      return { currentStreak: 1, longestStreak: 1, milestone: true, alreadyToday: false };
+      return { currentStreak: 1, longestStreak: 1, milestone: true, alreadyToday: false, freezes: 1 };
     }
     const d = s.data();
     if (d.lastActiveDate === today) {
@@ -9672,19 +9699,65 @@ async function updateStreakServerSide(email) {
         currentStreak: d.currentStreak || 1,
         longestStreak: d.longestStreak || 1,
         milestone: false, alreadyToday: true,
+        freezes: d.freezeCount || 0,
       };
     }
-    const next = d.lastActiveDate === y ? (d.currentStreak || 0) + 1 : 1;
+
+    // Streak Freeze. Missing a single day used to reset the streak to 1 with
+    // no warning and no way back, which turns one bad day into a reason to
+    // stop entirely — the opposite of what a streak is for. A freeze is
+    // granted weekly (max 1 held) and spent automatically to bridge exactly
+    // one missed day.
+    const dayGap = Math.round(
+      (Date.parse(today + "T00:00:00Z") - Date.parse((d.lastActiveDate || today) + "T00:00:00Z")) / 86400000,
+    );
+    let freezes = d.freezeCount || 0;
+    let freezeUsed = false;
+    if (dayGap === 2 && freezes > 0) {
+      freezes -= 1;
+      freezeUsed = true;
+    }
+
+    const continued = d.lastActiveDate === y || freezeUsed;
+    const next = continued ? (d.currentStreak || 0) + 1 : 1;
     const longest = Math.max(next, d.longestStreak || 0);
+
+    // Weekly freeze grant, capped at 1 so it cannot be hoarded into
+    // permanent immunity.
+    const lastGrant = d.freezeGrantedWeek || "";
+    const week = isoWeekKey(kstNow);
+    if (week !== lastGrant && freezes < 1) freezes = 1;
+
     t.update(ref, {
       currentStreak: next,
       longestStreak: longest,
       lastActiveDate: today,
       totalActiveDays: (d.totalActiveDays || 0) + 1,
+      freezeCount: freezes,
+      freezeGrantedWeek: week,
+      ...(freezeUsed ? { lastFreezeUsedAt: today } : {}),
       updatedAt: new Date().toISOString(),
     });
-    return { currentStreak: next, longestStreak: longest, milestone: true, alreadyToday: false };
+    return {
+      currentStreak: next, longestStreak: longest,
+      milestone: true, alreadyToday: false,
+      freezes, freezeUsed,
+    };
   });
+}
+
+/**
+ * ISO week key (YYYY-Www) used to grant one streak freeze per week.
+ * @param {Date} d - date to key
+ * @return {string} e.g. "2026-W33"
+ */
+function isoWeekKey(d) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 /**
