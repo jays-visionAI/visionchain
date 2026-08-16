@@ -2,18 +2,11 @@ import { createSignal, Show, For, onMount } from 'solid-js';
 import { ethers } from 'ethers';
 import {
     Zap,
-    TrendingUp,
-    Sparkles,
-    Copy,
     ChevronRight,
-    User,
     UserPlus,
-    Target,
     ArrowLeft,
     Trophy,
-    Search,
     Award,
-    BarChart3,
     Gamepad2
 } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
@@ -21,6 +14,7 @@ import { Motion } from 'solid-motionone';
 import { WalletViewHeader } from './WalletViewHeader';
 import { ReferralLeaderboard } from './ReferralLeaderboard';
 import { GameDailyLeaderboard } from './GameDailyLeaderboard';
+import { DailyHub } from './DailyHub';
 import { useI18n } from '../../i18n/i18nContext';
 import { getRPConfig, RPConfig } from '../../services/firebaseService';
 
@@ -64,86 +58,32 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
         } catch { /* silent */ }
     });
 
-    const quests = [
+    // P1: the five hardcoded quest cards are gone.
+    //
+    // Three of them were dead ends — `airdrop` and `vns` rendered a "Quest
+    // Initializing" placeholder and `staking` was permanently disabled — so a
+    // new user exploring this tab hit "coming soon" three times out of five.
+    // The stats printed on them were literals, not data: Participants "2.4K+",
+    // Handles Claimed "8.1K", Top Reward "100x VCN", airdrop progress 5%.
+    // Those are removed rather than recomputed; the daily hub below shows real
+    // server state, and the two entries that lead somewhere real (the referral
+    // and game leaderboards) are kept as links underneath it.
+    const leaderboards = [
         {
             id: 'referral',
             title: t('campaign.referralRushTitle'),
-            tag: t('campaign.activeNow'),
-            tagColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
             description: t('campaign.referralRushCardDesc'),
             icon: UserPlus,
             accent: 'emerald',
             btnText: t('campaign.viewLeaderboard'),
-            stats: [
-                { label: t('campaign.topReward'), value: '100x VCN' },
-                { label: t('campaign.participants'), value: '2.4K+' },
-                { label: 'RP Bonus', value: rpConfig() ? `${rpConfig()!.rush_1st.toLocaleString()} RP` : '...' }
-            ],
-            footerTag: t('campaign.season1'),
-            footerIcon: Sparkles
         },
         {
             id: 'game_daily',
             title: 'Daily Game Challenge',
-            tag: 'Daily',
-            tagColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-            description: 'Play daily mini-games, earn VCN & RP, and compete for the top spot on today\'s leaderboard.',
+            description: 'Play daily mini-games and compete for the top spot on today\'s leaderboard.',
             icon: Gamepad2,
             accent: 'amber',
             btnText: 'View Leaderboard',
-            stats: [
-                { label: 'Games', value: 'Spin + Block' },
-                { label: 'Reset', value: 'Daily' },
-                { label: 'Rewards', value: 'VCN + RP' }
-            ],
-            footerTag: 'Play Daily',
-            footerIcon: Award
-        },
-        {
-            id: 'airdrop',
-            title: t('campaign.communityAirdrop'),
-            tag: t('campaign.season1'),
-            tagColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-            description: t('campaign.communityAirdropDesc'),
-            icon: Sparkles,
-            accent: 'purple',
-            btnText: t('campaign.viewMissions'),
-            progress: 5,
-            footerTag: t('campaign.newEra'),
-            footerIcon: TrendingUp
-        },
-        {
-            id: 'vns',
-            title: t('campaign.vnsHunting'),
-            tag: t('campaign.earlyAccess'),
-            tagColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-            description: t('campaign.vnsHuntingDesc'),
-            icon: Target,
-            accent: 'amber',
-            btnText: t('campaign.startHunting'),
-            stats: [
-                { label: t('campaign.handlesClaimed'), value: '8.1K' },
-                { label: t('campaign.rarityBonus'), value: 'Up to 5x' }
-            ],
-            footerTag: t('campaign.limited'),
-            footerIcon: Award
-        },
-        {
-            id: 'staking',
-            title: t('campaign.validatorStaking'),
-            tag: 'Coming Soon',
-            tagColor: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-            description: t('campaign.validatorStakingDesc'),
-            icon: TrendingUp,
-            accent: 'orange',
-            btnText: t('campaign.stakeNow'),
-            disabled: true,
-            stats: [
-                { label: t('campaign.currentApy'), value: '12~20%' },
-                { label: t('campaign.totalStaked'), value: totalStaked() }
-            ],
-            footerTag: 'Coming Soon',
-            footerIcon: Target
         },
     ];
 
@@ -308,92 +248,28 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                             icon={Zap}
                         />
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-                            <For each={quests}>
-                                {(quest) => (
-                                    <div
-                                        onClick={() => {
-                                            if ((quest as any).disabled) return;
-                                            if (quest.id === 'staking' && props.onNavigate) {
-                                                props.onNavigate('staking');
-                                            } else {
-                                                setSelectedQuest(quest.id);
-                                            }
-                                        }}
-                                        class={`bg-[#111113] border border-white/[0.06] rounded-[32px] p-8 pb-10 transition-all group flex flex-col h-full relative ${(quest as any).disabled ? 'opacity-50 grayscale cursor-not-allowed' : `hover:border-${quest.accent}-500/30 cursor-pointer`}`}
+                        {/* The day's checklist — real server state, one call. */}
+                        <DailyHub onNavigate={props.onNavigate} />
+
+                        {/* The two destinations that actually exist. */}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
+                            <For each={leaderboards}>
+                                {(item) => (
+                                    <button
+                                        onClick={() => setSelectedQuest(item.id)}
+                                        class="bg-[#111113] border border-white/[0.06] rounded-[24px] p-6 text-left transition-all hover:border-white/[0.14] group"
                                     >
-                                        {/* Hover Glow - Moved to inner container to prevent clipping of button shadow */}
-                                        <div class="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
-                                            <div class={`absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-0 group-hover:opacity-20 transition-opacity bg-${quest.accent}-500 -mr-16 -mt-16`} />
+                                        <div class="flex items-center justify-between mb-4">
+                                            <item.icon class="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
+                                            <ChevronRight class="w-4 h-4 text-gray-700 group-hover:text-white transition-colors" />
                                         </div>
-
-                                        <div class="flex items-center justify-between mb-8 relative z-10">
-                                            <div class={`px-3 py-1 ${quest.tagColor} border rounded-full text-[9px] font-black uppercase tracking-widest`}>
-                                                {quest.tag}
-                                            </div>
-                                            <quest.icon class="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
-                                        </div>
-
-                                        <div class="flex-1 relative z-10">
-                                            <h2 class="text-3xl font-black italic text-white tracking-tighter mb-4 group-hover:text-blue-400 transition-colors uppercase">
-                                                {quest.title}
-                                            </h2>
-                                            <p class="text-gray-400 mb-8 font-medium leading-relaxed text-sm">
-                                                {quest.description}
-                                            </p>
-
-                                            <Show when={quest.stats}>
-                                                <div class="flex items-center gap-8 mb-8 pt-4 border-t border-white/5">
-                                                    <For each={quest.stats}>
-                                                        {(stat) => (
-                                                            <div>
-                                                                <div class="text-[9px] text-gray-600 uppercase font-black tracking-widest mb-1.5">{stat.label}</div>
-                                                                <div class="text-xl font-black text-white italic tracking-tighter">{stat.value}</div>
-                                                            </div>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </Show>
-
-                                            <Show when={quest.progress !== undefined}>
-                                                <div class="mb-8 pt-4 border-t border-white/5">
-                                                    <div class="flex items-center justify-between mb-3">
-                                                        <span class="text-[9px] text-gray-600 font-black uppercase tracking-widest">{t('campaign.progressBasis')}</span>
-                                                        <span class="text-[10px] text-white font-black italic">ACTIVE</span>
-                                                    </div>
-                                                    <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                                                        <div
-                                                            class={`h-full bg-${quest.accent}-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]`}
-                                                            style={{ width: `${quest.progress}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </Show>
-                                        </div>
-
-                                        <div class="space-y-6 mt-auto pr-1 pb-1">
-                                            <button
-                                                disabled={(quest as any).disabled}
-                                                class={`w-full py-4 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${(quest as any).disabled ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed' :
-                                                    quest.accent === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20 shadow-xl' :
-                                                        quest.accent === 'emerald' ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20 shadow-xl' :
-                                                            quest.accent === 'purple' ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-purple-500/20 shadow-xl' :
-                                                                quest.accent === 'orange' ? 'bg-orange-600 text-white hover:bg-orange-500 shadow-orange-500/20 shadow-xl' :
-                                                                    'bg-white/5 text-gray-500 hover:bg-white/10'
-                                                    }`}
-                                            >
-                                                {(quest as any).disabled ? 'Coming Soon' : quest.btnText}
-                                                <ChevronRight class="w-4 h-4" />
-                                            </button>
-
-                                            <div class="flex items-center justify-between pt-2">
-                                                <div class="flex items-center gap-2 px-2 py-1 bg-white/[0.03] border border-white/[0.05] rounded-lg">
-                                                    <span class="text-[8px] font-black text-gray-600 uppercase tracking-widest">{quest.footerTag}</span>
-                                                </div>
-                                                <quest.footerIcon class="w-3.5 h-3.5 text-gray-700" />
-                                            </div>
-                                        </div>
-                                    </div>
+                                        <h2 class="text-xl font-black italic text-white tracking-tighter uppercase mb-2">
+                                            {item.title}
+                                        </h2>
+                                        <p class="text-sm text-gray-500 font-medium leading-relaxed">
+                                            {item.description}
+                                        </p>
+                                    </button>
                                 )}
                             </For>
                         </div>
