@@ -1,0 +1,19 @@
+{
+  "network": "visionV2",
+  "chainId": 3151909,
+  "deployer": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "settler": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "oracle": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "feeCollector": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "contracts": {
+    "CollateralToken": "0xD0BB17B69801b9a76caD1aA0e0710B8b01625D10",
+    "SolventPerp": "0xe0217ea652a802E339bD5DCC473b44F50EC1952F"
+  },
+  "market": {
+    "id": "1",
+    "maintenanceMarginBps": 500,
+    "initialMarginBps": 1000,
+    "markPrice": "100000000000000000000"
+  },
+  "deployedAt": "2026-06-17T04:22:31.327Z"
+}

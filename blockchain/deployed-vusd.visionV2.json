@@ -1,0 +1,13 @@
+{
+  "network": "visionV2",
+  "chainId": 3151909,
+  "deployer": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "admin": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "contracts": {
+    "VisionStableUSD": "0xD0BB17B69801b9a76caD1aA0e0710B8b01625D10"
+  },
+  "decimals": 18,
+  "initialMintWhole": "10000000",
+  "phase": "pilot-unbacked",
+  "deployedAt": "2026-06-17T04:14:16.272Z"
+}

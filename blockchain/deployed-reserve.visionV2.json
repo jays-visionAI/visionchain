@@ -1,0 +1,12 @@
+{
+  "network": "visionV2",
+  "chainId": 3151909,
+  "contracts": {
+    "SolventReserve": "0x933637Fd9c90db8BCC1c6820606e32F931A2f2F5",
+    "vUSD": "0xD0BB17B69801b9a76caD1aA0e0710B8b01625D10",
+    "USDT": "0x4526572c795c1d17b690ff8DdC052051AFd0cDd7"
+  },
+  "scale": "1000000000000",
+  "note": "USDT here is a 6dec MOCK for the self-test; pass real bridged USDT on mainnet.",
+  "deployedAt": "2026-06-17T04:33:02.543Z"
+}

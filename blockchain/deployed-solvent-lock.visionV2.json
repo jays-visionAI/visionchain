@@ -1,0 +1,14 @@
+{
+  "network": "visionV2",
+  "chainId": 3151909,
+  "deployer": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "settler": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "feeCollector": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "contracts": {
+    "QuoteToken": "0xD0BB17B69801b9a76caD1aA0e0710B8b01625D10",
+    "SolventLockRegistry": "0x02f8c4a1A82e8df50741B1CA74D9c0d8aB2a311c",
+    "SolventLockSettlement": "0x76930b302489b686207a301006a3E586329c5931",
+    "SolventLockVault": "0xeE379A31dD645649bc35De8799dcB37dbbB648f1"
+  },
+  "deployedAt": "2026-06-17T09:07:31.120Z"
+}

@@ -1,0 +1,13 @@
+{
+  "network": "visionV2",
+  "chainId": 3151909,
+  "deployer": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "settler": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "feeCollector": "0x805E8DB0175aeC75d2e2852aD14092466C281e3b",
+  "contracts": {
+    "SpotDex": "0xb8123Aa334925c416Eb7c703C8aa48991c304f96",
+    "BaseToken": "0x39DB64Aeb6cacB5853351d18e99B5213a57B0880",
+    "QuoteToken": "0xD0BB17B69801b9a76caD1aA0e0710B8b01625D10"
+  },
+  "deployedAt": "2026-06-17T04:24:00.615Z"
+}
