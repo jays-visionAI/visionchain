@@ -11,7 +11,7 @@
 **Vision Chain Testnet v2**에 오신 것을 환영합니다. 이 환경은 개발자와 사용자가 **AI-Native Layer 1**의 기능을 탐색할 수 있도록 설계되었습니다. 여기에는 높은 처리량을 자랑하는 Kafka 기반의 Shared Sequencer와 독자적인 "Equalizer" 상호운용성 모델이 포함됩니다.
 
 **v2의 새로운 기능:**
-*   **퍼블릭 액세스:** 누구나 공개 RPC(`46.224.221.201`)를 통해 접속 가능합니다.
+*   **퍼블릭 액세스:** 누구나 공개 RPC(`https://api.visionchain.co/rpc-proxy`)를 통해 접속 가능합니다.
 *   **Shared Sequencer:** Redpanda를 통한 1초 미만의 트랜잭션 정렬(Ordering).
 *   **AI Oracle:** 네트워크 사용량과 노드 상태에 따른 동적 토크노믹스.
 
@@ -95,7 +95,7 @@ npx hardhat run scripts/deploy.js --network vision_v1
 ### The Equalizer (크로스체인 싱크)
 Vision Chain은 자산을 래핑(Wrapping)하거나 소각(Burning)하지 않고 다른 체인에서 "텔레포트"할 수 있게 합니다.
 *   **개념:** Chain A에서 자산 잠금 -> Agent가 이벤트 감지 -> Sequencer가 Chain B에 크레딧 지급.
-*   **테스트 컨트랙트:** `VisionEqualizer` (주소: `0x5FbDB2315678afecb367f032d93F642f64180aa3`)
+*   **테스트 컨트랙트:** `VisionEqualizer` (주소: 배포 대기 중 - 최신 주소는 `contractService.ts` 참조)
 
 ### 고속 시퀀서 (High-Speed Sequencer)
 1초 미만의 지연 시간이 필요한 자동화된 에이전트의 경우, 표준 RPC 대신 Sequencer API로 서명된 트랜잭션을 직접 전송하세요.

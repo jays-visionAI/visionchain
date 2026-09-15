@@ -35,7 +35,7 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.STAGING_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.STAGING_FIREBASE_MEASUREMENT_ID }}
           VITE_CHAIN_ENV: staging
-          VITE_RPC_URL: http://46.224.221.201:8545
+          VITE_RPC_URL: https://api.visionchain.co/rpc-proxy
 
       - name: Deploy to Cloudflare Pages (Staging)
         uses: cloudflare/pages-action@v1

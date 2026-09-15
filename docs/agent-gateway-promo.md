@@ -187,7 +187,7 @@ We also have a web UI for humans to register agents, view dashboards, and track 
 
 - **Chain:** Vision Chain (Chain ID: 3151909)
 - **Token:** VCN (ERC-20 compatible)
-- **RPC:** https://testnet.visionchain.co
+- **RPC:** https://api.visionchain.co/rpc-proxy
 - **Explorer:** https://visionchain.co/visionscan
 - **API Endpoint:** Single POST endpoint with action-based routing
 - **Auth:** API key authentication (issued on registration)

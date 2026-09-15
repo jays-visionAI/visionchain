@@ -12,7 +12,7 @@ Vision Chain is a purpose-built EVM-compatible blockchain featuring a native AI 
 Vision Chain Ecosystem
 ├── Frontend (SolidJS + Vite)          → AI Wallet, Bridge UI, Explorer
 ├── Cloud Functions (Firebase)         → Paymaster, Bridge Relayer, Auth
-├── Blockchain (Geth-based EVM)        → Custom L1 Chain (ChainID: 1337)
+├── Blockchain (Geth-based EVM)        → Custom L1 Chain (ChainID: 3151909)
 ├── Smart Contracts (Solidity)         → VCN Token, Bridge, Staking, Paymaster
 └── AI Services (Gemini)              → Intent Parsing, Chat, Image Gen
 ```
@@ -89,7 +89,7 @@ Vision-Chain/
 
 ## Smart Contracts
 
-All contracts are deployed on Vision Chain v2 Testnet (ChainID: 1337).
+All contracts are deployed on Vision Chain v2 Testnet (ChainID: 3151909).
 
 | Contract | Description |
 |----------|-------------|
@@ -106,7 +106,9 @@ All contracts are deployed on Vision Chain v2 Testnet (ChainID: 1337).
 ### Deployed Addresses (v2 Testnet)
 
 ```
-IntentCommitment:    0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6
+VCNToken (ERC-20):   0xf8a2F49C782447a8660554F7c3274cbd765b1963
+VCNPaymasterNative:  0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3
+BridgeStaking:       0x009326c391012593Aeca601B09c02545E00Aa818
 VisionBridgeSecure:  0x610178dA211FEF7D417bC0e6FeD39F05609AD788
 ```
 
@@ -149,7 +151,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 
 # Blockchain RPC
-VITE_RPC_URL=https://testnet.visionchain.co
+VITE_RPC_URL=https://api.visionchain.co/rpc-proxy
 ```
 
 ### 3. Run Development Server

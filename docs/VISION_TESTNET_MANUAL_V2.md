@@ -11,7 +11,7 @@
 Welcome to the **Vision Chain Testnet v2**. This environment allows developers and users to explore the **AI-Native Layer 1** capabilities, including the high-throughput Kafka-based Shared Sequencer and the unique "Equalizer" interoperability model.
 
 **What's New in v2:**
-*   **Public Access:** Now accessible via public RPC (`46.224.221.201`).
+*   **Public Access:** Now accessible via public RPC (`https://api.visionchain.co/rpc-proxy`).
 *   **Shared Sequencer:** Sub-second transaction ordering via Redpanda.
 *   **AI Oracle:** Dynamic tokenomics driven by network usage and node health.
 
@@ -95,7 +95,7 @@ npx hardhat run scripts/deploy.js --network vision_v1
 ### The Equalizer (Cross-Chain Sync)
 Vision Chain allows you to "teleport" assets from other chains without wrapping/burning.
 *   **Concept:** Lock asset on Chain A -> Agents detect event -> Sequencer credits Chain B.
-*   **Test Contract:** `VisionEqualizer` (Address: `0x5FbDB2315678afecb367f032d93F642f64180aa3`)
+*   **Test Contract:** `VisionEqualizer` (Address: Pending deployment — see `contractService.ts` for latest)
 
 ### High-Speed Sequencer
 For automated agents requiring sub-second latency, submit signed transactions directly to the Sequencer API instead of the standard RPC.

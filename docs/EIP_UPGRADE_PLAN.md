@@ -171,7 +171,7 @@ Solidity 0.8.20+ 컨트랙트를 배포하여 PUSH0가 작동하는지 확인:
 # Node.js로 검증 (로컬)
 node -e "
 const { ethers } = require('ethers');
-const p = new ethers.JsonRpcProvider('https://rpc.visionchain.co');
+const p = new ethers.JsonRpcProvider('https://api.visionchain.co/rpc-proxy');
 (async () => {
   const b = await p.getBlock('latest');
   console.log('Block:', b.number);

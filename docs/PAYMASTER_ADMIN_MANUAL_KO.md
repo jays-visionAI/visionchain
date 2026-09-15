@@ -168,7 +168,7 @@ const bridge = new MockBridgeAdapter();
 
 // Quote 요청
 const quote = await bridge.getQuote({
-    sourceChainId: 1337,  // Vision
+    sourceChainId: 3151909,  // Vision Chain v2
     destChainId: 1,          // Ethereum
     token: 'VCN',
     amount: BigInt(1000e18)

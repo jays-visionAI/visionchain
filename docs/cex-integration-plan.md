@@ -643,7 +643,7 @@ type TradingNotification =
 | 차트 | lightweight-charts (TradingView) / recharts |
 | 스케줄링 | Cloud Scheduler |
 | 모니터링 | Cloud Logging + Cloud Monitoring |
-| 알림 | FCM + Resend Email (기존 인프라 활용) |
+| 알림 | FCM + Gmail/Nodemailer (Cloud Functions, 기존 인프라 활용) |
 
 ---
 

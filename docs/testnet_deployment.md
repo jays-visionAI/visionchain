@@ -84,7 +84,7 @@ server {
 VITE_RPC_URL=http://localhost:8545
 
 # 변경 후
-VITE_RPC_URL=https://testnet.visionchain.co
+VITE_RPC_URL=https://api.visionchain.co/rpc-proxy
 ```
 
 ---

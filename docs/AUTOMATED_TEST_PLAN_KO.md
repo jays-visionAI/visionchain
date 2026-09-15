@@ -32,7 +32,7 @@
     -   `Math.random()`을 사용하여 60,000ms(1분) ~ 300,000ms(5분) 사이의 지연 시간 산출.
     -   비동기 루프를 통해 지속적인 트래픽 발생 유지.
 3.  **Transaction Engine**:
-    -   Vision Chain RPC (`46.224.221.201:8545`) 연결.
+    -   Vision Chain RPC (`https://api.visionchain.co/rpc-proxy`) 연결.
     -   `shared-sequencer` API (`POST /rpc/submit`)를 통한 트랜잭션 제출.
 4.  **Metadata Factory**:
     -   거래 유형별 가짜 메타데이터 생성 (예: 'Invoice Settlement', 'Liquidity Swap' 등).
