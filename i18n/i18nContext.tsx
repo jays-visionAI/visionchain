@@ -1,15 +1,21 @@
 import { createContext, useContext, createSignal, createMemo, JSX } from 'solid-js';
 
-// Import locale files
+// English is the fallback for every other locale and the default, so it is the
+// one file that ships with the entry. The other eight are fetched on demand:
+// statically importing all nine put ~440 KB of JSON in front of every page,
+// including visitors who only ever see English.
 import en from './locales/en.json';
-import ko from './locales/ko.json';
-import jp from './locales/jp.json';
-import th from './locales/th.json';
-import vi from './locales/vi.json';
-import zh from './locales/zh.json';
-import fr from './locales/fr.json';
-import de from './locales/de.json';
-import it from './locales/it.json';
+
+const LOADERS: Record<LocaleCode, () => Promise<{ default: NestedRecord }>> = {
+    ko: () => import('./locales/ko.json'),
+    jp: () => import('./locales/jp.json'),
+    th: () => import('./locales/th.json'),
+    vi: () => import('./locales/vi.json'),
+    zh: () => import('./locales/zh.json'),
+    fr: () => import('./locales/fr.json'),
+    de: () => import('./locales/de.json'),
+    it: () => import('./locales/it.json'),
+};
 
 // ============================================================
 // Types
@@ -31,17 +37,37 @@ interface I18nContextValue {
 // ============================================================
 // Locale Registry
 // ============================================================
-const LOCALES: Record<LocaleCode, NestedRecord> = {
+/**
+ * Which locales exist. Kept separate from what is currently in memory so that
+ * detection and validation do not depend on a file having been fetched yet.
+ */
+const KNOWN: LocaleCode[] = ['en', 'ko', 'jp', 'th', 'vi', 'zh', 'fr', 'de', 'it'];
+
+/**
+ * What is loaded right now. English is always present; others appear as their
+ * chunk arrives, and the signal makes every `t()` call re-run when they do.
+ */
+const [tables, setTables] = createSignal<Record<LocaleCode, NestedRecord>>({
     en: en as NestedRecord,
-    ko: ko as NestedRecord,
-    jp: jp as NestedRecord,
-    th: th as NestedRecord,
-    vi: vi as NestedRecord,
-    zh: zh as NestedRecord,
-    fr: fr as NestedRecord,
-    de: de as NestedRecord,
-    it: it as NestedRecord,
-};
+});
+
+const inFlight = new Set<LocaleCode>();
+
+/** Fetch a locale table once. Failure is non-fatal: English keeps rendering. */
+async function ensureLoaded(code: LocaleCode) {
+    if (code === DEFAULT_LOCALE || tables()[code] || inFlight.has(code)) return;
+    const load = LOADERS[code];
+    if (!load) return;
+    inFlight.add(code);
+    try {
+        const mod = await load();
+        setTables((prev) => ({ ...prev, [code]: (mod.default ?? mod) as NestedRecord }));
+    } catch (err) {
+        console.warn(`[i18n] could not load locale ${code}`, err);
+    } finally {
+        inFlight.delete(code);
+    }
+}
 
 const AVAILABLE_LOCALES = [
     { code: 'en', label: 'English', native: 'English' },
@@ -80,7 +106,7 @@ function detectLocale(): LocaleCode {
     // 1. localStorage
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored && LOCALES[stored]) return stored;
+        if (stored && KNOWN.includes(stored)) return stored;
     } catch { /* SSR or privacy mode */ }
 
     // 2. Browser language — map ISO 639-1 codes to our internal locale keys.
@@ -90,7 +116,7 @@ function detectLocale(): LocaleCode {
         const raw = navigator.language?.split('-')[0]?.toLowerCase();
         const alias: Record<string, string> = { ja: 'jp' };
         const browserLang = raw ? (alias[raw] || raw) : undefined;
-        if (browserLang && LOCALES[browserLang]) return browserLang;
+        if (browserLang && KNOWN.includes(browserLang)) return browserLang;
     } catch { /* SSR */ }
 
     return DEFAULT_LOCALE;
@@ -105,7 +131,8 @@ export function I18nProvider(props: { children: JSX.Element }) {
     const [locale, setLocaleSignal] = createSignal<LocaleCode>(detectLocale());
 
     const setLocale = (code: LocaleCode) => {
-        if (LOCALES[code]) {
+        if (KNOWN.includes(code)) {
+            void ensureLoaded(code);
             setLocaleSignal(code);
             try {
                 localStorage.setItem(STORAGE_KEY, code);
@@ -120,13 +147,18 @@ export function I18nProvider(props: { children: JSX.Element }) {
     // Set initial HTML lang
     document.documentElement.lang = locale();
 
+    // A browser or stored preference other than English needs its table fetched.
+    // Until it lands, `t()` returns English — the same fallback an untranslated
+    // key already gets.
+    void ensureLoaded(locale());
+
     const t = (key: string, params?: Record<string, string | number>): string => {
         // Try current locale first
-        let value = resolveKey(LOCALES[locale()] || {}, key);
+        let value = resolveKey(tables()[locale()] || {}, key);
 
         // Fallback to English
         if (value === undefined && locale() !== DEFAULT_LOCALE) {
-            value = resolveKey(LOCALES[DEFAULT_LOCALE] || {}, key);
+            value = resolveKey(tables()[DEFAULT_LOCALE] || {}, key);
         }
 
         // Fallback to key itself

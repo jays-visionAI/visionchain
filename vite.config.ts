@@ -58,6 +58,21 @@ export default defineConfig(({ mode }) => {
               return 'vendor';
             }
 
+            // ── Shared app code ───────────────────────────────────────────
+            // These modules are reachable from the entry, so whichever chunk they
+            // land in becomes a preloaded dependency of every page. Left unnamed,
+            // Rollup folded them into admin-named chunks — which is how 174 KB of
+            // admin components ended up preloading on `/`. Naming them keeps the
+            // shared bytes shared and lets the admin components stay lazy.
+            if (id.includes('/components/auth/authContext')) return 'app-core';
+            if (id.includes('/services/envConfig')) return 'app-core';
+            if (id.includes('/utils/')) return 'app-core';
+            if (id.includes('/services/firebaseService')) return 'services-firebase-app';
+            if (id.includes('/services/abi/')) return 'services-abi';
+            if (id.includes('/services/gatewayClient')) return 'services-gateway';
+            if (id.includes('/services/vcnPriceService')) return 'services-price';
+            if (id.includes('/services/contractService')) return 'services-contract';
+
             // ── Admin ─────────────────────────────────────────────────────
             if (id.includes('/components/admin/vpis/')) return 'admin-vpis';
             if (id.includes('/components/admin/tabs/')) return 'admin-tabs';

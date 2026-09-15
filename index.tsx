@@ -1,6 +1,6 @@
 import { render } from 'solid-js/web';
 import { Router, Route, Navigate, useLocation } from '@solidjs/router';
-import { Show, Suspense } from 'solid-js';
+import { Show, Suspense, lazy } from 'solid-js';
 import { AuthProvider, useAuth } from './components/auth/authContext';
 import { I18nProvider } from './i18n/i18nContext';
 import { isProduction } from './services/envConfig';
@@ -17,7 +17,7 @@ import HomePage from './pages/HomePage';
 import * as Public from './pages/PublicPages';
 import * as Admin from './pages/AdminPages';
 import * as Auth from './pages/AuthPages';
-import ValidatorStaking from './components/ValidatorStaking';
+const ValidatorStaking = lazy(() => import('./components/ValidatorStaking'));
 
 // Loading spinner component
 function PageLoader() {

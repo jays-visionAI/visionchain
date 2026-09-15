@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'solid-js';
-import AdminLayout from '../components/admin/AdminLayout';
+// Lazy: every wrapper below already sits inside a <Suspense>, and a static
+// import here makes the admin bundle a preloaded dependency of the entry.
+const AdminLayout = lazy(() => import('../components/admin/AdminLayout'));
 
 // Admin components (lazy-loaded)
 export const AdminDashboard = lazy(() => import('../components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
