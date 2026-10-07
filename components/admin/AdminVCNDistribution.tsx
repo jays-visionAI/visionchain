@@ -5,7 +5,8 @@ import {
     Users,
     Activity,
     Megaphone,
-    ShoppingBag
+    ShoppingBag,
+    Search
 } from 'lucide-solid';
 
 const UploadCSV = lazy(() => import('./UploadCSV').then(m => ({ default: m.UploadCSV })));
@@ -13,6 +14,7 @@ const ActivateContract = lazy(() => import('./ActivateContract'));
 const ManagePartners = lazy(() => import('./ManagePartners').then(m => ({ default: m.ManagePartners })));
 const Announcement = lazy(() => import('./Announcement').then(m => ({ default: m.Announcement })));
 const SalesHistory = lazy(() => import('./SalesHistory').then(m => ({ default: m.SalesHistory })));
+const InvestorLookup = lazy(() => import('./InvestorLookup').then(m => ({ default: m.InvestorLookup })));
 
 // Helper for loading state
 const TabLoading = () => (
@@ -22,7 +24,7 @@ const TabLoading = () => (
 );
 
 export default function AdminVCNDistribution() {
-    const [activeTab, setActiveTab] = createSignal<'upload' | 'contract' | 'partners' | 'announcement' | 'sales'>('upload');
+    const [activeTab, setActiveTab] = createSignal<'lookup' | 'upload' | 'contract' | 'partners' | 'announcement' | 'sales'>('lookup');
 
     const TabButton = (props: { id: string, label: string, icon: any, active: boolean, onClick: () => void }) => (
         <button
@@ -50,6 +52,13 @@ export default function AdminVCNDistribution() {
 
             {/* Navigation Tabs */}
             <div class="flex flex-wrap gap-4">
+                <TabButton
+                    id="lookup"
+                    label="투자자 조회"
+                    icon={Search}
+                    active={activeTab() === 'lookup'}
+                    onClick={() => setActiveTab('lookup')}
+                />
                 <TabButton
                     id="upload"
                     label="Upload CSV"
@@ -91,6 +100,9 @@ export default function AdminVCNDistribution() {
             <div class="min-h-[500px]">
                 <Suspense fallback={<TabLoading />}>
                     <Switch>
+                        <Match when={activeTab() === 'lookup'}>
+                            <InvestorLookup />
+                        </Match>
                         <Match when={activeTab() === 'upload'}>
                             <UploadCSV />
                         </Match>

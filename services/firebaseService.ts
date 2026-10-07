@@ -25,6 +25,13 @@ import {
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
+import {
+    classifyLookupTerm,
+    readAmount,
+    reconcileInvestorRecords,
+    type InvestorLookupResult,
+    type InvestorSaleRecord,
+} from './investorLookup';
 import { getFunctions as getFns, httpsCallable as httpsCallableFn } from 'firebase/functions';
 import { firebaseConfig } from '../config/firebase.config';
 import { gatewayCall } from './gatewayClient';
@@ -4030,6 +4037,154 @@ export const saveVcnPurchases = async (purchases: Omit<VcnPurchase, 'createdAt' 
     });
 
     await batch.commit();
+};
+
+/**
+ * Look up one investor's VCN purchase, by email, wallet address or partner code.
+ *
+ * Why this exists next to the search box on the vesting screen: that screen
+ * loads the first 500 merged users and filters them in the browser, so an
+ * investor past the cap reads as "not found" with no error anywhere — a silently
+ * wrong answer to "how much did this person buy". Here the email IS the document
+ * key in all three collections, so an email lookup is three direct reads whose
+ * result does not depend on how many investors exist.
+ *
+ * It reads every source and reports what each one says (see services/investorLookup.ts):
+ * a disagreement between them is the thing an operator most needs to see, and
+ * picking a winner silently is how a wrong figure gets paid.
+ *
+ * A wallet address or partner code cannot be a key, so those are field queries,
+ * and a partner code can legitimately match many investors.
+ */
+export const lookupInvestor = async (term: string, maxMatches = 25): Promise<InvestorLookupResult[]> => {
+    const { kind, value } = classifyLookupTerm(term);
+    if (!value) return [];
+
+    let currentDb: Firestore;
+    try {
+        const adminAuth = getAdminFirebaseAuth();
+        currentDb = adminAuth.currentUser ? getAdminFirebaseDb() : getFirebaseDb();
+    } catch {
+        initializeFirebase();
+        currentDb = getFirebaseDb();
+    }
+
+    /** The three records for one email: three key reads, no scan, no cap. */
+    const byEmail = async (emailLower: string): Promise<InvestorLookupResult> => {
+        const [saleSnap, purchaseSnap, userSnap] = await Promise.all([
+            getDoc(doc(currentDb, 'token_sales', emailLower)),
+            getDoc(doc(currentDb, 'vcn_purchases', emailLower)),
+            getDoc(doc(currentDb, 'users', emailLower)),
+        ]);
+
+        const records: InvestorSaleRecord[] = [];
+
+        if (saleSnap.exists()) {
+            const d = saleSnap.data() as any;
+            records.push({
+                source: 'token_sales',
+                email: d.email || emailLower,
+                amount: readAmount(d),
+                partnerCode: d.partnerCode,
+                status: d.status,
+                walletAddress: d.walletAddress,
+                initialUnlockRatio: d.initialUnlockRatio ?? d.unlockRatio,
+                cliffMonths: d.cliffMonths,
+                vestingMonths: d.vestingMonths ?? d.vestingPeriod,
+                vestingTx: d.vestingTx,
+                createdAt: d.createdAt ?? d.date,
+                updatedAt: d.updatedAt,
+            });
+        }
+
+        if (purchaseSnap.exists()) {
+            const d = purchaseSnap.data() as any;
+            records.push({
+                source: 'vcn_purchases',
+                email: d.email || emailLower,
+                amount: readAmount(d),
+                partnerCode: d.partnerCode,
+                status: d.status,
+                walletAddress: d.walletAddress,
+                initialUnlockRatio: d.initialUnlockRatio,
+                cliffMonths: d.cliffMonths,
+                vestingMonths: d.vestingMonths,
+                vestingContractAddress: d.vestingContractAddress,
+                createdAt: d.createdAt,
+            });
+        }
+
+        if (userSnap.exists()) {
+            const d = userSnap.data() as any;
+            records.push({
+                source: 'users',
+                email: d.email || emailLower,
+                // Usually absent: the amount lives on the sale, and getAllUsers
+                // copies it onto the row it builds rather than onto the document.
+                amount: readAmount(d),
+                partnerCode: d.partnerCode,
+                status: d.status,
+                walletAddress: d.walletAddress,
+                vestingTx: d.vestingTx,
+                createdAt: d.createdAt,
+            });
+        }
+
+        return reconcileInvestorRecords(emailLower, 'email', records);
+    };
+
+    if (kind === 'email') {
+        const result = await byEmail(value);
+        return result.records.length ? [result] : [{ ...result, records: [] }];
+    }
+
+    // Not a key: find the emails first, then read each one's three records so the
+    // answer has the same shape — and the same disagreement reporting — either way.
+    const emails = new Set<string>();
+    const addFrom = (snap: any, field = 'email') => {
+        snap.docs.forEach((d: any) => {
+            const data = d.data();
+            const email = (data?.[field] || d.id || '').toString().toLowerCase();
+            if (email.includes('@')) emails.add(email);
+        });
+    };
+
+    if (kind === 'wallet') {
+        const [sales, purchases, users] = await Promise.all([
+            getDocs(query(collection(currentDb, 'token_sales'), where('walletAddress', '==', value), limit(maxMatches))),
+            getDocs(query(collection(currentDb, 'vcn_purchases'), where('walletAddress', '==', value), limit(maxMatches))),
+            getDocs(query(collection(currentDb, 'users'), where('walletAddress', '==', value), limit(maxMatches))),
+        ]);
+        addFrom(sales); addFrom(purchases); addFrom(users);
+
+        // Addresses are stored checksummed in some places and lowercased in
+        // others, and Firestore equality is case-sensitive, so one query can
+        // miss. Retry with the string exactly as it was typed, which covers the
+        // operator pasting a checksummed address from the explorer. Computing
+        // the checksum here would mean pulling a keccak implementation into this
+        // module for one query; if a third casing ever shows up, normalising the
+        // stored field is the fix, not a third query.
+        const typed = (term || '').trim();
+        if (emails.size === 0 && typed && typed !== value) {
+            const [s2, p2, u2] = await Promise.all([
+                getDocs(query(collection(currentDb, 'token_sales'), where('walletAddress', '==', typed), limit(maxMatches))),
+                getDocs(query(collection(currentDb, 'vcn_purchases'), where('walletAddress', '==', typed), limit(maxMatches))),
+                getDocs(query(collection(currentDb, 'users'), where('walletAddress', '==', typed), limit(maxMatches))),
+            ]);
+            addFrom(s2); addFrom(p2); addFrom(u2);
+        }
+    } else {
+        // A partner code, or something typed that is neither an email nor an
+        // address. Partner code is the only one of those that is a stored field.
+        const [sales, purchases] = await Promise.all([
+            getDocs(query(collection(currentDb, 'token_sales'), where('partnerCode', '==', value), limit(maxMatches))),
+            getDocs(query(collection(currentDb, 'vcn_purchases'), where('partnerCode', '==', value), limit(maxMatches))),
+        ]);
+        addFrom(sales); addFrom(purchases);
+    }
+
+    const results = await Promise.all([...emails].slice(0, maxMatches).map(byEmail));
+    return results.map((r) => ({ ...r, term, kind }));
 };
 
 export const getVcnPurchases = async (limitCount = 100): Promise<VcnPurchase[]> => {
