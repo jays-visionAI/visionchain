@@ -37,3 +37,12 @@ functions/find-duplicate-phones.cjs
 # Mainnet deploy keys (NEVER commit)
 blockchain/mainnet-deploy/
 keys-backup.txt
+
+# Environment files hold keys; only the example is tracked.
+# .env.production and .env.staging were tracked until 2026-10-14 — the keys
+# that were in them are public and must be treated as compromised. CI injects
+# every VITE_* value from GitHub secrets, and Vite gives an existing
+# process.env entry priority over a dotenv file, so nothing depends on these
+# being in the repo.
+.env.production
+.env.staging
