@@ -1999,6 +1999,35 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     const intentContract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, adminWallet);
     const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, BRIDGE_SECURE_ABI, adminWallet);
 
+    // Refuse BEFORE taking the user's VCN. Everything below this point moves
+    // money, and `commitIntent` further down is sent to a contract that does
+    // not implement it, so without this the user is charged and the bridge
+    // then reverts. See checkBridgeContracts in bridgeGate.js.
+    const readiness = await checkBridgeContracts({
+      ethers,
+      // handleBridge is handed the wallet, not a provider; in ethers v6 the
+      // wallet carries the one it is connected to.
+      getProvider: () => adminWallet.provider,
+      contracts: {
+        IntentCommitment: {
+          address: INTENT_COMMITMENT_ADDRESS,
+          signature: "commitIntent(address,uint256,uint256)",
+        },
+        VisionBridgeSecure: {
+          address: VISION_BRIDGE_SECURE_ADDRESS,
+          signature: "lockVCN(bytes32,address,uint256)",
+        },
+      },
+    });
+    if (!readiness.ok) {
+      console.error("[Paymaster:Bridge] refusing: ", readiness.missing);
+      return res.status(503).json({
+        error: "Bridge is unavailable on this chain",
+        detail: readiness.missing,
+        hint: "No VCN was taken. The bridge contracts are not deployed on this chain.",
+      });
+    }
+
     const amountWei = BigInt(amount);
     const BRIDGE_FEE = fee ? BigInt(fee) : ethers.parseEther("1"); // 1 VCN default fee
     const totalAmount = amountWei + BRIDGE_FEE;
@@ -3071,28 +3100,47 @@ exports.updateBridgeLimits = onRequest({ cors: true, invoker: "public", secrets:
 });
 
 
-// --- Admin Set Target APY (Server-Side, Fixed APY) ---
-exports.adminSetAPY = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
+/**
+ * Admin gate for callables: a Firebase-verified ID token plus the `admin`
+ * role on the caller's own users document. Same check the other admin
+ * callables make; it lives in one function so the callables below cannot
+ * drift apart from it.
+ *
+ * @param {object} request the callable request
+ * @return {Promise<string>} the caller's lowercased email
+ */
+async function assertAdminCaller(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email?.toLowerCase();
+  if (!email) throw new HttpsError("permission-denied", "Admin access required.");
 
-  if (req.method === "OPTIONS") return res.status(204).send("");
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  const snap = await db.collection("users").doc(email).get();
+  if (!snap.exists || snap.data().role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+  return email;
+}
+
+// --- Admin Set Target APY (Server-Side, Fixed APY) ---
+//
+// P0 SECURITY: this was onRequest({ invoker: "public" }) guarded only by a
+// plaintext `adminSecret`. The same literal was hardcoded in the admin UI, so
+// it shipped inside the public client bundle, and the server fell back to that
+// literal whenever ADMIN_SECRET was unset — i.e. the only credential standing
+// between the internet and the staking APY was a published string. It is now a
+// callable: Firebase verifies the ID token and the admin role is read from
+// Firestore. `backfillRP` was removed for exactly this reason.
+exports.adminSetAPY = onCall({ cors: true }, async (request) => {
+  const actor = await assertAdminCaller(request);
 
   try {
-    const { apyPercent, adminSecret } = req.body;
+    const apyPercent = Number(request.data?.apyPercent);
 
     if (!apyPercent || apyPercent <= 0 || apyPercent > 50) {
-      return res.status(400).json({ error: "APY must be between 1 and 50%" });
+      throw new HttpsError("invalid-argument", "APY must be between 1 and 50%");
     }
 
-    const expectedSecret = process.env.ADMIN_SECRET || "vision-admin-2026";
-    if (adminSecret !== expectedSecret) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-
-    console.log(`[Admin] Setting target APY to ${apyPercent}%`);
+    console.log(`[Admin] ${actor} setting target APY to ${apyPercent}%`);
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
@@ -3113,42 +3161,39 @@ exports.adminSetAPY = onRequest({ cors: true, invoker: "public" }, async (req, r
       apyBasisPoints: apyBasisPoints.toString(),
       txHash: tx.hash,
       blockNumber: receipt.blockNumber,
+      actor: actor,
       createdAt: admin.firestore.Timestamp.now(),
     });
 
-    return res.status(200).json({
+    return {
       success: true,
       txHash: tx.hash,
       apyPercent: apyPercent,
-    });
+    };
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
     console.error("[Admin] Set APY Error:", err);
-    return res.status(500).json({ error: err.message || "Internal server error" });
+    throw new HttpsError("internal", err.message || "Internal server error");
   }
 });
 
 // --- Admin Fund Reward Pool (Server-Side, Fixed APY) ---
-exports.adminFundPool = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") return res.status(204).send("");
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+//
+// P0 SECURITY: same hole as adminSetAPY above, but this one spends money —
+// it approves and moves the executor wallet's VCN into the staking reward
+// pool, with the amount taken from the request body. Guarded by a published
+// string, it was an open drain on that wallet. Now admin-callable only.
+exports.adminFundPool = onCall({ cors: true }, async (request) => {
+  const actor = await assertAdminCaller(request);
 
   try {
-    const { amount, adminSecret } = req.body;
+    const { amount } = request.data || {};
 
-    if (!amount || parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: "Invalid amount" });
+    if (!amount || parseFloat(amount) <= 0 || !Number.isFinite(parseFloat(amount))) {
+      throw new HttpsError("invalid-argument", "Invalid amount");
     }
 
-    const expectedSecret = process.env.ADMIN_SECRET || "vision-admin-2026";
-    if (adminSecret !== expectedSecret) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-
-    console.log(`[Admin] Funding reward pool with ${amount} VCN`);
+    console.log(`[Admin] ${actor} funding reward pool with ${amount} VCN`);
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
@@ -3160,9 +3205,10 @@ exports.adminFundPool = onRequest({ cors: true, invoker: "public" }, async (req,
     // Check balance
     const balance = await vcnToken.balanceOf(adminWallet.address);
     if (balance < amountWei) {
-      return res.status(400).json({
-        error: `Insufficient VCN. Have: ${ethers.formatEther(balance)}, Need: ${amount}`,
-      });
+      throw new HttpsError(
+        "failed-precondition",
+        `Insufficient VCN. Have: ${ethers.formatEther(balance)}, Need: ${amount}`,
+      );
     }
 
     // Approve if needed
@@ -3185,17 +3231,19 @@ exports.adminFundPool = onRequest({ cors: true, invoker: "public" }, async (req,
       amount: amount.toString(),
       txHash: tx.hash,
       blockNumber: receipt.blockNumber,
+      actor: actor,
       createdAt: admin.firestore.Timestamp.now(),
     });
 
-    return res.status(200).json({
+    return {
       success: true,
       txHash: tx.hash,
       amount: amount,
-    });
+    };
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
     console.error("[Admin] Fund Pool Error:", err);
-    return res.status(500).json({ error: err.message || "Internal server error" });
+    throw new HttpsError("internal", err.message || "Internal server error");
   }
 });
 
@@ -4695,8 +4743,11 @@ exports.bridgeRelayer = onSchedule({
       } catch (bridgeErr) {
         console.error(`[Bridge Relayer] Failed to process bridge ${bridgeId}:`, bridgeErr);
 
+        // A record that cannot be matched to a lock on chain is not a
+        // transient failure, so it does not go back in the retry queue: it is
+        // held, named, and left for a human.
         await docSnap.ref.update({
-          status: "FAILED",
+          status: bridgeErr.unverified ? "HELD_UNVERIFIED" : "FAILED",
           failedAt: admin.firestore.Timestamp.now(),
           errorMessage: bridgeErr.message || "Unknown error",
         });
@@ -4722,13 +4773,23 @@ exports.bridgeRelayer = onSchedule({
           processingStartedAt: Date.now(),
         });
 
-        // Construct bridge object for existing functions
+        // Construct bridge object for existing functions.
+        //
+        // `lockTxHash` is what the payout gate verifies against the source
+        // chain, so it must travel with the record: the gateway stores it on
+        // the document, and for a document keyed by its own lock the id is it.
+        //
+        // The amount goes through parseEther rather than `parseFloat * 1e18`:
+        // the float form renders as "1e+21" from 1000 VCN upwards, and
+        // BigInt("1e+21") throws, so every bridge of 1000 VCN or more died
+        // here with a SyntaxError.
         const bridge = {
-          amount: String(parseFloat(amount) * 1e18), // Convert to wei
+          amount: ethers.parseEther(String(amount)).toString(),
           recipient: recipient,
           dstChainId: dstChainId,
           srcChainId: txData.metadata?.srcChainId || 1337,
           intentHash: txId, // Use txId as intentHash for tracking
+          lockTxHash: txData.lockTxHash || txId,
         };
 
         // Execute on destination chain
@@ -4826,8 +4887,11 @@ exports.bridgeRelayer = onSchedule({
       } catch (bridgeErr) {
         console.error(`[Bridge Relayer] Failed to process transactions/${txId}:`, bridgeErr);
 
+        // FAILED is retried for an hour, which is right for a gas or RPC
+        // hiccup and wrong for a record with no lock behind it — that one is
+        // held out of the queue under its own status.
         await docSnap.ref.update({
-          bridgeStatus: "FAILED",
+          bridgeStatus: bridgeErr.unverified ? "HELD_UNVERIFIED" : "FAILED",
           failedAt: Date.now(),
           errorMessage: bridgeErr.message || "Unknown error",
         });
@@ -4846,20 +4910,42 @@ exports.bridgeRelayer = onSchedule({
  * @param {object} bridge - Bridge transaction data
  * @return {Promise<string>} Destination transaction hash
  */
+// Bridge payout gate: see functions/bridgeGate.js for why every payout is
+// verified against the source chain rather than against the Firestore record,
+// and functions/test/bridgeGate.test.cjs for the cases it is held to.
+const { createBridgeGate, checkBridgeContracts, BridgeUnverified } = require("./bridgeGate");
+
+const {
+  readBridgeLock,
+  releaseBridgeLock,
+  authorizeBridgePayout,
+} = createBridgeGate({
+  ethers,
+  db,
+  getProvider: () => new ethers.JsonRpcProvider(RPC_URL),
+  timestamp: () => admin.firestore.Timestamp.now(),
+});
+
 async function executeSepoliaBridgeTransfer(bridge) {
   if (!SEPOLIA_RELAYER_PK) {
     throw new Error("SEPOLIA_RELAYER_PK secret not configured. Run: firebase functions:secrets:set SEPOLIA_RELAYER_PK");
   }
 
+  // Amount and recipient come from the lock on the source chain, never from
+  // the Firestore record. See the bridge payout gate above.
+  const authorized = await authorizeBridgePayout(bridge, "SEPOLIA_MINT");
+  if (!authorized.ok) throw new BridgeUnverified(authorized.reason);
+
   const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
   const relayerWallet = new ethers.Wallet(SEPOLIA_RELAYER_PK, provider);
 
-  const vcnAmountWei = BigInt(bridge.amount);
+  const vcnAmountWei = authorized.amountWei;
+  const payRecipient = authorized.recipient;
   const vcnAmount = ethers.formatEther(vcnAmountWei);
 
   console.log(`[Sepolia Bridge] Relayer address: ${relayerWallet.address}`);
-  console.log(`[Sepolia Bridge] VCN amount to mint: ${vcnAmount} VCN`);
-  console.log(`[Sepolia Bridge] Recipient: ${bridge.recipient}`);
+  console.log(`[Sepolia Bridge] VCN amount to mint: ${vcnAmount} VCN (from lock ${bridge.lockTxHash})`);
+  console.log(`[Sepolia Bridge] Recipient: ${payRecipient}`);
 
   // VCN Token contract on Sepolia (to be deployed)
   // TODO: Update this address after deploying VCNToken on Sepolia
@@ -4892,6 +4978,8 @@ async function executeSepoliaBridgeTransfer(bridge) {
       note: "Simulated - VCN contract not deployed on Sepolia yet",
     });
 
+    // Nothing was minted, so the lock must stay payable.
+    await releaseBridgeLock(bridge.lockTxHash);
     return `SIMULATED_${Date.now()}`;
   }
 
@@ -4909,14 +4997,20 @@ async function executeSepoliaBridgeTransfer(bridge) {
       note: `Simulated - need ETH for gas, have ${ethers.formatEther(ethBalance)} ETH`,
     });
 
+    // Nothing was minted, so the lock must stay payable.
+    await releaseBridgeLock(bridge.lockTxHash);
     return `SIMULATED_${Date.now()}`;
   }
 
   // Execute VCN mint on Sepolia
   const vcnContract = new ethers.Contract(VCN_SEPOLIA_ADDRESS, VCN_TOKEN_ABI, relayerWallet);
-  const bridgeId = ethers.keccak256(ethers.toUtf8Bytes(bridge.intentHash || `bridge_${Date.now()}`));
+  // The lock hash IS a bytes32, so using it as the on-chain bridgeId makes the
+  // token's own replay guard enforce the same rule as the claim above: one
+  // lock, one mint. keccak(intentHash) could differ between two records that
+  // named the same lock, so on its own it guarded nothing.
+  const bridgeId = bridge.lockTxHash;
 
-  const tx = await vcnContract.bridgeMint(bridge.recipient, vcnAmountWei, bridgeId, {
+  const tx = await vcnContract.bridgeMint(payRecipient, vcnAmountWei, bridgeId, {
     gasLimit: 100000,
   });
 
@@ -4947,12 +5041,19 @@ async function executeSepoliaBridgeTransfer(bridge) {
  * @return {Promise<string>} Destination transaction hash
  */
 async function executeVisionChainBridgeTransfer(bridge) {
+  // This one sends NATIVE VCN out of the executor wallet, so an unverified
+  // record here is a direct withdrawal, not just a mint. Same gate, same
+  // authority: the lock on chain decides the amount and the recipient.
+  const authorized = await authorizeBridgePayout(bridge, "NATIVE_VCN");
+  if (!authorized.ok) throw new BridgeUnverified(authorized.reason);
+
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-  const amountWei = BigInt(bridge.amount);
+  const amountWei = authorized.amountWei;
+  const payRecipient = authorized.recipient;
 
-  console.log(`[Vision Bridge] Unlocking ${ethers.formatEther(amountWei)} native VCN to ${bridge.recipient}`);
+  console.log(`[Vision Bridge] Unlocking ${ethers.formatEther(amountWei)} native VCN to ${payRecipient} (lock ${bridge.lockTxHash})`);
 
   // For Native VCN, we simply send VCN directly (no ERC-20 contract needed)
   // The Bridge contract holds locked VCN and releases it
@@ -4965,7 +5066,7 @@ async function executeVisionChainBridgeTransfer(bridge) {
   if (adminBalance >= amountWei + ethers.parseEther("0.01")) {
     // Direct transfer from admin wallet (simpler for now)
     const tx = await adminWallet.sendTransaction({
-      to: bridge.recipient,
+      to: payRecipient,
       value: amountWei,
       gasLimit: 21000,
     });
@@ -4977,10 +5078,11 @@ async function executeVisionChainBridgeTransfer(bridge) {
     await db.collection("bridgeExecutions").add({
       bridgeId: bridge.intentHash,
       type: "NATIVE_VCN",
+      lockTxHash: bridge.lockTxHash,
       srcChainId: bridge.srcChainId,
       dstChainId: bridge.dstChainId,
-      amount: bridge.amount,
-      recipient: bridge.recipient,
+      amount: amountWei.toString(),
+      recipient: payRecipient,
       txHash: tx.hash,
       blockNumber: receipt.blockNumber,
       executedAt: admin.firestore.Timestamp.now(),
@@ -4993,14 +5095,17 @@ async function executeVisionChainBridgeTransfer(bridge) {
     await db.collection("bridgeExecutions").add({
       bridgeId: bridge.intentHash,
       type: "SIMULATED",
+      lockTxHash: bridge.lockTxHash,
       srcChainId: bridge.srcChainId,
       dstChainId: bridge.dstChainId,
-      amount: bridge.amount,
-      recipient: bridge.recipient,
+      amount: amountWei.toString(),
+      recipient: payRecipient,
       executedAt: admin.firestore.Timestamp.now(),
       note: "Simulated - admin wallet needs funding",
     });
 
+    // Nothing was sent, so the lock must stay payable.
+    await releaseBridgeLock(bridge.lockTxHash);
     return `SIMULATED_${Date.now()}`;
   }
 }
@@ -7364,6 +7469,19 @@ exports.secureBridgeRelayer = onSchedule({
         const currentStatus = txData.bridgeStatus;
         const challengeEndTime = txData.challengeEndTime || 0;
 
+        // Check the lock before spending gas on the message. finalizeAndMint
+        // gates the payout itself, but submitting unverifiable records would
+        // still burn the executor's gas on every scheduled run, and nothing
+        // legitimate writes PENDING here — the gateway writes LOCKED.
+        const lockCheck = await readBridgeLock(txData.lockTxHash || txId);
+        if (!lockCheck.ok) {
+          if (lockCheck.retryable) {
+            console.warn(`[Secure Bridge] ${txId}: ${lockCheck.reason} — leaving for the next run`);
+            continue;
+          }
+          throw new BridgeUnverified(lockCheck.reason);
+        }
+
         // PENDING -> Submit to MessageInbox as PENDING
         if (currentStatus === "PENDING") {
           console.log(`[Secure Bridge] Submitting ${txId} to MessageInbox...`);
@@ -7482,7 +7600,7 @@ exports.secureBridgeRelayer = onSchedule({
         console.error(`[Secure Bridge] Error processing ${txId}:`, bridgeErr);
 
         await docSnap.ref.update({
-          bridgeStatus: "FAILED",
+          bridgeStatus: bridgeErr.unverified ? "HELD_UNVERIFIED" : "FAILED",
           errorMessage: bridgeErr.message,
           failedAt: admin.firestore.Timestamp.now(),
         });
@@ -7567,8 +7685,17 @@ async function finalizeAndMint(txData, messageId) {
 
     const vcnToken = new ethers.Contract(VCN_TOKEN_SEPOLIA, VCN_TOKEN_SEPOLIA_ABI, sepoliaWallet);
 
-    const amount = ethers.parseEther(txData.value || "0");
-    const recipient = txData.from_addr;
+    // Same gate as the other payout paths: the amount and the recipient are
+    // the lock's, not the record's. `txData.value` and `txData.from_addr` came
+    // from a document any caller could write.
+    const authorized = await authorizeBridgePayout(
+      { lockTxHash: txData.lockTxHash || txData.hash, intentHash: txData.intentHash, dstChainId },
+      "SECURE_BRIDGE_MINT",
+    );
+    if (!authorized.ok) throw new BridgeUnverified(authorized.reason);
+
+    const amount = authorized.amountWei;
+    const recipient = authorized.recipient;
     const bridgeId = messageId;
 
     const mintTx = await vcnToken.bridgeMint(recipient, amount, bridgeId, { gasLimit: 100000 });
@@ -12798,6 +12925,33 @@ exports.agentGateway = onRequest({
           });
         }
 
+        // Refuse BEFORE the transfer below. `commitIntent` further down is
+        // sent to a contract that does not implement it, so without this the
+        // user's VCN (amount + 1 VCN fee) is taken and the bridge then
+        // reverts, with no refund path. See checkBridgeContracts.
+        const readiness = await checkBridgeContracts({
+          ethers,
+          getProvider: () => provider,
+          contracts: {
+            IntentCommitment: {
+              address: "0x009326c391012593Aeca601B09c02545E00Aa818",
+              signature: "commitIntent(address,uint256,uint256)",
+            },
+            VisionBridgeSecure: {
+              address: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+              signature: "lockVCN(bytes32,address,uint256)",
+            },
+          },
+        });
+        if (!readiness.ok) {
+          console.error("[Agent Gateway] bridge.initiate refusing:", readiness.missing);
+          return res.status(503).json({
+            error: "Bridge is unavailable on this chain",
+            detail: readiness.missing,
+            hint: "No VCN was taken. The bridge contracts are not deployed on this chain.",
+          });
+        }
+
         // ========== Transfer VCN to admin ==========
         if (agent._isUser) {
           // USER MODE: Use permit-based transfer
@@ -12925,6 +13079,39 @@ exports.agentGateway = onRequest({
           createdAt: admin.firestore.Timestamp.now(),
           type: "BRIDGE_GATEWAY",
         }).catch(() => { });
+
+        // The relayer's work order, written HERE rather than by the browser.
+        //
+        // This handler used to write only the two records above, neither of
+        // which any relayer query matches (`bridgeTransactions` is polled for
+        // status "COMMITTED"; this writes "LOCKED" or "committed"). The
+        // document that actually made the payout happen was written by the
+        // client afterwards — Wallet.tsx — which is why a writable
+        // `transactions` collection was a mint. The server holds the lock
+        // hash, so the server writes the order, keyed by that hash so one
+        // lock can only ever be one order.
+        if (lockTxHash) {
+          await db.collection("transactions").doc(lockTxHash).set({
+            hash: lockTxHash,
+            from_addr: agent.walletAddress.toLowerCase(),
+            to_addr: "bridge:sepolia",
+            recipient: bridgeRecipient.toLowerCase(),
+            value: amount.toString(),
+            fee: "1",
+            timestamp: Date.now(),
+            type: "Bridge",
+            bridgeStatus: "LOCKED",
+            intentHash: intentHash,
+            commitTxHash: commitTx.hash,
+            lockTxHash: lockTxHash,
+            challengeEndTime: Date.now(), // Testnet: immediate (no challenge logic yet)
+            metadata: {
+              destinationChain: destChainId === 11155111 ? "Sepolia" : "Unknown",
+              srcChainId: 3151909,
+              dstChainId: destChainId,
+            },
+          }, { merge: true });
+        }
 
         // Forward fee to staking (fire-and-forget)
         (async () => {

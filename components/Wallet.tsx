@@ -3334,33 +3334,15 @@ const Wallet = (): JSX.Element => {
                 console.warn('[Bridge] Notification failed:', notiErr);
             }
 
-            // Save Bridge Transaction to Firestore for History display (client-side backup)
-            try {
-                const db = getFirebaseDb();
-                const txRef = doc(db, 'transactions', resultTxHash);
-                await setDoc(txRef, {
-                    hash: resultTxHash,
-                    from_addr: walletAddress()?.toLowerCase(),
-                    recipient: resolvedRecipientAddr.toLowerCase(), // CRITICAL: include resolved recipient
-                    to_addr: 'bridge:sepolia', // Special address for bridge
-                    value: bridge.amount,
-                    timestamp: Date.now(),
-                    type: 'Bridge',
-                    bridgeStatus: 'LOCKED', // Relayer will update to SUBMITTED → COMPLETED
-                    intentHash: intentHash,
-                    commitTxHash: result.txHash,
-                    lockTxHash: result.bridgeId,
-                    challengeEndTime: Date.now(), // Testnet: immediate (no challenge logic implemented yet)
-                    metadata: {
-                        destinationChain: bridge.destinationChain,
-                        srcChainId: 1337,
-                        dstChainId: dstChainId
-                    }
-                }, { merge: true }); // merge: true to preserve server-side fields
-                console.log('[Bridge] Saved to Firestore for History');
-            } catch (historyErr) {
-                console.warn('[Bridge] Failed to save history (non-critical):', historyErr);
-            }
+            // The bridge record is written by the server, in the same handler
+            // that performs the lock (bridge.initiate in functions/index.js).
+            //
+            // This used to write it from here, as a "client-side backup", and
+            // it was neither a backup nor harmless: a record with
+            // type 'Bridge' + bridgeStatus 'LOCKED' is what the scheduled
+            // relayer pays out on, and it was keyed by the COMMIT hash while
+            // the server keys by the LOCK hash — two work orders for one
+            // lock. The browser does not get to order a payout.
 
             setPendingBridge(null);
 

@@ -20,6 +20,7 @@ import {
 } from 'lucide-solid';
 import { getFirebaseDb, DefiConfig, getDefiConfig, updateDefiConfig } from '../../services/firebaseService';
 import { collection, query, getDocs, limit, orderBy, doc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ethers } from 'ethers';
 import { useAdminRole } from './adminRoleContext';
 
@@ -265,17 +266,14 @@ export default function AdminDeFi() {
 
         setIsSettingAPY(true);
         try {
-            const response = await fetch('https://adminsetapy-sapjcm3s5a-uc.a.run.app', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    apyPercent: newTargetAPY(),
-                    adminSecret: 'vision-admin-2026'
-                })
-            });
-
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Failed to set APY');
+            // Callable, not a public URL with a shared password: the admin
+            // secret this used to post was hardcoded here and therefore
+            // shipped in the client bundle. Firebase sends the signed-in
+            // user's ID token and the function checks the admin role.
+            const setAPY = httpsCallable<{ apyPercent: number }, { txHash: string }>(
+                getFunctions(), 'adminSetAPY'
+            );
+            const { data: result } = await setAPY({ apyPercent: newTargetAPY() });
 
             alert(`Successfully set target APY to ${newTargetAPY()}%!\n\nTX: ${result.txHash}`);
             await fetchBridgeData();
@@ -297,17 +295,10 @@ export default function AdminDeFi() {
 
         setIsFundingPool(true);
         try {
-            const response = await fetch('https://adminfundpool-sapjcm3s5a-uc.a.run.app', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    amount: fundAmount(),
-                    adminSecret: 'vision-admin-2026'
-                })
-            });
-
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Failed to fund pool');
+            const fundPool = httpsCallable<{ amount: string }, { txHash: string }>(
+                getFunctions(), 'adminFundPool'
+            );
+            const { data: result } = await fundPool({ amount: fundAmount() });
 
             alert(`Successfully funded ${amount.toLocaleString()} VCN to reward pool!\n\nTX: ${result.txHash}`);
             setFundAmount('');
