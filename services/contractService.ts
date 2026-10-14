@@ -21,7 +21,14 @@ const ADDRESSES = {
     // Legacy Core Contracts (old chain)
     VCN_VESTING: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     NODE_LICENSE: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-    MINING_POOL: "0xf8a2F49C782447a8660554F7c3274cbd765b1963",
+    // Not deployed. This held the VCN_TOKEN address above, so every
+    // MiningPool call was sent to the ERC-20 token: `claimReward` reverted
+    // with whatever the token made of the selector instead of saying the pool
+    // does not exist. Checked on chain — 0xf8a2… carries `symbol()` and
+    // `transfer(address,uint256)` and no `claimRewards()`. Zero, like
+    // VISION_EQUALIZER below, is how this file says "pending"; claimReward
+    // now refuses up front rather than sending a transaction into the token.
+    MINING_POOL: "0x0000000000000000000000000000000000000000",
     VISION_BRIDGE: "0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3",
 
     // Secure Bridge (Phase 1 - Optimistic Security)
@@ -34,7 +41,9 @@ const ADDRESSES = {
 
     // Legacy (kept for compatibility)
     TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
-    TIME_LOCK_AGENT_MOCK: "0xf8a2F49C782447a8660554F7c3274cbd765b1963",
+    // Not deployed either, and for the same reason: this was the VCN token
+    // address, not a TimeLockAgent.
+    TIME_LOCK_AGENT_MOCK: "0x0000000000000000000000000000000000000000",
 
     // V2 Security Core
     VISION_EQUALIZER: "0x0000000000000000000000000000000000000000", // Pending
@@ -311,6 +320,9 @@ export class ContractService {
 
     async claimReward(tokenId: number) {
         if (!this.miningPool) throw new Error("Contracts not initialized");
+        if (ADDRESSES.MINING_POOL === "0x0000000000000000000000000000000000000000") {
+            throw new Error("Mining pool is not deployed on this chain yet — rewards cannot be claimed.");
+        }
         const tx = await this.miningPool.claimReward(tokenId);
         return await tx.wait();
     }
