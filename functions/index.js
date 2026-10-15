@@ -11006,6 +11006,30 @@ exports.agentGateway = onRequest({
         return res.status(400).json({ error: "Invalid amount (must be 0 < amount <= 10000)" });
       }
 
+      // `to` was never checked, and the user-mode path below runs the permit
+      // BEFORE transferFrom. So an unresolved contact name — which both client
+      // intent paths pass through verbatim — spent a permit on chain and then
+      // failed inside transferFrom with an error that said nothing about the
+      // name. Reject it here, before anything is signed or sent.
+      if (!ethers.isAddress(to)) {
+        return res.status(400).json({
+          error: `Invalid recipient: ${JSON.stringify(String(to).slice(0, 64))} is not an address`,
+          hint: "Resolve names to a 0x address before calling transfer.send.",
+        });
+      }
+
+      // parseEther rejects "10.5.3" and "1,000", but only after the balance
+      // read; doing it here keeps the failure cheap and the message plain.
+      let parsedAmountWei;
+      try {
+        parsedAmountWei = ethers.parseEther(amount.toString());
+      } catch (e) {
+        return res.status(400).json({ error: `Invalid amount format: ${JSON.stringify(String(amount).slice(0, 32))}` });
+      }
+      if (parsedAmountWei <= 0n) {
+        return res.status(400).json({ error: "Invalid amount (must be greater than zero)" });
+      }
+
       // ========== USER MODE (Firebase Auth) ==========
       if (agent._isUser) {
         const { signature, deadline, fee: userFee, from: userFrom } = req.body;

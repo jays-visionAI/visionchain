@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:staging": "vite --mode staging",
+    "check:intent": "node scripts/check-voice-intent.mjs",
     "build": "vite build",
     "build:staging": "vite build --mode staging",
     "build:production": "vite build --mode production",

@@ -26,6 +26,17 @@ export interface VoiceIntent {
     recipient: string | null; // name or address
     rawText: string;
     confidence: number;       // 0–1
+    /**
+     * Set when the utterance asks for the transfer to happen LATER.
+     *
+     * This parser has no scheduling of its own, and the caller must not treat a
+     * delayed request as an immediate send — "30분 뒤에 jays에게 10 VCN 보내줘"
+     * used to come out as an immediate send of 30 VCN, because the time value
+     * was the first number in the sentence and so became the amount. A delayed
+     * utterance goes to the chat input instead, where the assistant's schedule
+     * intent handles it.
+     */
+    delay: { value: number; unit: 'second' | 'minute' | 'hour' } | null;
 }
 
 // ── Phonetic normalization map ───────────────────────────────────────────────
@@ -201,6 +212,40 @@ const KOREAN_UNITS: Record<string, number> = {
     '억': 100000000,
 };
 
+// ── Delay extractor ───────────────────────────────────────────────────────────
+/**
+ * Finds "in 30 minutes", "30분 뒤에", "1시간 후에", "30초 뒤" and friends.
+ *
+ * Both halves matter. The caller needs to know a delay was asked for, so it can
+ * refuse to send now; and `extractAmount` needs the delay removed first, or the
+ * time value is read as the amount.
+ */
+const DELAY_PATTERNS: Array<{ re: RegExp; unit: 'second' | 'minute' | 'hour' }> = [
+    { re: /(\d+)\s*초\s*(?:뒤|후|이후)\s*에?/, unit: 'second' },
+    { re: /(\d+)\s*분\s*(?:뒤|후|이후)\s*에?/, unit: 'minute' },
+    { re: /(\d+)\s*시간\s*(?:뒤|후|이후)\s*에?/, unit: 'hour' },
+    { re: /\b(?:in|after)\s+(\d+)\s*(?:seconds?|secs?|s)\b/i, unit: 'second' },
+    { re: /\b(?:in|after)\s+(\d+)\s*(?:minutes?|mins?|m)\b/i, unit: 'minute' },
+    { re: /\b(?:in|after)\s+(\d+)\s*(?:hours?|hrs?|h)\b/i, unit: 'hour' },
+    { re: /\b(\d+)\s*(?:minutes?|mins?)\s+(?:later|from now)\b/i, unit: 'minute' },
+    { re: /\b(\d+)\s*(?:hours?|hrs?)\s+(?:later|from now)\b/i, unit: 'hour' },
+];
+
+/** Words that mean "later" without a number — enough to refuse an immediate send. */
+const VAGUE_DELAY = /내일|모레|나중에|이따가|저녁에|아침에|\btomorrow\b|\blater\b|\btonight\b|\bnext week\b/i;
+
+export function extractDelay(text: string): { match: string; value: number; unit: 'second' | 'minute' | 'hour' } | null {
+    for (const { re, unit } of DELAY_PATTERNS) {
+        const m = text.match(re);
+        if (m) return { match: m[0], value: parseInt(m[1], 10), unit };
+    }
+    const vague = text.match(VAGUE_DELAY);
+    // A vague delay has no number to schedule from; report it with value 0 so
+    // the caller still knows not to send now.
+    if (vague) return { match: vague[0], value: 0, unit: 'minute' };
+    return null;
+}
+
 function extractAmount(text: string): string | null {
     // Korean unit numbers: e.g. "10만 VCN" → 100000
     for (const [unit, multiplier] of Object.entries(KOREAN_UNITS)) {
@@ -232,6 +277,13 @@ function extractToken(text: string): string {
 // ── Recipient extractor ───────────────────────────────────────────────────────
 // Strips action words & amounts to get the recipient name/address
 function extractRecipient(text: string, amount: string | null, token: string): string | null {
+    // An explicit address wins and is taken before anything is stripped — the
+    // cleanup below removes digit groups, which would shred one. The old code
+    // only recognised an address if the whole leftover string was one, so
+    // "0x6605…에게 10 VCN 보내줘" did not resolve.
+    const addressInText = text.match(/0x[0-9a-fA-F]{40}/);
+    if (addressInText) return addressInText[0];
+
     let cleaned = text;
 
     // Phase 1: Strip Korean postpositions/particles attached to names (no space between)
@@ -254,9 +306,18 @@ function extractRecipient(text: string, amount: string | null, token: string): s
         cleaned = cleaned.replace(new RegExp(`\\b${w}\\b`, 'gi'), ' ');
     }
 
-    // Remove amount
+    // Remove amount. The parsed value has separators stripped ("1,000" → "1000")
+    // so it does not match the text it came from; without clearing the digits
+    // themselves the recipient ends up as "jays 1 000".
     if (amount) {
         cleaned = cleaned.replace(new RegExp(amount.replace(/\./g, '\\.'), 'g'), ' ');
+    }
+    cleaned = cleaned.replace(/\d[\d,.]*/g, ' ');
+
+    // Quantity words and numeral units that are not names. The units are
+    // stripped after the digits, which is what leaves "10만" as a bare "만".
+    for (const w of ['만', '천', '백', '억', '전부', '모두', '전액', '다', '\\ball\\b', '\\beverything\\b']) {
+        cleaned = cleaned.replace(new RegExp(w, 'gi'), ' ');
     }
 
     // Remove token name
@@ -294,18 +355,35 @@ export function parseVoiceIntent(rawText: string): VoiceIntent {
         if (action !== 'unknown') break;
     }
 
-    const token = extractToken(text);
-    const amount = extractAmount(text);
+    // The delay comes out FIRST and is removed from the text everything else
+    // reads. Otherwise "30분 뒤에 … 10 VCN" yields amount 30: extractAmount
+    // takes the first number in the sentence, and extractRecipient leaves the
+    // leftover time words in the name.
+    const delayHit = extractDelay(text);
+    const withoutDelay = delayHit ? text.replace(delayHit.match, ' ') : text;
+
+    const token = extractToken(withoutDelay);
+    // A pasted address is full of digits, and extractAmount takes the first
+    // number it sees — so "0x6605…에게 10 VCN" used to come out as amount 0.
+    const amount = extractAmount(withoutDelay.replace(/0x[0-9a-fA-F]{40}/g, ' '));
 
     let recipient: string | null = null;
     if (action === 'send') {
-        recipient = extractRecipient(text, amount, token);
+        recipient = extractRecipient(withoutDelay, amount, token);
         // Boost confidence if we have all three
         if (recipient && amount) confidence = 0.95;
         else if (amount) confidence = 0.7;
     }
 
-    return { action, amount, token, recipient, rawText: text, confidence };
+    return {
+        action,
+        amount,
+        token,
+        recipient,
+        rawText: text,
+        confidence,
+        delay: delayHit ? { value: delayHit.value, unit: delayHit.unit } : null,
+    };
 }
 
 // ── Contact resolver ──────────────────────────────────────────────────────────

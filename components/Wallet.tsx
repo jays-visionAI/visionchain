@@ -1303,6 +1303,28 @@ const Wallet = (): JSX.Element => {
                 return; // Everything updated, no alerting needed
             } else if (action.type === 'send_tokens') {
                 const { amount, recipient, symbol } = action.data;
+
+                // The recipient must be an address by now, not a name.
+                //
+                // Both intent paths fall back to the raw text when a name
+                // cannot be resolved — the voice path through
+                // `resolvedAddress || intent.recipient`, the assistant path
+                // through resolveSingle's `{ address: rec }` — so a contact
+                // that does not exist arrived here as its own name. Nothing
+                // downstream checked: the gateway ran the permit on chain and
+                // only then failed inside transferFrom, leaving the user with
+                // a spent permit, a granted allowance and an opaque ethers
+                // error that never mentioned the name it could not find.
+                if (!ethers.isAddress(recipient)) {
+                    setFlowLoading(false);
+                    setIsLoading(false);
+                    setFlowStep(2);
+                    alert(lastLocale() === 'ko'
+                        ? `"${recipient}" 주소를 찾을 수 없습니다.\n\n연락처에 없는 이름입니다. 연락처에 추가하거나 0x 주소를 직접 입력해 주세요.`
+                        : `Could not resolve "${recipient}" to an address.\n\nIt is not in your contacts. Add it there, or enter the 0x address directly.`);
+                    return;
+                }
+
                 setFlowLoading(true);
 
                 // 1. Decrypt Mnemonic
@@ -3031,6 +3053,19 @@ const Wallet = (): JSX.Element => {
     const processVoiceTranscript = (transcript: string) => {
         const intent = parseVoiceIntent(transcript);
 
+        // A request to send LATER must never open the immediate-send modal.
+        // This parser has no scheduling, so it used to drop the delay and
+        // propose sending now — and with the time first ("30분 뒤에 … 10 VCN")
+        // it also read the time as the amount. Delayed utterances go to the
+        // chat input, where the assistant's schedule intent handles them.
+        if (intent.delay) {
+            setInput(prev => {
+                const cleanPrev = prev.trim();
+                return cleanPrev ? `${cleanPrev} ${transcript}` : transcript;
+            });
+            return;
+        }
+
         if (intent.action === 'send' && intent.confidence >= 0.7 && intent.amount) {
             const resolved = resolveIntentRecipient(intent, contacts() as any);
             setVoiceIntent(intent);
@@ -4186,13 +4221,22 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         const numMatch = timeStr.match(/(\d+)/);
                         const num = numMatch ? parseInt(numMatch[1]) : 5;
 
-                        // Determine time unit
-                        if (timeStr.includes('h') || timeStr.includes('시간')) {
+                        // Determine time unit.
+                        //
+                        // Substring tests have to be ordered, and the obvious
+                        // order is wrong: "30 minutes" contains an "s", so the
+                        // seconds branch claimed it and scheduled the transfer
+                        // 30 SECONDS out. Minutes are therefore matched first,
+                        // and the seconds branch now needs a real seconds
+                        // marker rather than any stray "s".
+                        if (/\b\d*\s*(?:분|m|min|mins|minute|minutes)\b/.test(timeStr) || timeStr.includes('분')) {
+                            delay = num * 60; // minutes
+                        } else if (timeStr.includes('시간') || /\b\d*\s*(?:h|hr|hrs|hour|hours)\b/.test(timeStr)) {
                             delay = num * 3600; // hours
-                        } else if (timeStr.includes('s') || timeStr.includes('초')) {
+                        } else if (timeStr.includes('초') || /\b\d*\s*(?:s|sec|secs|second|seconds)\b/.test(timeStr)) {
                             delay = num; // seconds
                         } else {
-                            delay = num * 60; // default to minutes (분, m, min, minutes)
+                            delay = num * 60; // default to minutes
                         }
                         setLockDelaySeconds(delay);
                     } else {
