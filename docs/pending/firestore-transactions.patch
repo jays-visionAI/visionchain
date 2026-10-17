@@ -1,0 +1,84 @@
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -65,9 +65,60 @@
+         && request.auth.token.email in ['jays@visai.io', 'sangky94@gmail.com'];
+     }
+ 
+-    // Transaction indexing - allow public access for blockchain sync
++    // Transaction records (the explorer's index of on-chain activity).
++    //
++    // P0 SECURITY: this was `allow read, write: if true` — any ANONYMOUS
++    // caller could create a document here. That was a mint. Two scheduled
++    // relayers poll this very collection:
++    //
++    //   bridgeRelayer        type == "Bridge" && bridgeStatus in
++    //                        {PENDING, LOCKED, FAILED} && challengeEndTime
++    //                        <= now
++    //   secureBridgeRelayer  type == "Bridge" && bridgeStatus in
++    //                        {PENDING, SUBMITTED}
++    //
++    // and both took `value` and `recipient` straight from the document and
++    // minted that amount to that address on the destination chain. Nothing
++    // checked the source chain, so a forged document paid out. The gate in
++    // functions/bridgeGate.js now verifies every payout against the lock on
++    // chain; this rule stops the forged orders being written at all.
++    //
++    // Bridge records are SERVER records: functions/index.js writes
++    // transactions/{lockTx.hash} in the same handler that performs the lock,
++    // and the Admin SDK bypasses these rules, so the real flow is unaffected.
++    // The client's own bridge write was keyed by the COMMIT tx hash — a
++    // second work order for one lock — and it is gone from Wallet.tsx.
++    //
++    // Still allowed for a signed-in user: ordinary history records, the
++    // reverse-bridge receipt (no relayer queries `ReverseBridge`), and
++    // hiding a bridge from the Agent Desk, which touches two UI-only fields.
++    // `get(key, default)` is used because most history records carry no
++    // `type` at all, and reading a missing field would deny the write.
++    function isRelayerActionable(data) {
++      return data.get('type', '') == 'Bridge';
++    }
++    function changesOnlyDeskFlags() {
++      return request.resource.data.diff(resource.data).affectedKeys()
++        .hasOnly(['hiddenFromDesk', 'hiddenAt']);
++    }
+     match /transactions/{txId} {
+-      allow read, write: if true;
++      // Chain receipts. VisionScan reads these without a login, and every
++      // field in them is already public on chain.
++      allow read: if true;
++
++      allow create: if request.auth != null
++        && !isRelayerActionable(request.resource.data);
++
++      // A bridge document may only have its desk flags toggled; anything
++      // else about it — status, amount, recipient — is the server's.
++      allow update: if request.auth != null
++        && (changesOnlyDeskFlags()
++            || (!isRelayerActionable(resource.data)
++                && !isRelayerActionable(request.resource.data)));
++
++      // Nothing in the app deletes a receipt; `if true` let anyone erase the
++      // whole history.
++      allow delete: if false;
+     }
+ 
+     // Users collection.
+@@ -115,7 +166,8 @@
+     }
+ 
+     // Everything else: previous behaviour (any signed-in user), EXCEPT the
+-    // reward ledgers (server-write-only) and `config` (admin-write-only).
++    // reward ledgers (server-write-only), `config` (admin-write-only) and
++    // `transactions` (no bridge records from a client).
+     //
+     // `config` MUST be excluded here explicitly. Firestore rules are additive,
+     // so the admin-only `allow write` above grants nothing on its own — this
+@@ -123,7 +175,7 @@
+     // the exclusion, "non-admin writes config/rp_rewards" passes when it
+     // should be denied.
+     function hasDedicatedRule(col) {
+-      return col == 'config' || col == 'fcm_tokens';
++      return col == 'config' || col == 'fcm_tokens' || col == 'transactions';
+     }
+ 
+     // `hasDedicatedRule` must gate READ as well as write. Rules are additive,
