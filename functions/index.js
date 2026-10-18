@@ -772,9 +772,15 @@ const AGENT_SBT_ABI = [
   "function revoked(uint256 tokenId) external view returns (bool)",
   "event Locked(uint256 tokenId)",
   "event Revoked(uint256 indexed tokenId, string agentName)",
+  // Custom errors, so a reverted call names its reason (contracts/VisionAgentSBT.sol)
+  "error SoulBound()", "error NotMinter()", "error AgentNameTaken()", "error AlreadyHasSBT()",
+  "error EmptyName()", "error AlreadyRevoked()", "error TokenNotExists()",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ];
 const SBT_MINT_FEE = "1"; // 1 VCN minting fee
+// Fee for a user-mode (Firebase, permit-signed) transfer.send. The client signs
+// a permit for amount + this.
+const USER_TRANSFER_FEE_WEI = ethers.parseUnits("1.0", 18);
 
 const ERC20_ABI = [
   "function approve(address spender, uint256 amount) external returns (bool)",
@@ -9435,7 +9441,11 @@ function generateAgentReferralCode(agentName) {
 }
 
 /**
- * Authenticate agent by API key
+ * Look up the agent an API key belongs to.
+ *
+ * A lookup only: a key that resolves here is not yet authorised. The gateway
+ * passes the result through `agentIdentityGate.check` (R-GW-1) before acting
+ * on it.
  * @param {string} apiKey - Agent API key
  * @return {object|null} Agent data or null
  */
@@ -9450,8 +9460,143 @@ async function authenticateAgent(apiKey) {
   return { id: doc.id, ...doc.data() };
 }
 
-// The action catalog served by GET /agentGateway: see functions/agentCatalog.js.
+// Agent Gateway policy — R-GW-1 (SBT-bound keys), R-GW-2 (declared action
+// scope) and the action alias table pricing depends on: see
+// functions/agentGatewayPolicy.js, and functions/test/agentGatewayPolicy.test.cjs
+// for the cases it is held to. The catalog served by GET is in agentCatalog.js.
+const {
+  canonicalizeAction,
+  resolveDeclaredScope,
+  isActionInScope,
+  normalizeDeclaredActions,
+  hostedLoopActions,
+  SCOPE_ALWAYS_ALLOWED,
+  createAgentIdentityGate,
+} = require("./agentGatewayPolicy");
 const { AGENT_CATALOG_DOMAINS, summarizeCatalog } = require("./agentCatalog");
+
+/**
+ * Mint an agent's VisionAgentSBT from the executor and return its token id.
+ * Shared by system.register and by the identity gate, which mints for agents
+ * whose registration mint failed (they paid SBT_MINT_FEE out of the faucet).
+ *
+ * @param {string} walletAddress - agent wallet
+ * @param {string} agentName - lowercased agent name (unique on chain)
+ * @param {string} platform - platform label stored in the token
+ * @return {Promise<{tokenId: number, txHash: string}>} minted token
+ */
+async function mintAgentSbt(walletAddress, agentName, platform) {
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+  const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
+
+  // Verify executor has minter role
+  const hasMinterRole = await sbtContract.isMinter(adminWallet.address);
+  if (!hasMinterRole) {
+    console.log(`[Agent Gateway] Executor lacks minter role, granting...`);
+    try {
+      const grantTx = await sbtContract.setMinter(adminWallet.address, true, { gasLimit: 100000, gasPrice: ethers.parseUnits("1", "gwei") });
+      await grantTx.wait();
+      console.log(`[Agent Gateway] Minter role granted to executor`);
+    } catch (grantErr) {
+      throw new Error(`Cannot grant minter role: ${grantErr.message}`);
+    }
+  }
+
+  // Simulate first. With a fixed gasLimit a doomed mint (AgentNameTaken,
+  // AlreadyHasSBT) is otherwise sent, mined and reverted with no reason; the
+  // simulation fails fast and names the custom error.
+  try {
+    await sbtContract.mintAgentIdentity.staticCall(walletAddress, agentName, platform);
+  } catch (simErr) {
+    throw new Error(`SBT mint would revert: ${(simErr.revert && simErr.revert.name) || simErr.shortMessage || simErr.message}`);
+  }
+
+  const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+  const mintTx = await sbtContract.mintAgentIdentity(walletAddress, agentName, platform, gasOpts);
+  const receipt = await mintTx.wait();
+
+  // Parse Transfer event log to get tokenId
+  let tokenId = null;
+  const transferLog = receipt.logs.find((l) => l.topics[0] === ethers.id("Transfer(address,address,uint256)"));
+  if (transferLog) {
+    tokenId = parseInt(transferLog.topics[3], 16);
+  }
+
+  // Verify on-chain
+  const onChainAgent = await sbtContract.getAgentByAddress(walletAddress);
+  if (onChainAgent[0] !== 0n && onChainAgent[0] !== 0) {
+    tokenId = Number(onChainAgent[0]);
+  }
+  if (!tokenId) throw new Error(`SBT mint ${mintTx.hash} confirmed but ${walletAddress} holds no token`);
+  return { tokenId, txHash: mintTx.hash };
+}
+
+// One reader for identity checks. staticNetwork skips the eth_chainId probe a
+// fresh provider makes, so a check costs exactly its two eth_calls.
+let _sbtReader = null;
+function agentSbtReader() {
+  if (!_sbtReader) {
+    const provider = new ethers.JsonRpcProvider(RPC_URL, 3151909, { staticNetwork: true });
+    _sbtReader = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, provider);
+  }
+  return _sbtReader;
+}
+
+const agentIdentityGate = createAgentIdentityGate({
+  readIdentity: async (walletAddress) => {
+    const sbt = agentSbtReader();
+    const [tokenId, name] = await sbt.getAgentByAddress(walletAddress);
+    const revoked = tokenId > 0n ? await sbt.isRevoked(tokenId) : false;
+    return { tokenId, name, revoked };
+  },
+  mintIdentity: (agent) => mintAgentSbt(agent.walletAddress, agent.agentName, agent.platform || "agent_gateway"),
+  // One mint attempt per agent per retry window, across instances.
+  claimMintAttempt: (agentId, nowMs, retryMs) => {
+    const ref = db.collection("agents").doc(agentId);
+    return db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      const last = snap.exists ? Number(snap.data().sbtMintAttemptAt || 0) : 0;
+      if (last && nowMs - last < retryMs) return { claimed: false, retryAfterMs: retryMs - (nowMs - last) };
+      t.update(ref, { sbtMintAttemptAt: nowMs, sbtStatus: "minting" });
+      return { claimed: true, retryAfterMs: 0 };
+    });
+  },
+  recordIdentity: (agentId, fields) => db.collection("agents").doc(agentId).update(fields),
+});
+
+const FEE_RECONCILIATION_COLLECTION = "fee_reconciliation";
+
+/**
+ * Record an API fee the gateway did not collect, or could not confirm, so it
+ * can be reconciled instead of disappearing into a log line. Never throws:
+ * the caller has already decided what to tell the client.
+ *
+ * kind "uncollected"  the fee did not move
+ * kind "unconfirmed"  a fee transfer was broadcast but its outcome is unknown
+ *                     (wait() failed without a mined revert); check fee_tx
+ *
+ * `action_executed` says which way a correction goes: true means the work was
+ * done and the fee is owed; false means the call was refused, so a fee that
+ * did land is owed back to the payer.
+ *
+ * @param {object} entry - who, what and why; see the call sites
+ * @return {Promise<string|null>} reconciliation document id
+ */
+async function recordFeeReconciliation(entry) {
+  try {
+    const ref = await db.collection(FEE_RECONCILIATION_COLLECTION).add({
+      ...entry,
+      status: "open",
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.error(`[Fee Reconciliation] ${entry.kind} ${entry.amount_vcn} VCN for ${entry.action} (${entry.payer}) -> ${FEE_RECONCILIATION_COLLECTION}/${ref.id}`);
+    return ref.id;
+  } catch (e) {
+    console.error(`[Fee Reconciliation] could not record ${JSON.stringify(entry)}: ${e.message}`);
+    return null;
+  }
+}
 
 /**
  * Authenticate a Firebase user via ID token for Agent Gateway.
@@ -10068,11 +10213,13 @@ exports.agentGateway = onRequest({
         201: "Created (agent registered)",
         400: "Bad Request - missing or invalid parameters",
         401: "Unauthorized - missing or invalid API key",
-        402: "Payment Required - insufficient VCN balance for API fee",
+        402: "Payment Required - insufficient VCN balance for the API fee, or the fee could not be collected (the action was not executed)",
+        403: "Forbidden - agent identity (SBT) missing or revoked (code agent_identity_*), action outside the agent's declared hosting scope (code action_not_declared), or Vision Node required for T3/T4",
         404: "Not Found - resource does not exist",
         409: "Conflict - resource already exists (e.g., agent name taken)",
         429: "Rate Limited - max 60 requests/minute per agent",
         500: "Internal Server Error",
+        503: "Service Unavailable - balance, pricing or identity could not be read; nothing was executed and no fee was taken (retryable)",
       },
       pricing_tiers: {
         T1: { cost: "0 VCN", desc: "Read-only queries, no fee" },
@@ -10291,7 +10438,39 @@ exports.agentGateway = onRequest({
         await agentDocRef.update({ fundingStatus: "failed", fundingError: fundErr.message }).catch(() => { });
       }
 
-      // === STEP 5: RESPOND (before SBT mint -- fast response) ===
+      // === STEP 5: Mint the identity (SBT) BEFORE returning the key ===
+      // R-GW-1: a key is only good for a wallet that holds a VisionAgentSBT.
+      // This used to respond first and mint afterwards, so the key worked
+      // before the identity existed and kept working when the mint failed.
+      // If the mint fails here the agent still exists and keeps its key; the
+      // identity gate mints on its first authenticated call, and refuses the
+      // call if that fails too.
+      let sbtResult;
+      try {
+        const minted = await mintAgentSbt(wallet.address, agentName.toLowerCase(), platform.toLowerCase());
+        await agentDocRef.update({
+          sbtTokenId: minted.tokenId,
+          sbtTxHash: minted.txHash,
+          sbtAddress: AGENT_SBT_ADDRESS,
+          sbtStatus: "completed",
+        });
+        console.log(`[Agent Gateway] SBT minted and verified for ${agentName}, tokenId: ${minted.tokenId}, tx: ${minted.txHash}`);
+        sbtResult = { status: "completed", token_id: String(minted.tokenId), tx_hash: minted.txHash, contract: AGENT_SBT_ADDRESS };
+      } catch (sbtErr) {
+        console.error(`[Agent Gateway] SBT mint failed for ${agentName}:`, sbtErr.message);
+        await agentDocRef.update({
+          sbtStatus: "failed",
+          sbtError: sbtErr.message,
+          sbtRetryAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => { });
+        sbtResult = {
+          status: "failed",
+          contract: AGENT_SBT_ADDRESS,
+          note: "The identity mint failed. This api_key does not authorize calls until the agent holds its SBT; the gateway retries the mint on your first authenticated call.",
+        };
+      }
+
+      // === STEP 6: RESPOND ===
       res.status(201).json({
         success: true,
         user: {
@@ -10307,69 +10486,12 @@ exports.agentGateway = onRequest({
           referral_code: agentReferralCode,
           initial_balance: `${netFundingAmount} VCN`,
           funding_tx: fundingTxHash || "pending",
-          sbt: {
-            status: "pending",
-            contract: AGENT_SBT_ADDRESS,
-            note: "SBT DID is being minted asynchronously. Query social.profile to check status.",
-          },
+          sbt: sbtResult,
           dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
         },
       });
 
-      // === ASYNC: SBT Minting + Referral (runs after response is sent) ===
-
-      // -- SBT Mint with verification --
-      try {
-        const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-        const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
-
-        // Verify executor has minter role
-        const hasMinterRole = await sbtContract.isMinter(adminWallet.address);
-        if (!hasMinterRole) {
-          console.log(`[Agent Gateway] Executor lacks minter role, granting...`);
-          try {
-            const grantTx = await sbtContract.setMinter(adminWallet.address, true, { gasLimit: 100000, gasPrice: ethers.parseUnits("1", "gwei") });
-            await grantTx.wait();
-            console.log(`[Agent Gateway] Minter role granted to executor`);
-          } catch (grantErr) {
-            throw new Error(`Cannot grant minter role: ${grantErr.message}`);
-          }
-        }
-
-        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
-        const mintTx = await sbtContract.mintAgentIdentity(wallet.address, agentName.toLowerCase(), platform.toLowerCase(), gasOpts);
-        const receipt = await mintTx.wait();
-        const sbtTxHash = mintTx.hash;
-
-        // Parse Transfer event log to get tokenId
-        let sbtTokenId = null;
-        const transferLog = receipt.logs.find((l) => l.topics[0] === ethers.id("Transfer(address,address,uint256)"));
-        if (transferLog) {
-          sbtTokenId = parseInt(transferLog.topics[3], 16);
-        }
-
-        // Verify on-chain
-        const onChainAgent = await sbtContract.getAgentByAddress(wallet.address);
-        if (onChainAgent[0] !== 0n && onChainAgent[0] !== 0) {
-          sbtTokenId = Number(onChainAgent[0]);
-        }
-
-        await agentDocRef.update({
-          sbtTokenId: sbtTokenId,
-          sbtTxHash: sbtTxHash,
-          sbtAddress: AGENT_SBT_ADDRESS,
-          sbtStatus: "completed",
-        });
-        console.log(`[Agent Gateway] SBT minted and verified for ${agentName}, tokenId: ${sbtTokenId}, tx: ${sbtTxHash}`);
-      } catch (sbtErr) {
-        console.error(`[Agent Gateway] SBT mint failed for ${agentName}:`, sbtErr.message);
-        await agentDocRef.update({
-          sbtStatus: "failed",
-          sbtError: sbtErr.message,
-          sbtRetryAt: admin.firestore.FieldValue.serverTimestamp(),
-        }).catch(() => { });
-      }
+      // === ASYNC: Referral (runs after response is sent) ===
 
       // -- Referral Processing --
       if (refCode) {
@@ -10513,6 +10635,12 @@ exports.agentGateway = onRequest({
         if (!agent) {
           return res.status(401).json({ error: "Invalid api_key" });
         }
+        // R-GW-1: the key must belong to a live agent whose wallet holds an
+        // unrevoked VisionAgentSBT. See agentGatewayPolicy.js.
+        const identity = await agentIdentityGate.check(agent);
+        if (!identity.ok) {
+          return res.status(identity.status).json(identity.body);
+        }
         // Update last active
         db.collection("agents").doc(agent.id).update({
           lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -10562,16 +10690,26 @@ exports.agentGateway = onRequest({
     }
 
     // === API FEE DEDUCTION MIDDLEWARE ===
-    // Map legacy action names to canonical domain.method for pricing lookup
-    const ACTION_CANONICAL = {
-      balance: "wallet.balance", transfer: "transfer.send", transactions: "wallet.tx_history",
-      referral: "social.referral", leaderboard: "social.leaderboard", profile: "social.profile",
-      stake: "staking.deposit", unstake: "staking.request_unstake",
-      claim_rewards: "staking.claim", staking_info: "staking.position",
-      network_info: "system.network_info", delete_agent: "system.delete_agent",
-      configure_hosting: "hosting.configure", toggle_hosting: "hosting.toggle", hosting_logs: "hosting.logs",
-    };
-    const canonicalAction = ACTION_CANONICAL[action] || action;
+    // Map legacy action names to canonical domain.method for pricing lookup.
+    // The table covers every alias a handler accepts; an alias missing from it
+    // was priced as T1 (free) and skipped the node gate.
+    const canonicalAction = canonicalizeAction(action);
+
+    // R-GW-2: an agent that declared its actions at hosting time may only call
+    // those (plus identity and hosting management). An agent that declared
+    // nothing is unrestricted. See resolveDeclaredScope in agentGatewayPolicy.js.
+    if (agent && !agent._isUser) {
+      const scope = resolveDeclaredScope(agent.hosting);
+      if (!isActionInScope(scope, canonicalAction)) {
+        return res.status(403).json({
+          error: `${canonicalAction} is outside the actions this agent declared at hosting time. Nothing was executed and no fee was taken.`,
+          code: "action_not_declared",
+          action: canonicalAction,
+          declared_actions: scope.declared,
+          hint: "Declare it with hosting.configure: allowed_actions accepts gateway action names (\"disk.write\") and domain wildcards (\"disk.*\").",
+        });
+      }
+    }
 
     // === NODE-GATE MIDDLEWARE ===
     // T1 + T2: open to all authenticated agents
@@ -10650,7 +10788,18 @@ exports.agentGateway = onRequest({
         _gwPricingCacheAt = Date.now();
       } catch (pcErr) {
         console.warn(`[Agent Gateway] Pricing config load failed:`, pcErr.message);
-        pricingConfig = null;
+        // Fail closed: a read error used to price every action at 0. Keep the
+        // last pricing this instance loaded; if it never loaded any, an agent
+        // call cannot be priced, so it is refused.
+        pricingConfig = _gwPricingCache;
+        if (!_gwPricingCacheAt && agent && !agent._isUser) {
+          return res.status(503).json({
+            error: "API pricing could not be loaded, so the fee for this call cannot be determined. Nothing was executed; retry shortly.",
+            code: "fee_pricing_unavailable",
+            action: canonicalAction,
+            retryable: true,
+          });
+        }
       }
     }
 
@@ -10740,6 +10889,7 @@ exports.agentGateway = onRequest({
     // Idempotent: subsequent calls after first success are no-ops.
     async function _runFeeDeduction() {
       if (feeDeducted || feeVcn <= 0 || !agent || agent._isUser) return { ok: true, alreadyCharged: feeDeducted };
+      let sentFeeTxHash = "";
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const feeWei = ethers.parseEther(feeVcn.toString());
@@ -10759,6 +10909,7 @@ exports.agentGateway = onRequest({
 
         const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
         const feeTx = await agentToken.transfer(adminWallet.address, feeWei);
+        sentFeeTxHash = feeTx.hash;
         await feeTx.wait();
         feeTxHash = feeTx.hash;
         feeDeducted = true;
@@ -10776,45 +10927,106 @@ exports.agentGateway = onRequest({
         return { ok: true, txHash: feeTx.hash };
       } catch (feeErr) {
         console.error(`[Agent Gateway] Fee deduction failed for ${agent.agentName}/${canonicalAction}:`, feeErr.message);
-        return { ok: false, error: feeErr.message };
+        // Sent but not known to have failed (wait() timed out, RPC dropped):
+        // the fee may have landed. A mined revert is a definite "no".
+        const reverted = Boolean(feeErr && feeErr.receipt && feeErr.receipt.status === 0);
+        return { ok: false, error: feeErr.message, txHash: sentFeeTxHash || undefined, unconfirmed: Boolean(sentFeeTxHash) && !reverted };
       }
     }
 
+    const feeLedgerEntry = (kind, feeRes, extra = {}) => ({
+      kind,
+      action_executed: isDeferred, // deferred fees are charged after the work
+      source: "agent_gateway_api_fee",
+      action: canonicalAction,
+      tier: feeTierId,
+      amount_vcn: feeVcn.toString(),
+      agent_id: agent.id,
+      payer: agent.walletAddress,
+      deferred: isDeferred,
+      fee_tx: (feeRes && feeRes.txHash) || null,
+      error: String((feeRes && feeRes.error) || "unknown").slice(0, 500),
+      ...extra,
+    });
+
     // Pre-check balance for ALL fee-bearing actions (deferred or not).
+    // R-GW-3: a call whose fee cannot be covered is refused before it runs —
+    // including when the balance cannot be read at all, which used to log a
+    // warning and carry on.
     if (feeVcn > 0 && agent && !agent._isUser) {
+      const feeWei = ethers.parseEther(feeVcn.toString());
+      let agentBal;
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
-        const feeWei = ethers.parseEther(feeVcn.toString());
-        const agentBal = await tokenContract.balanceOf(agent.walletAddress);
-        if (agentBal < feeWei) {
-          return res.status(402).json({
-            error: "Insufficient VCN balance for API fee",
-            required_fee: `${feeVcn} VCN`,
-            your_balance: ethers.formatEther(agentBal),
-            tier: feeTierId,
-            action: canonicalAction,
-          });
-        }
+        agentBal = await tokenContract.balanceOf(agent.walletAddress);
       } catch (balErr) {
         console.warn(`[Agent Gateway] Balance pre-check failed for ${canonicalAction}:`, balErr.message);
+        return res.status(503).json({
+          error: "Could not read your VCN balance to cover the API fee. Nothing was executed and no fee was taken; retry shortly.",
+          code: "fee_balance_unavailable",
+          required_fee: `${feeVcn} VCN`,
+          tier: feeTierId,
+          action: canonicalAction,
+          retryable: true,
+        });
+      }
+      if (agentBal < feeWei) {
+        return res.status(402).json({
+          error: "Insufficient VCN balance for API fee",
+          required_fee: `${feeVcn} VCN`,
+          your_balance: ethers.formatEther(agentBal),
+          tier: feeTierId,
+          action: canonicalAction,
+        });
       }
     }
 
-    // Charge upstream UNLESS this action defers to its handler.
+    // Charge upstream UNLESS this action defers to its handler. A fee that
+    // was not collected refuses the call; its result used to be ignored and
+    // the action ran for free.
     if (!isDeferred) {
-      await _runFeeDeduction();
+      const feeRes = await _runFeeDeduction();
+      if (!feeRes.ok) {
+        // Broadcast but unconfirmed: the fee may have landed even though the
+        // action is refused, so it goes on the books for a refund check.
+        const reconciliationId = feeRes.unconfirmed ?
+          await recordFeeReconciliation(feeLedgerEntry("unconfirmed", feeRes)) :
+          null;
+        return res.status(402).json({
+          error: "The API fee could not be collected, so the action was not executed.",
+          code: "fee_not_collected",
+          required_fee: `${feeVcn} VCN`,
+          tier: feeTierId,
+          action: canonicalAction,
+          retryable: true,
+          fee_tx_hash: feeRes.txHash,
+          reconciliation_id: reconciliationId || undefined,
+        });
+      }
     }
 
     // Handlers in DEFERRED_FEE_ACTIONS call this AFTER they finish successful
     // work but BEFORE responding with success. If they never call it, the user
     // is never charged (e.g. on Gamma/LLM 5xx, quota 429, validation 400).
-    const chargeDeferredFee = _runFeeDeduction;
+    // By the time it runs the work is done and cannot be refused, so a failed
+    // charge is recorded as owed rather than silently forgiven. The balance
+    // pre-check above already refused anyone who could not cover it.
+    const chargeDeferredFee = async () => {
+      const feeRes = await _runFeeDeduction();
+      if (!feeRes.ok) {
+        await recordFeeReconciliation(feeLedgerEntry(feeRes.unconfirmed ? "unconfirmed" : "uncollected", feeRes));
+      }
+      return feeRes;
+    };
 
-    // Auto-inject fee info into all successful JSON responses
+    // Auto-inject fee info into all successful JSON responses. Not in user
+    // (Firebase) mode: _runFeeDeduction never charges a user, so the block
+    // always said `charged: false` with the agent tier's amount, and it
+    // overwrote the handler's own fee report (the permit transfer's 1 VCN).
     const _originalJson = res.json.bind(res);
     res.json = (body) => {
-      if (body && typeof body === "object" && body.success && feeVcn > 0) {
+      if (body && typeof body === "object" && body.success && feeVcn > 0 && !(agent && agent._isUser)) {
         body.fee = {
           charged: feeDeducted,
           amount_vcn: feeVcn.toString(),
@@ -10902,7 +11114,21 @@ exports.agentGateway = onRequest({
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
         const transferAmountBigInt = ethers.parseEther(amount.toString());
-        const feeBigInt = userFee ? BigInt(userFee) : ethers.parseUnits("1.0", 18);
+        // The fee is part of what the user signed (the permit covers amount +
+        // fee), so the client sends it, in wei. It was taken on trust: "0"
+        // made the transfer free. The wallet always sends exactly 1 VCN.
+        let feeBigInt;
+        try {
+          feeBigInt = userFee ? BigInt(userFee) : USER_TRANSFER_FEE_WEI;
+        } catch (_) {
+          return res.status(400).json({ error: "Invalid fee: send it in wei as an integer string, e.g. \"1000000000000000000\"" });
+        }
+        if (feeBigInt < USER_TRANSFER_FEE_WEI) {
+          return res.status(400).json({
+            error: `Fee too low: the transfer fee is ${ethers.formatEther(USER_TRANSFER_FEE_WEI)} VCN. Sign the permit for amount + fee.`,
+            required_fee_wei: USER_TRANSFER_FEE_WEI.toString(),
+          });
+        }
         const totalAmountBigInt = transferAmountBigInt + feeBigInt;
 
         // Check user balance
@@ -10954,16 +11180,42 @@ exports.agentGateway = onRequest({
           return res.status(500).json({ error: `Transfer failed: ${txErr.reason || txErr.message}` });
         }
 
-        // Collect fee (transferFrom fee portion to admin)
+        // Collect fee (transferFrom fee portion to admin). The transfer has
+        // already landed and cannot be refused now, so a failure here is a
+        // debt, not a refusal: it goes on the reconciliation ledger with what
+        // is needed to collect it later (the permit's allowance for the fee
+        // stays with the executor until the user signs another permit).
+        let feeTxHash = "";
+        let feeCollected = false;
+        let feeReconciliationId = null;
         try {
           const feeTx = await tokenContract.transferFrom(
             userAddress, adminWallet.address, feeBigInt,
             { nonce: startNonce + 2 },
           );
+          feeTxHash = feeTx.hash;
           await feeTx.wait();
+          feeCollected = true;
           console.log(`[Agent Gateway] Fee collected: ${ethers.formatEther(feeBigInt)} VCN`);
         } catch (feeErr) {
-          console.warn(`[Agent Gateway] Fee collection failed (transfer still succeeded):`, feeErr.message);
+          console.error(`[Agent Gateway] Fee collection failed (transfer still succeeded):`, feeErr.message);
+          const reverted = Boolean(feeErr && feeErr.receipt && feeErr.receipt.status === 0);
+          feeReconciliationId = await recordFeeReconciliation({
+            kind: feeTxHash && !reverted ? "unconfirmed" : "uncollected",
+            action_executed: true,
+            source: "transfer.send:user_permit",
+            action: "transfer.send",
+            amount_vcn: ethers.formatEther(feeBigInt),
+            amount_wei: feeBigInt.toString(),
+            payer: userAddress,
+            payer_email: agent.email || null,
+            spender: adminWallet.address,
+            transfer_tx: txHash,
+            fee_tx: feeTxHash || null,
+            fee_nonce: startNonce + 2,
+            permit_deadline: String(deadline),
+            error: String(feeErr.reason || feeErr.message || feeErr).slice(0, 500),
+          });
         }
 
         // Index transaction in Firestore
@@ -10977,7 +11229,7 @@ exports.agentGateway = onRequest({
           value: amount.toString(),
           timestamp: Date.now(),
           status: "indexed",
-          metadata: { method: "Agent Gateway User Transfer", source: "agent_gateway", fee: ethers.formatEther(feeBigInt) },
+          metadata: { method: "Agent Gateway User Transfer", source: "agent_gateway", fee: ethers.formatEther(feeBigInt), fee_collected: feeCollected },
         }).catch((e) => console.warn("[Agent Gateway] Transfer indexing failed:", e.message));
 
         // Send notifications (async, don't block response)
@@ -11018,7 +11270,13 @@ exports.agentGateway = onRequest({
           from: agent.walletAddress,
           to: to,
           amount: amount.toString(),
-          fee: { charged: true, amount_vcn: ethers.formatEther(feeBigInt), method: "paymaster_permit" },
+          fee: {
+            charged: feeCollected,
+            amount_vcn: ethers.formatEther(feeBigInt),
+            method: "paymaster_permit",
+            tx_hash: feeTxHash || undefined,
+            reconciliation_id: feeReconciliationId || undefined,
+          },
         });
       }
 
@@ -11542,7 +11800,9 @@ exports.agentGateway = onRequest({
       const llmModel = body.llm_model || "deepseek-chat";
       const systemPrompt = body.system_prompt || "";
       const trigger = body.trigger || { type: "interval", interval_minutes: 60 };
-      const allowedActions = body.allowed_actions || [];
+      // The discovery catalog documented this parameter as `enabled_actions`,
+      // which was ignored; accept both.
+      const allowedActions = body.allowed_actions || body.enabled_actions || [];
       const maxVcnPerAction = Math.min(Math.max(parseFloat(body.max_vcn_per_action) || 5, 1), 100);
       const actionSettings = body.action_settings || {};
       const selectedAction = body.selected_action || (allowedActions.length === 1 ? allowedActions[0] : "");
@@ -11559,9 +11819,22 @@ exports.agentGateway = onRequest({
         return res.status(400).json({ error: "interval_minutes must be between 5 and 1440" });
       }
 
-      // Validate allowed actions
-      const validActions = ["balance", "transfer", "stake", "unstake", "network_info", "leaderboard", "staking_info", "transactions", "referral_outreach", "social_promo", "content_create", "invite_distribute", "community_engage"];
-      const filteredActions = allowedActions.filter((a) => validActions.includes(a));
+      // Validate allowed actions. The declaration is also this key's action
+      // scope (R-GW-2), so besides the hosted loop's own names it accepts
+      // gateway actions ("disk.write") and domain wildcards ("disk.*"). An
+      // unknown entry is refused rather than dropped: dropped, it would be an
+      // action the caller thinks it declared and the key cannot call.
+      if (!Array.isArray(allowedActions)) {
+        return res.status(400).json({ error: "allowed_actions must be an array of action names" });
+      }
+      const knownGatewayActions = [...summarizeCatalog(AGENT_CATALOG_DOMAINS).actions, ...Object.keys(ACTION_TIER_MAP)];
+      const { accepted: filteredActions, rejected: rejectedActions } = normalizeDeclaredActions(allowedActions, knownGatewayActions);
+      if (rejectedActions.length > 0) {
+        return res.status(400).json({
+          error: `Unknown actions in allowed_actions: ${rejectedActions.join(", ")}`,
+          hint: "Use hosted-loop names (balance, transfer, stake, ...), gateway action names (wallet.balance, disk.write, ...) or domain wildcards (disk.*).",
+        });
+      }
 
       // Estimate monthly cost based on actual action cost tier
       const executionsPerMonth = (30 * 24 * 60) / intervalMinutes;
@@ -11608,7 +11881,12 @@ exports.agentGateway = onRequest({
           updated_at: new Date().toISOString(),
         },
         estimated_monthly_cost_vcn: estimatedMonthlyCost.toFixed(1),
-        message: "Hosting configured. Use toggle_hosting to start.",
+        api_scope: filteredActions.length > 0 ?
+          { restricted: true, declared_actions: filteredActions, always_allowed: [...SCOPE_ALWAYS_ALLOWED] } :
+          { restricted: false },
+        message: filteredActions.length > 0 ?
+          "Hosting configured. Use toggle_hosting to start. This agent's API key may now call only the declared actions (plus identity and hosting management)." :
+          "Hosting configured. Use toggle_hosting to start.",
       });
     }
 
@@ -11734,6 +12012,8 @@ exports.agentGateway = onRequest({
           deletedAt: admin.firestore.FieldValue.serverTimestamp(),
           apiKey: null, // Invalidate API key
           previousApiKey: agent.apiKey, // Keep for reference
+          ...(agent.hosting ? { "hosting.enabled": false } : {}), // stop the hosted loop
+          ...(sbtResult.status === "revoked" || sbtResult.status === "already_revoked" ? { sbtStatus: "revoked" } : {}),
         });
 
         return res.status(200).json({
@@ -13457,10 +13737,11 @@ exports.agentGateway = onRequest({
           }
         }
 
+        // Only a token minted to this agent's own wallet is this agent's
+        // identity. Minting to `mint_to` used to mark the CALLER completed.
+        const mintedToSelf = String(targetAddress).toLowerCase() === String(agent.walletAddress || "").toLowerCase();
         await db.collection("agents").doc(agent.id).update({
-          sbtTokenId: tokenId,
-          sbtTxHash: mintTx.hash,
-          sbtStatus: "completed",
+          ...(mintedToSelf ? { sbtTokenId: tokenId, sbtTxHash: mintTx.hash, sbtStatus: "completed" } : {}),
           rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_nft_mint),
         });
 
@@ -21087,6 +21368,12 @@ exports.agentExecutor = onSchedule({
       const agentData = docSnap.data();
       const hosting = agentData.hosting;
 
+      // A deleted agent kept `hosting.enabled` and so kept running here,
+      // spending from its wallet, after its key was cleared.
+      if (agentData.status && agentData.status !== "active") {
+        return;
+      }
+
       // Check if it's time to execute based on interval
       const intervalMs = (hosting.trigger?.interval_minutes || 60) * 60 * 1000;
       const lastExec = hosting.last_execution?.toDate?.()?.getTime() || 0;
@@ -21143,7 +21430,10 @@ async function executeAgent(agentId, agentData, hosting, provider) {
       return;
     }
 
-    // 2. Build context prompt for the agent with user's action settings
+    // 2. Build context prompt for the agent with user's action settings.
+    // A declaration can also name gateway actions (it doubles as the API
+    // key's scope); the loop offers and runs only the ones it implements.
+    const loopActions = hostedLoopActions(hosting);
     const actionSettingsStr = (hosting.action_settings && Object.keys(hosting.action_settings).length > 0) ?
       `\nYour owner has configured these settings for your action:\n${JSON.stringify(hosting.action_settings, null, 2)}\nYou MUST use these settings when executing actions. For example, use the configured thresholds, recipients, channels, limits, and preferences.` :
       "";
@@ -21153,7 +21443,7 @@ Current time: ${new Date().toISOString()}
 Your wallet: ${agentData.walletAddress}
 VCN Balance: ${balance.toFixed(2)} VCN
 
-Available actions you can request: ${hosting.allowed_actions.join(", ")}
+Available actions you can request: ${loopActions.join(", ")}
 Max VCN per action: ${hosting.max_vcn_per_action}
 ${actionSettingsStr}
 
@@ -21167,7 +21457,7 @@ Do NOT perform any action unless your instructions explicitly require it.`;
       hosting.llm_model,
       hosting.system_prompt || "You are a helpful autonomous agent.",
       contextPrompt,
-      hosting.allowed_actions,
+      loopActions,
     );
 
     // 4. Parse and execute action if present
@@ -21179,7 +21469,7 @@ Do NOT perform any action unless your instructions explicitly require it.`;
       const jsonMatch = llmResponse.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
       if (jsonMatch) {
         const actionData = JSON.parse(jsonMatch[0]);
-        if (actionData.action && hosting.allowed_actions.includes(actionData.action)) {
+        if (actionData.action && loopActions.includes(actionData.action)) {
           // Execute the action via the agent's own API key
           const actionResult = await executeAgentAction(
             agentData, actionData.action, actionData.params || {}, provider, hosting,

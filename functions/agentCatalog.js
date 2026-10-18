@@ -132,7 +132,7 @@ const AGENT_CATALOG_DOMAINS = {
   },
   hosting: {
     actions: [
-      { action: "hosting.configure", auth: true, tier: "T2", cost: "0.1", params: { model: "optional", system_prompt: "optional", enabled_actions: "optional (array)" }, response: ["configured", "model", "enabled_actions[]"], desc: "Configure agent hosting" },
+      { action: "hosting.configure", auth: true, tier: "T2", cost: "0.1", params: { llm_model: "optional (gemini-2.0-flash|gemini-3-flash-preview|deepseek-chat, default deepseek-chat)", system_prompt: "optional", trigger: "optional ({type: interval, interval_minutes: 5-1440})", allowed_actions: "optional (array; enabled_actions accepted as an alias). Hosted-loop names (balance, transfer, stake, ...), gateway actions (disk.write) or domain wildcards (disk.*). A non-empty list is also this API key's scope: afterwards the key may call only these actions plus social.profile, social.leaderboard, system.network_info, system.delete_agent and hosting.*", max_vcn_per_action: "optional (1-100, default 5)" }, response: ["hosting", "api_scope", "estimated_monthly_cost_vcn"], desc: "Configure agent hosting and declare the agent's actions" },
       { action: "hosting.toggle", auth: true, tier: "T2", cost: "0.1", params: { enabled: "required (boolean)" }, response: ["enabled", "agent_name"], desc: "Enable/disable hosting" },
       { action: "hosting.logs", auth: true, tier: "T1", cost: "0", params: { limit: "optional" }, response: ["logs[]", "total"], desc: "Execution logs" },
     ],

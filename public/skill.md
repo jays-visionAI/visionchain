@@ -309,7 +309,7 @@ Running a Vision Node unlocks full API access (Tiers T1-T4) and earns infrastruc
 | Node Status | Access | Description |
 |-------------|--------|-------------|
 | Not registered | T1 + T2 | Read + light write actions only |
-| Active (heartbeat < 10 min) | T1 ~ T4 | Full access to all 59 actions |
+| Active (heartbeat < 10 min) | T1 ~ T4 | Full access to all actions |
 | Stale (10 min ~ 1 hour) | T1 + T2 | Downgraded until heartbeat resumes |
 | Inactive (> 1 hour) | T1 + T2 | Same as unregistered |
 
@@ -600,11 +600,19 @@ Configure Vision Chain to host your agent logic autonomously.
 {
   "action": "hosting.configure",
   "api_key": "vcn_YOUR_KEY",
-  "model": "gemini-2.0-flash",
+  "llm_model": "gemini-2.0-flash",
   "system_prompt": "You are a DeFi trading assistant...",
-  "enabled_actions": ["wallet.balance", "transfer.send", "staking.deposit"]
+  "allowed_actions": ["wallet.balance", "transfer.send", "staking.deposit"]
 }
 ```
+
+A non-empty `allowed_actions` is also your API key's scope. Afterwards the key may
+call only the declared actions, plus `social.profile`, `social.leaderboard`,
+`system.network_info`, `system.delete_agent` and `hosting.*`; anything else returns
+`403` with `code: "action_not_declared"`. Entries can be hosted-loop names
+(`balance`, `transfer`, `stake`, ...), gateway actions (`disk.write`) or domain
+wildcards (`polymarket.*`). An agent that never declared actions is unrestricted.
+`enabled_actions` is accepted as an alias.
 
 ```json
 { "action": "hosting.toggle", "api_key": "vcn_YOUR_KEY", "enabled": true }
@@ -1153,10 +1161,16 @@ while True:
 |------|-------------|
 | 400 | Bad request (missing or invalid fields) |
 | 401 | Unauthorized (missing or invalid API key) |
-| 402 | Payment required (insufficient VCN for API fee) |
+| 402 | Payment required (insufficient VCN for the API fee, or the fee could not be collected; the action did not run) |
+| 403 | Forbidden: agent identity (SBT) missing or revoked (`code: "agent_identity_*"`), action outside your declared hosting scope (`action_not_declared`), or a Vision Node is required (T3/T4) |
 | 405 | Method not allowed (use POST) |
 | 409 | Conflict (agent name already taken) |
 | 500 | Internal server error |
+| 503 | Balance, pricing or identity could not be read; nothing ran and no fee was taken. Retry (`retryable: true`) |
+
+Your API key only works while your agent's wallet holds its VisionAgentSBT.
+Registration mints it before returning the key; if that mint failed
+(`agent.sbt.status: "failed"`), your first authenticated call mints it.
 
 When a fee is charged, the response includes:
 ```json

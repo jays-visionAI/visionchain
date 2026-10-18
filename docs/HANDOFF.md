@@ -23,6 +23,13 @@ c220f25 perf(bundle): stop preloading admin, locales and staking on every page
 0ee8dfa chore(security): drop the client-bundled Resend key; RPC via the proxy
 ```
 
+> **Branch `fix/agent-gateway-enforcement`** (cut from `main` at `8de290a`,
+> local only) adds two commits on top of the above: the Agent Gateway now
+> enforces SBT-bound keys, declared hosting scopes and fail-closed fees. See
+> [The agent gateway did not enforce its own rules](#the-agent-gateway-did-not-enforce-its-own-rules).
+> Its behaviour changes are integrator-visible; review that list before
+> merging it into `main`.
+
 ## Do these first
 
 1. **Apply and deploy the Firestore rules patch.** `transactions` is still
@@ -143,11 +150,47 @@ fallback when `ADMIN_SECRET` was unset. `adminFundPool` spends the executor
 wallet. Both are now callables behind the same admin-role check the other
 admin callables use.
 
+### The agent gateway did not enforce its own rules
+
+Branch `fix/agent-gateway-enforcement`. Found by reading `agentGateway` on
+2026-10-18 against the gateway's spec rules.
+
+- **Keys were not bound to an identity (R-GW-1).** `authenticateAgent` was a
+  bare `agents.apiKey` lookup; `system.register` returned the key and minted
+  the SBT afterwards, so a failed mint left a working key. Now every API-key
+  call passes `agentIdentityGate.check` (`functions/agentGatewayPolicy.js`):
+  the wallet must hold an unrevoked VisionAgentSBT, read from the chain and
+  cached per wallet for 5 minutes. Registration mints before responding. An
+  agent with no SBT gets one minted on its next call (one attempt per 2
+  minutes, claimed in Firestore). Read-only on 2026-10-18: 29 SBTs issued, 7
+  revoked.
+- **Hosting declarations were not enforced on the key (R-GW-2).** A
+  non-empty `hosting.allowed_actions` now limits the key to those actions plus
+  identity and hosting management. Agents that declared nothing are
+  unrestricted, explicitly. `hosting.configure` accepts gateway names and
+  `domain.*` wildcards, and the `enabled_actions` name the catalog documented.
+- **Fees failed open (R-GW-3).** An unreadable balance now returns 503 and a
+  failed deduction 402, both before the action runs; a pricing read error no
+  longer prices everything at 0. 29 legacy aliases (`nft_mint`,
+  `bridge_initiate`, ...) were missing from the pricing alias table, so they
+  were priced as unknown (free) and skipped the node gate;
+  `transfer.scheduled` is now priced as the `transfer.conditional` it is an
+  alias of.
+- **Uncollected fees vanished.** The permit transfer's third transaction, and
+  a deferred fee that fails after the work is done, now write to
+  `fee_reconciliation` (`kind`, `action_executed`, payer, tx hashes). The
+  user-mode fee can no longer be set below 1 VCN by the client.
+
+Tests: `cd functions && npm test` — 36 more checks, mutation-tested. The
+`agents` collection is still readable and writable by any signed-in user
+under the catch-all rule in `firestore.rules`, which includes plaintext
+`apiKey`; that is not fixed here and undercuts all of the above.
+
 ## Verification commands
 
 | | |
 |---|---|
-| `cd functions && npm test` | bridge payout gate, 23 checks |
+| `cd functions && npm test` | bridge payout gate, 23 checks; agent gateway policy, 36 checks |
 | `npm run check:intent` | voice transfer intent, 18 checks |
 | `node scripts/check-firestore-rules.mjs` | rules, under the emulator (see above) |
 | `npx tsc --noEmit -p .` | ~475 pre-existing errors. **Compare, never expect zero** |
