@@ -25,9 +25,10 @@ c220f25 perf(bundle): stop preloading admin, locales and staking on every page
 
 ## Do these first
 
-1. **Apply and deploy the Firestore rules patch.** `transactions` is still
+1. **Apply and deploy the Firestore rules patches.** `transactions` is still
    `allow read, write: if true` in the live ruleset, which is the other half of
-   `d3508ed`. See [Pending: the rules patch](#pending-the-rules-patch).
+   `d3508ed`, and every agent's plaintext API key is readable by any signed-in
+   user. See [Pending: the rules patches](#pending-the-rules-patches).
 2. **Deploy functions.** The bridge payout gate, the transfer guards and the
    admin callables are all server-side and inert until then:
    `cd functions && npm test && firebase deploy --only functions`.
@@ -42,29 +43,92 @@ c220f25 perf(bundle): stop preloading admin, locales and staking on every page
 4. **Decide on the 40 VCN refund.** Its cause is now understood and fixed
    (see below); the refund itself needs a key and is an operational call.
 
-## Pending: the rules patch
+## Pending: the rules patches
 
-`docs/pending/firestore-transactions.patch` closes the `transactions`
-collection. It was written but **not applied** — editing `firestore.rules`
-was refused by the agent harness as a shared-resource change, twice, through
-two different tools. It is not a merge conflict; it needs a human or a session
-with that permission.
+Two patches in `docs/pending/`, written but **not applied** — editing
+`firestore.rules` is refused by the agent harness as a shared-resource change.
+It is not a merge conflict; it needs a human or a session with that
+permission. Each patch applies on its own, and both apply in either order
+with the same result.
+
+| patch | closes |
+|---|---|
+| `firestore-transactions.patch` | `transactions` was `allow read, write: if true`: anyone, signed in or not, could write the Bridge work orders the relayers pay out. |
+| `firestore-agents.patch` | `agents` and `fee_reconciliation` had no rule, so the catch-all let any signed-in user read and write them. See below. |
 
 ```
-git apply docs/pending/firestore-transactions.patch
+git apply docs/pending/firestore-transactions.patch docs/pending/firestore-agents.patch
 npm i --no-save --legacy-peer-deps @firebase/rules-unit-testing
 npx firebase emulators:exec --only firestore --project demo-rules \
   'node scripts/check-firestore-rules.mjs'
 firebase deploy --only firestore:rules   # replaces the live ruleset wholesale
 ```
 
-`scripts/check-firestore-rules.mjs` runs 14 cases against the working tree and
-against the patched ruleset. Measured on 2026-10-14: **unpatched 5/14**, every
-denial allowed including "anonymous creates a Bridge work order"; **patched
-14/14**, with the explorer read, ordinary history writes, the reverse-bridge
-receipt and the Agent Desk hide all still working. The file's header explains
-why rules get verified before deploying: `firebase deploy --only
-firestore:rules` replaces the live ruleset in one shot.
+`scripts/check-firestore-rules.mjs` runs 37 cases against the working tree,
+against each pending patch alone, and against all of them. A patch already in
+the working tree is detected and skipped. Measured on 2026-10-18:
+
+| ruleset | as intended | transactions | agents |
+|---|---|---|---|
+| working tree (unpatched) | 13/37 | 5/14 | 8/23 |
+| + `firestore-transactions.patch` only | 22/37 | 14/14 | 8/23 |
+| + `firestore-agents.patch` only | 28/37 | 5/14 | 23/23 |
+| + both | **37/37** | 14/14 | 23/23 |
+
+Unpatched, every `transactions` denial is allowed, including "anonymous creates
+a Bridge work order". For `agents`, every denial except the anonymous read is
+allowed. Patched, the explorer read, ordinary history writes, the
+reverse-bridge receipt, the Agent Desk hide and the admin console's agent
+table, count and delete all still work. Six deliberate weakenings of the
+agents patch were each caught: no catch-all gate, no gate on the
+`{sub=**}` catch-all alone (it matches zero segments, so it covers
+`agents/{id}` itself), no subcollection rule, admin write on the fee ledger,
+signed-in read of agents, and `fee_reconciliation` left out of the gate. The
+script's header explains why rules get verified before deploying: `firebase
+deploy --only firestore:rules` replaces the live ruleset in one shot.
+
+### `agents` and `fee_reconciliation` were open to any signed-in user
+
+Every agent document holds a plaintext `apiKey`, which authorises Agent
+Gateway calls that move that agent's VCN, and a server-encrypted `privateKey`.
+It also holds what the gateway on `fix/agent-gateway-enforcement` now enforces
+on that key: `hosting.allowed_actions`, `sbtStatus`, `walletAddress` and
+`status`. Any signed-in user could read all of that and rewrite it, plant an
+agent with a key of their choosing, or add `authority_delegations`.
+`fee_reconciliation`, that branch's ledger of uncollected fees, was open the
+same way.
+
+`firestore-agents.patch` makes `agents/{id}` and all its subcollections
+admin-only (`isAdmin()`), makes `fee_reconciliation` admin-read and
+client-write-never, and closes both to the catch-all. The Cloud Functions
+write them through the Admin SDK and are unaffected. The exclusion is a new
+`isServerOwned()` predicate beside `hasDedicatedRule()`, because adding the two
+collections to `hasDedicatedRule` would edit the same line as the
+`transactions` patch.
+
+What the lockdown changes for clients. No end-user feature reads or writes
+`agents` from the browser; the wallet's agent screens go through the gateway.
+The only client readers are in the admin console, and they now depend on the
+**email list in `isAdmin()`**, not on the `role` field that the console's
+login checks:
+
+- **Agent table** (`components/admin/users/AgentTable.tsx` →
+  `getAllAgents` / `deleteAgent`, on the `AdminConsole` Firebase app). It keeps
+  working for `jays@visai.io` and `sangky94@gmail.com`. Other `role: 'admin'`
+  accounts, and `partner` accounts that `admin_settings/partner_menu_access`
+  shows the Users menu, get a permission error instead of the agent list.
+- **Dashboard agent count** (`components/admin/AdminDashboard.tsx`
+  `fetchUserStats`). This one reads through the *default* Firebase app, the
+  wallet session in the same browser, not the admin session. Unless that
+  wallet session is one of the two admin emails, the count is denied, and
+  because it shares a `try` block, the wallet total and the 24h/7d growth
+  figures stop rendering too. Moving that read to `getAdminFirebaseDb()`
+  fixes it.
+
+Deploying the rules does not un-leak anything. Every agent's API key has been
+readable by every signed-in user, and the gateway has no key-rotation action
+(`system.delete_agent` nulls the key; nothing issues a new one). Rotating
+agent keys is an operational decision for after the deploy.
 
 ## What was wrong, and where the fix lives
 
