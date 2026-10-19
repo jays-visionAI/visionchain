@@ -360,37 +360,38 @@ export default function AdminSettings() {
                                                 <th class="text-left py-2 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Address</th>
                                             </tr>
                                         </thead>
+                                        {/* Names follow ADDRESSES in services/contractService.ts. "not deployed" = no code at that address on chain 3151909 (checked 2026-10-19). */}
                                         <tbody class="divide-y divide-white/5">
                                             <tr class="hover:bg-white/[0.02]">
                                                 <td class="py-2.5 px-3 font-bold text-white">VCN Token</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0xf8a2F49C782447a8660554F7c3274cbd765b1963</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">Node License</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">Node License (not deployed)</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">Mining Pool</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">VCN Vesting (not deployed)</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">VCN Vesting</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">VCN Paymaster</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x28F40F9Da1c6D3c38fFDC1Fba80364B6bb21A1E3</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">Vision Equalizer</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">Vision Bridge Secure (not deployed)</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x610178dA211FEF7D417bC0e6FeD39F05609AD788</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">VCN Paymaster</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">VCN Paymaster, legacy (not deployed)</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">Time Lock Agent</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">Time Lock Agent (not deployed)</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb</td>
                                             </tr>
                                             <tr class="hover:bg-white/[0.02]">
-                                                <td class="py-2.5 px-3 font-bold text-white">Profile Registry</td>
+                                                <td class="py-2.5 px-3 font-bold text-white">Profile Registry (not deployed)</td>
                                                 <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x3Aa5ebB10DC797CAC828524e59A333d0A371443c</td>
                                             </tr>
                                         </tbody>

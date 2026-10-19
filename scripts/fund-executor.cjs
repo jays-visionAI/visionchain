@@ -2,7 +2,9 @@ const { ethers } = require('ethers');
 
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
 const ADMIN_PK = process.env.VISION_ADMIN_PK;
-const EXECUTOR_ADDRESS = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
+// The live executor (PAYMASTER_ADMIN in services/contractService.ts). The old
+// value here, 0x08A1B183..., is the v3-testnet executor and is not used.
+const EXECUTOR_ADDRESS = process.env.EXECUTOR_ADDRESS || '0x805E8DB0175aeC75d2e2852aD14092466C281e3b';
 
 async function main() {
     const provider = new ethers.JsonRpcProvider(RPC_URL);
