@@ -2760,6 +2760,38 @@ export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'pa
     return 'user';
 };
 
+/**
+ * The admin console's role for whoever is signed in to the admin console.
+ *
+ * 'admin' comes only from the `admin` custom claim on the ID token, which is
+ * what the server checks (functions/adminGate.js). The users document's `role`
+ * no longer counts for admin: any user could write `role: 'admin'` onto their
+ * own document. 'partner' still comes from the document, where only an admin
+ * can now set it (firestore.rules).
+ *
+ * The token is force-refreshed so a claim granted since sign-in shows up
+ * without signing out. The admin callables called through the default app
+ * (adminSetAPY, adminFundPool, …) send the WALLET session's token, so that one
+ * is refreshed too when it is the same account.
+ */
+export const getAdminConsoleRole = async (): Promise<'admin' | 'user' | 'partner'> => {
+    const user = getAdminFirebaseAuth().currentUser;
+    if (!user?.email) return 'user';
+    try {
+        const { claims } = await user.getIdTokenResult(true);
+        if (claims.admin === true) {
+            const walletUser = getFirebaseAuth().currentUser;
+            if (walletUser && walletUser.uid === user.uid) {
+                await walletUser.getIdToken(true).catch(() => { });
+            }
+            return 'admin';
+        }
+    } catch (error) {
+        console.error('Error reading admin claim:', error);
+    }
+    return (await getUserRole(user.email)) === 'partner' ? 'partner' : 'user';
+};
+
 
 
 export const updateUserData = async (email: string, updates: Partial<UserData>) => {

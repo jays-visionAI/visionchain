@@ -13,7 +13,7 @@ import {
     Terminal
 } from 'lucide-solid';
 import { useAuth } from './authContext';
-import { getUserRole, adminLogin } from '../../services/firebaseService';
+import { getAdminConsoleRole, adminLogin } from '../../services/firebaseService';
 
 export default function AdminLogin() {
     const [email, setEmail] = createSignal('');
@@ -37,8 +37,10 @@ export default function AdminLogin() {
             // 1. Authenticate using Admin Isolated Auth
             await adminLogin(emailVal, pwdVal);
 
-            // 2. Strict Role Check (still checks global role, but auth is separate)
-            const role = await getUserRole(emailVal);
+            // 2. Strict Role Check: admin is the custom claim on this session's
+            // token, never the users document's `role` (which a user could
+            // write on their own document). Partner still comes from `role`.
+            const role = await getAdminConsoleRole();
             if (role === 'admin' || role === 'partner') {
                 navigate('/adminsystem', { replace: true });
             } else {

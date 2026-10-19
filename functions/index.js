@@ -3100,26 +3100,15 @@ exports.updateBridgeLimits = onRequest({ cors: true, invoker: "public", secrets:
 });
 
 
-/**
- * Admin gate for callables: a Firebase-verified ID token plus the `admin`
- * role on the caller's own users document. Same check the other admin
- * callables make; it lives in one function so the callables below cannot
- * drift apart from it.
- *
- * @param {object} request the callable request
- * @return {Promise<string>} the caller's lowercased email
- */
-async function assertAdminCaller(request) {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const email = request.auth.token.email?.toLowerCase();
-  if (!email) throw new HttpsError("permission-denied", "Admin access required.");
-
-  const snap = await db.collection("users").doc(email).get();
-  if (!snap.exists || snap.data().role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required.");
-  }
-  return email;
-}
+// Admin gate: admin is the `admin` custom claim on the caller's ID token, not
+// anything in Firestore. See functions/adminGate.js for why, and
+// functions/test/adminGate.test.cjs for the cases it is held to. Every admin
+// endpoint below goes through one of these.
+const { createAdminGate } = require("./adminGate");
+const { isAdminToken, assertAdminCaller, verifyAdminRequest } = createAdminGate({
+  HttpsError,
+  verifyIdToken: (idToken) => admin.auth().verifyIdToken(idToken),
+});
 
 // --- Admin Set Target APY (Server-Side, Fixed APY) ---
 //
@@ -5811,27 +5800,24 @@ exports.inactivityNudge = onSchedule({
 
 /**
  * Admin broadcast email to all users (or filtered subset)
+ *
+ * P0 SECURITY: this took `adminEmail` from the request body and checked that
+ * address's users document — no token at all, so anyone who knew an admin's
+ * email could mail every user. It now needs an admin ID token; `adminEmail`
+ * in the body is ignored.
  */
 exports.sendAdminBroadcast = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { adminEmail, title, message, ctaText, ctaUrl, filter } = req.body;
+    if (!(await verifyAdminRequest(req, res))) return;
 
-    // Basic admin verification
-    if (!adminEmail) {
-      return res.status(400).json({ error: "Missing adminEmail" });
-    }
-
-    const adminDoc = await db.collection("users").doc(adminEmail.toLowerCase()).get();
-    if (!adminDoc.exists || adminDoc.data().role !== "admin") {
-      return res.status(403).json({ error: "Unauthorized: Admin access required" });
-    }
+    const { title, message, ctaText, ctaUrl, filter } = req.body;
 
     if (!title || !message) {
       return res.status(400).json({ error: "Missing required fields: title, message" });
@@ -6382,30 +6368,7 @@ exports.sendPasswordChangeCodeEmail = onCall(
 exports.sendActivationInvitationEmail = onCall(
   { cors: true, secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "User must be logged in.");
-    }
-
-    const callerEmail = (request.auth.token.email || "").toLowerCase();
-    let isAdmin = false;
-    if (callerEmail) {
-      const userDoc = await db.collection("users").doc(callerEmail).get();
-      if (userDoc.exists) {
-        const u = userDoc.data() || {};
-        if (u.role === "admin" || u.isAdmin === true) isAdmin = true;
-      }
-      if (!isAdmin) {
-        const adminEmailDoc = await db.collection("admins").doc(callerEmail).get();
-        if (adminEmailDoc.exists) isAdmin = true;
-      }
-    }
-    if (!isAdmin) {
-      const adminUidDoc = await db.collection("admins").doc(request.auth.uid).get();
-      if (adminUidDoc.exists) isAdmin = true;
-    }
-    if (!isAdmin) {
-      throw new HttpsError("permission-denied", "Admin access required");
-    }
+    await assertAdminCaller(request);
 
     const { email, activationUrl } = request.data || {};
     if (!email || !activationUrl) {
@@ -6451,16 +6414,7 @@ exports.adminEmailPreview = onRequest({ cors: true, invoker: "public" }, async (
 
   try {
     // Verify admin auth
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    const token = authHeader.split("Bearer ")[1];
-    const decoded = await admin.auth().verifyIdToken(token);
-    const adminDoc = await db.collection("admins").doc(decoded.uid).get();
-    if (!adminDoc.exists) {
-      return res.status(403).json({ error: "Admin access required" });
-    }
+    if (!(await verifyAdminRequest(req, res))) return;
 
     const templateId = req.query.template || req.body?.template;
 
@@ -6560,16 +6514,7 @@ exports.adminEmailStats = onRequest({ cors: true, invoker: "public" }, async (re
 
   try {
     // Verify admin auth
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    const token = authHeader.split("Bearer ")[1];
-    const decoded = await admin.auth().verifyIdToken(token);
-    const adminDoc = await db.collection("admins").doc(decoded.uid).get();
-    if (!adminDoc.exists) {
-      return res.status(403).json({ error: "Admin access required" });
-    }
+    if (!(await verifyAdminRequest(req, res))) return;
 
     // Get all users and aggregate email preference stats
     const usersSnapshot = await db.collection("users").get();
@@ -6641,16 +6586,8 @@ exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets:
 
   try {
     // Verify admin auth
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    const token = authHeader.split("Bearer ")[1];
-    const decoded = await admin.auth().verifyIdToken(token);
-    const adminDoc = await db.collection("admins").doc(decoded.uid).get();
-    if (!adminDoc.exists) {
-      return res.status(403).json({ error: "Admin access required" });
-    }
+    const decoded = await verifyAdminRequest(req, res);
+    if (!decoded) return;
 
     const { templateId, targetEmail, sendTo: sendToParam } = req.body;
     if (!templateId) {
@@ -24549,21 +24486,7 @@ async function forceSyncNodes() {
 
 exports.nodeHealth = onRequest({ cors: true }, async (req, res) => {
   // Verify admin auth
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace("Bearer ", "");
-  if (!token) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    const email = decoded.email || "";
-    const adminDoc = await db.collection("admins").doc(email).get();
-    if (!adminDoc.exists) {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-  } catch {
-    return res.status(401).json({ error: "Invalid token" });
-  }
+  if (!(await verifyAdminRequest(req, res))) return;
 
   if (req.method === "GET") {
     const status = await getNodeStatuses();
@@ -26694,15 +26617,7 @@ exports.diskGetChunk = onCall({ cors: true, maxInstances: 30, timeoutSeconds: 30
  * Also logs the violation and optionally auto-bans the publisher.
  */
 exports.adminRemoveMarketItem = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const adminEmail = request.auth.token.email?.toLowerCase();
-  if (!adminEmail) throw new HttpsError("permission-denied", "Admin access required.");
-
-  // Verify admin role
-  const adminDoc = await db.collection("users").doc(adminEmail).get();
-  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required.");
-  }
+  const adminEmail = await assertAdminCaller(request);
 
   const { fileId, reason, autoBan } = request.data;
   if (!fileId) throw new HttpsError("invalid-argument", "fileId is required.");
@@ -26834,14 +26749,7 @@ exports.adminRemoveMarketItem = onCall({ cors: true }, async (request) => {
  * adminBanPublisher - Admin bans or unbans a user from publishing to the market.
  */
 exports.adminBanPublisher = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const adminEmail = request.auth.token.email?.toLowerCase();
-  if (!adminEmail) throw new HttpsError("permission-denied", "Admin access required.");
-
-  const adminDoc = await db.collection("users").doc(adminEmail).get();
-  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required.");
-  }
+  const adminEmail = await assertAdminCaller(request);
 
   const { targetEmail, action, reason } = request.data;
   if (!targetEmail) throw new HttpsError("invalid-argument", "targetEmail is required.");
@@ -26906,14 +26814,7 @@ exports.adminBanPublisher = onCall({ cors: true }, async (request) => {
  * Returns: published items list, banned users, violation history.
  */
 exports.adminGetMarketModeration = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const adminEmail = request.auth.token.email?.toLowerCase();
-  if (!adminEmail) throw new HttpsError("permission-denied", "Admin access required.");
-
-  const adminDoc = await db.collection("users").doc(adminEmail).get();
-  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required.");
-  }
+  await assertAdminCaller(request);
 
   // 1. Get all published items
   const publishedSnap = await db.collection("published_materials")
@@ -32376,9 +32277,7 @@ exports.setQuantEngineConfig = onCall(async (request) => {
   if (!uid) throw new Error("Authentication required");
 
   // Admin check
-  const userSnap = await db.collection("users").doc(uid).get();
-  const userData = userSnap.data() || {};
-  if (userData.role !== "admin" && userData.isAdmin !== true) {
+  if (!isAdminToken(request.auth.token)) {
     return { success: false, error: "Admin access required" };
   }
 
