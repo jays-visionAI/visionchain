@@ -8,7 +8,11 @@ const fs = require('fs');
 const path = require('path');
 const solc = require('solc');
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '0x78ef903e82813aebe7ff3dfb46581520435c70f8b05d8fa1d728a2bebc3179b0';
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+if (!PRIVATE_KEY) {
+    console.error('Set PRIVATE_KEY to the deployer key (it is not stored in this repo).');
+    process.exit(1);
+}
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
 const VCN_TOKEN = '0xf8a2F49C782447a8660554F7c3274cbd765b1963';
 
