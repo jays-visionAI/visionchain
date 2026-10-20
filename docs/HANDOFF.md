@@ -150,15 +150,22 @@ Fix: admin is the `admin` custom claim, checked in one place,
 reads the claim too. `firestore.rules` stops clients granting themselves
 `role` / `isAdmin` / `permissions`, stops the catch-all and the subcollection
 rule writing users documents, closes `admins`, and accepts the claim in
-`isAdmin()`. The cross-user writes signup and referrals do today are kept,
-each narrowed to its keys and direction. The admin-role check mentioned in the
-next section is this claim now.
+`isAdmin()`. No client writes another user's users document any more: the
+referral count, duplicate-phone flags and referral reward totals that signup
+and node purchases wrote there are Cloud Functions (`completeSignup`,
+`creditNodePurchaseReferral` in `functions/referralLedger.js`), which derive
+each value themselves. The admin-role check mentioned in the next section is
+this claim now.
 
-**Deploy order matters** (claims → Functions → rules, frontend after the
-claims): see `docs/pending/admin-claims-deploy.md`. Tests:
-`node functions/test/adminGate.test.cjs` (19 checks) and
-`scripts/check-firestore-rules-users.mjs` under the emulator (44 cases, also
-run with every pending rules patch applied), both mutation-tested.
+**Deploy order matters** (claims → Functions → frontend → rules): see
+`docs/pending/admin-claims-deploy.md`, which also lists two behaviour changes
+to decide on first (duplicate-phone flagging starts working; node purchases
+credit no reward while the license contract is not deployed). Tests:
+`node functions/test/adminGate.test.cjs` (19 checks),
+`functions/test/referralLedger.test.cjs` (36 cases) and
+`scripts/check-firestore-rules-users.mjs` (54 cases, also run with every
+pending rules patch applied) under the emulator, all mutation-tested, plus
+`scripts/check-referral-flows-e2e.mjs` end to end.
 
 ### Admin endpoints guarded by a published string
 

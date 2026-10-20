@@ -31,10 +31,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Collections the catch-all at the bottom must not grant WRITE on, though
-    // they are not reward ledgers: `users`, whose dedicated rule below decides
-    // every write, and `admins`, which the server once read as its admin list
-    // and which no client writes. Reads are untouched: the catch-all's
-    // signed-in read is what both already allow.
+    // they are not reward ledgers: `users` and `referral_configs`, whose
+    // dedicated rules below decide every write, and `admins`, which the
+    // server once read as its admin list and which no client writes. Reads
+    // are untouched: the catch-all's signed-in read is what all three
+    // already allow.
     //
     // This is `hasDedicatedRule`'s job, done through `isRewardLedger` only
     // because those are the two predicates the catch-all consults, and the
@@ -43,7 +44,7 @@ service cloud.firestore {
     // change applicable before or after either. Fold it into
     // `hasDedicatedRule` once they have landed.
     function isClosedToCatchAllWrites(col) {
-      return col == 'users' || col == 'admins';
+      return col == 'users' || col == 'admins' || col == 'referral_configs';
     }
 
     // Collections that hold reward state. These are written exclusively by
@@ -53,6 +54,9 @@ service cloud.firestore {
     //   game.start    -> mini_game_plays, mini_game_tokens
     //   game.submit   -> mini_game_plays, user_reward_points, rp_history
     //   dailyRPDigest -> rp_daily_stats
+    //   completeSignup             -> signup_records
+    //   creditNodePurchaseReferral -> referral_purchase_claims,
+    //                                 referral_rewards
     // A client write to any of them is a forgery attempt by definition.
     //
     // It also answers true for `isClosedToCatchAllWrites` — see there for why.
@@ -73,6 +77,9 @@ service cloud.firestore {
         'reward_snapshots',
         'reward_snapshot_line_items',
         'payout_requests',
+        'signup_records',
+        'referral_purchase_claims',
+        'referral_rewards',
         'revenue_monthly',
         'node_rollover_balances'
       ] || isClosedToCatchAllWrites(col);
@@ -116,14 +123,16 @@ service cloud.firestore {
     //   - a partner: an invitation stub for an address with no document yet
     //     (manualInviteUser). `role` is trustworthy to read here now that
     //     only an admin can set it.
-    //   - any other signed-in user: only the bookkeeping today's client flows
-    //     do on SOMEONE ELSE's document, each limited to its keys and its
-    //     direction — signup adds 1 to the referrer's referralCount and flags
-    //     accounts sharing the new phone number as blocked, a node purchase
-    //     raises the referrers' reward totals, and getUserData fills in a
-    //     missing referralCode. These are still forgeable (anyone can add 1
-    //     to anyone's referralCount) and belong server-side; they stay only so
-    //     that signup keeps working. None can touch a privilege key.
+    //   - nobody else. The bookkeeping signup and referrals do on SOMEONE
+    //     ELSE's document — the referrer's referralCount, the duplicate-phone
+    //     block on accounts sharing a number, the referrers' reward totals —
+    //     is done by Cloud Functions (completeSignup and
+    //     creditNodePurchaseReferral in functions/referralLedger.js), which
+    //     re-derive each value instead of taking it from the caller. Any
+    //     signed-in user used to be allowed those writes here, which let
+    //     anyone add to anyone's referralCount or reward totals, or set anyone's
+    //     phoneDuplicateBlocked (a transfer block). getUserData now fills in a
+    //     missing referralCode only on the caller's own document.
     function isOwner(email) {
       return request.auth != null && request.auth.token.email == email;
     }
@@ -157,26 +166,11 @@ service cloud.firestore {
         && data.get('status', '') == 'PendingActivation';
     }
 
-    function onlyRaises(key) {
-      return request.resource.data.get(key, 0) >= resource.data.get(key, 0);
-    }
-    function isPeerBookkeeping() {
-      let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return (changed.hasOnly(['referralCount'])
-          && request.resource.data.get('referralCount', 0) == resource.data.get('referralCount', 0) + 1)
-        || (changed.hasOnly(['totalRewardsVCN', 'totalRewardsUSD'])
-          && onlyRaises('totalRewardsVCN') && onlyRaises('totalRewardsUSD'))
-        || (changed.hasOnly(['phoneDuplicateBlocked', 'phoneDuplicateBlockedAt'])
-          && request.resource.data.get('phoneDuplicateBlocked', false) == true)
-        || (changed.hasOnly(['referralCode']) && !('referralCode' in resource.data));
-    }
-
     match /users/{email} {
       allow read: if request.auth != null;
       allow create: if (isOwner(email) && isUnprivileged(request.resource.data))
         || (isPartner() && isInvitationStub(request.resource.data));
-      allow update: if (isOwner(email) && keepsPrivilege())
-        || (request.auth != null && isPeerBookkeeping());
+      allow update: if isOwner(email) && keepsPrivilege();
       allow delete: if isOwner(email);
       allow write: if isAdmin();
     }
@@ -192,6 +186,16 @@ service cloud.firestore {
     // subcollection segment makes it match subcollection documents only.
     match /users/{email}/{subcollection}/{rest=**} {
       allow read, write: if request.auth != null;
+    }
+
+    // Referral reward rates and the events that earn them. The server takes
+    // the rates from here when it credits a node purchase
+    // (creditNodePurchaseReferral), so a client that could write this could
+    // still set its referrer's reward. Read by the app (getReferralConfig),
+    // written only by the admin console (AdminReferrals).
+    match /referral_configs/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // RP rates drive every award the server makes, so a client that can write

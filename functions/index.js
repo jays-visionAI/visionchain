@@ -2954,6 +2954,33 @@ exports.bridgeWithPaymaster = exports.paymaster;
 
 
 // =============================================================================
+// REFERRAL BOOKKEEPING ON OTHER USERS' DOCUMENTS (callables)
+// =============================================================================
+// The referral count, duplicate-phone flags and referral reward totals that
+// signup and node purchases used to write from the browser onto someone
+// else's users document. See functions/referralLedger.js for what each one
+// trusts, and functions/test/referralLedger.test.cjs for the cases.
+const { createReferralLedger } = require("./referralLedger");
+
+const referralLedger = createReferralLedger({
+  db,
+  // Not admin.firestore.FieldValue: this runs at load time, and under the
+  // functions emulator that property is still undefined then.
+  FieldValue: require("firebase-admin/firestore").FieldValue,
+  HttpsError,
+  ethers,
+  // Only the emulator may point purchase verification at another chain
+  // (scripts/check-referral-flows-e2e.mjs runs it against anvil).
+  getProvider: () => new ethers.JsonRpcProvider(
+    (process.env.FUNCTIONS_EMULATOR === "true" && process.env.REFERRAL_RPC_URL) || RPC_URL),
+  getAuthUser: (uid) => admin.auth().getUser(uid),
+});
+
+exports.completeSignup = onCall({ cors: true }, (request) => referralLedger.completeSignup(request));
+exports.creditNodePurchaseReferral = onCall({ cors: true }, (request) => referralLedger.creditNodePurchaseReferral(request));
+
+
+// =============================================================================
 // REFERRAL SIGNUP NOTIFICATION (HTTPS)
 // =============================================================================
 exports.notifyReferralSignup = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {

@@ -16,6 +16,14 @@
  * a users document still goes through (see the comment on `match
  * /users/{email}` in firestore.rules for the inventory).
  *
+ * No client writes SOMEONE ELSE's users document any more. The bookkeeping
+ * signup and referrals did there (referralCount + 1, the duplicate-phone
+ * block, reward totals, a missing referralCode) is done by Cloud Functions
+ * now — functions/referralLedger.js, tested by
+ * functions/test/referralLedger.test.cjs — so those cases are denials here,
+ * along with client writes to the ledgers those functions keep and to the
+ * reward rates they read.
+ *
  * It runs the cases against three rulesets:
  *
  *   1. the working tree — must be clean;
@@ -159,6 +167,9 @@ async function runCases(rules) {
         await setDoc(doc(db, 'users/partner@example.com'), { email: 'partner@example.com', role: 'partner', partnerCode: 'P1' });
         await setDoc(doc(db, 'users/partner2@example.com'), { email: 'partner2@example.com', role: 'partner', partnerCode: 'P2' });
         await setDoc(doc(db, 'config/rp_rewards'), { rate: 1 });
+        await setDoc(doc(db, 'referral_configs/global'), { tier1Rate: 0.1, tier2Rate: 0.02, enabledEvents: ['token_sale'] });
+        await setDoc(doc(db, 'referral_rewards/0xabc_1'), { userId: 'u1@example.com', amount: 7000, currency: 'VCN', tier: 1, status: 'pending' });
+        await setDoc(doc(db, 'signup_records/u2@example.com'), { email: 'u2@example.com', referrer: 'u1@example.com', grandReferrer: '' });
     });
 
     const users = (db, email) => doc(db, `users/${email}`);
@@ -190,6 +201,19 @@ async function runCases(rules) {
     await expect('partner creates a stub carrying extra fields', 'deny', () => setDoc(users(partner, 'evil2@example.com'), { email: 'evil2@example.com', role: 'user', partnerCode: 'P1', status: 'PendingActivation', createdAt: '2026-10-19', referralCount: 100 }));
     await expect('anonymous writes a users doc', 'deny', () => setDoc(users(anon, 'u1@example.com'), { role: 'admin' }));
 
+    // --- the bookkeeping signup and referrals did on someone else's document:
+    //     Cloud Functions only now (completeSignup, creditNodePurchaseReferral) ---
+    await expect("signup adds 1 to the referrer's referralCount — server only now", 'deny', () => updateDoc(users(u3, 'u1@example.com'), { referralCount: 3 }));
+    await expect('signup flags another account sharing the phone — server only now', 'deny', () => setDoc(users(u3, 'u2@example.com'), { phoneDuplicateBlocked: true, phoneDuplicateBlockedAt: '2026-10-19' }, { merge: true }));
+    await expect("node purchase raises the referrer's reward total — server only now", 'deny', () => updateDoc(users(u3, 'u1@example.com'), { totalRewardsVCN: 15 }));
+    await expect('getUserData fills in a missing referralCode — own document only now', 'deny', () => setDoc(users(u1, 'nocode@example.com'), { referralCode: 'NEWCODE' }, { merge: true }));
+    await expect('user writes a referral reward record', 'deny', () => setDoc(doc(u3, 'referral_rewards/forged_1'), { userId: 'u3@example.com', amount: 1e9, currency: 'VCN', tier: 1, status: 'pending' }));
+    await expect('user edits a referral reward record', 'deny', () => updateDoc(doc(u1, 'referral_rewards/0xabc_1'), { amount: 1e9 }));
+    await expect('user writes its own signup record (names a referrer)', 'deny', () => setDoc(doc(u3, 'signup_records/u3@example.com'), { email: 'u3@example.com', referrer: 'u3alt@example.com' }));
+    await expect("user rewrites another's signup record", 'deny', () => updateDoc(doc(u1, 'signup_records/u2@example.com'), { referrer: 'u1alt@example.com' }));
+    await expect('user marks a purchase as credited', 'deny', () => setDoc(doc(u1, 'referral_purchase_claims/0x' + 'ab'.repeat(32)), { buyer: 'u1@example.com' }));
+    await expect('user raises the referral reward rate', 'deny', () => setDoc(doc(u1, 'referral_configs/global'), { tier1Rate: 1, tier2Rate: 1, enabledEvents: ['token_sale'] }));
+
     // --- what the app does today and must keep doing ---
     await expect('user reads another user (leaderboards, referrals)', 'allow', () => getDoc(users(u1, 'u2@example.com')));
     await expect('user updates own profile', 'allow', () => updateDoc(users(u1, 'u1@example.com'), { name: 'U1 renamed', bio: 'hi', photoURL: 'https://x/p.png', phone: '+821000000009', updatedAt: '2026-10-19' }));
@@ -201,12 +225,11 @@ async function runCases(rules) {
     await expect("signup creates own doc with role 'user' (userRegister)", 'allow', () => setDoc(users(u3, 'u3@example.com'), {
         email: 'u3@example.com', phone: '+821000000001', role: 'user', status: 'PendingVerification', accountOrigin: 'self-signup',
         referralCode: 'U3CODE', referrerId: 'u1@example.com', grandReferrerId: '', referralCount: 0, totalRewardsVCN: 0, totalRewardsUSD: 0,
-        phoneDuplicateBlocked: true, phoneDuplicateBlockedAt: '2026-10-19', createdAt: '2026-10-19', cohortDate: '2026-10-19', updatedAt: '2026-10-19',
+        createdAt: '2026-10-19', cohortDate: '2026-10-19', updatedAt: '2026-10-19',
     }));
-    await expect("signup adds 1 to the referrer's referralCount", 'allow', () => updateDoc(users(u3, 'u1@example.com'), { referralCount: 3 }));
-    await expect('signup flags another account sharing the phone', 'allow', () => setDoc(users(u3, 'u2@example.com'), { phoneDuplicateBlocked: true, phoneDuplicateBlockedAt: '2026-10-19' }, { merge: true }));
-    await expect("node purchase raises the referrer's reward total", 'allow', () => updateDoc(users(u3, 'u1@example.com'), { totalRewardsVCN: 15 }));
-    await expect('getUserData fills in a missing referralCode', 'allow', () => setDoc(users(u1, 'nocode@example.com'), { referralCode: 'NEWCODE' }, { merge: true }));
+    await expect('getUserData fills in the caller\'s own missing referralCode', 'allow', () => setDoc(users(as('nc', { email: 'nocode@example.com' }), 'nocode@example.com'), { referralCode: 'NEWCODE' }, { merge: true }));
+    await expect('user reads the referral config (getReferralConfig)', 'allow', () => getDoc(doc(u1, 'referral_configs/global')));
+    await expect('user reads a referral reward record', 'allow', () => getDoc(doc(u1, 'referral_rewards/0xabc_1')));
     await expect("signup writes the referrer's contacts", 'allow', () => setDoc(doc(u3, 'users/u1@example.com/contacts/c1'), { internalName: 'u3', email: 'u3@example.com', createdAt: '2026-10-19' }));
     await expect('partner creates an invitation stub (manualInviteUser)', 'allow', () => setDoc(users(partner, 'invited@example.com'), { email: 'invited@example.com', role: 'user', partnerCode: 'P1', status: 'PendingActivation', createdAt: '2026-10-19' }));
     await expect('user creates own doc without a role', 'allow', () => setDoc(users(as('u4', { email: 'u4@example.com' }), 'u4@example.com'), { email: 'u4@example.com' }));
@@ -217,6 +240,7 @@ async function runCases(rules) {
     await expect("claim admin bumps a user's adminSentTotal", 'allow', () => updateDoc(users(claimAdmin, 'u2@example.com'), { adminSentTotal: increment(100) }));
     await expect('claim admin pre-registers an invitee', 'allow', () => setDoc(users(claimAdmin, 'invitee@example.com'), { email: 'invitee@example.com', role: 'user', partnerCode: 'P1', status: 'PendingActivation', createdAt: '2026-10-19' }));
     await expect('claim admin writes config/rp_rewards', 'allow', () => setDoc(doc(claimAdmin, 'config/rp_rewards'), { rate: 2 }));
+    await expect('claim admin sets the referral rates (AdminReferrals)', 'allow', () => setDoc(doc(claimAdmin, 'referral_configs/global'), { tier1Rate: 0.12, tier2Rate: 0.03, enabledEvents: ['token_sale'] }, { merge: true }));
     await expect("email-list admin (no claim yet) sets a user's role", 'allow', () => updateDoc(users(listAdmin, 'u2@example.com'), { role: 'user' }));
 
     await env.cleanup();
