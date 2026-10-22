@@ -84,6 +84,10 @@ for i in 1 2 3 4 5; do
         docker run --rm -v "$NODE_DIR:/data" alpine sh -c "echo '$PASSWORD' > /data/password.txt"
     echo "  Cleared node$i"
 done
+# Public RPC node: no keystore, no password
+mkdir -p "$DEPLOY_DIR/rpc-node/geth"
+docker run --rm -v "$DEPLOY_DIR/rpc-node:/data" alpine sh -c "rm -rf /data/geth/* /data/config.toml /data/genesis.json 2>/dev/null" 2>/dev/null || true
+echo "  Cleared rpc-node"
 echo "  Done."
 
 # ==============================
@@ -122,22 +126,25 @@ rm -f /tmp/node*_pk.txt /tmp/geth_pw.txt
 echo "  Done."
 
 # ==============================
-# Step 4: Write static-nodes.json globally
+# Step 4: Write static peers (config.toml) for all nodes
 # ==============================
-echo "[4/7] Applying persistent static-nodes.json to all nodes..."
-# Building the static routing configuration mapping the exact fixed IPs and Enodes
-cat > "$DEPLOY_DIR/static-nodes.json" << STATIC_EOF
-[
+echo "[4/7] Writing static peers (config.toml) for all nodes..."
+# geth 1.13 ignores static-nodes.json; static peers must be in config.toml.
+# The nodes have no HTTP, so admin_addPeer is not available as a fallback.
+cat > "$DEPLOY_DIR/config.toml" << STATIC_EOF
+[Node.P2P]
+StaticNodes = [
   "enode://${NODE1_PUB}@172.20.0.11:30303",
   "enode://${NODE2_PUB}@172.20.0.12:30303",
   "enode://${NODE3_PUB}@172.20.0.13:30303",
   "enode://${NODE4_PUB}@172.20.0.14:30303",
   "enode://${NODE5_PUB}@172.20.0.15:30303"
 ]
+NoDiscovery = true
 STATIC_EOF
 
-for i in 1 2 3 4 5; do
-    cp "$DEPLOY_DIR/static-nodes.json" "$DEPLOY_DIR/node$i/geth/static-nodes.json"
+for d in node1 node2 node3 node4 node5 rpc-node; do
+    cp "$DEPLOY_DIR/config.toml" "$DEPLOY_DIR/$d/config.toml"
 done
 
 # ==============================
@@ -200,8 +207,16 @@ for i in 1 2 3 4 5; do
         $GETH_IMAGE \
         init /tmp/genesis.json 2>&1 | tail -1
 done
+docker run --rm \
+    -v "$DEPLOY_DIR/rpc-node:/root/.ethereum" \
+    -v "$DEPLOY_DIR/genesis.json:/tmp/genesis.json:ro" \
+    $GETH_IMAGE \
+    init /tmp/genesis.json 2>&1 | tail -1
 
 # We inject `--nodiscover` strictly so nodes don't search external space.
+# Signers serve no HTTP/WS (geth allows --unlock only without them); admin, clique
+# and miner are reached over IPC. Public RPC = rpc-node (no keys, eth/net/web3,
+# 127.0.0.1:8555) behind rpc-gateway. See docs/pending/rpc-lockdown.md.
 cat > "$PROJECT_DIR/docker-compose.yml" << 'COMPOSE_EOF'
 services:
   node-1:
@@ -212,7 +227,6 @@ services:
       vision-net:
         ipv4_address: 172.20.0.11
     ports:
-      - "8545:8545"
       - "30303:30303"
     volumes:
       - ./deploy/v1-mainnet/node1:/root/.ethereum
@@ -220,7 +234,7 @@ services:
 COMPOSE_EOF
 
 cat >> "$PROJECT_DIR/docker-compose.yml" << COMPOSE_NODE1
-      --networkid $CHAIN_ID --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug,clique,miner" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x${NODE_ADDRS[0]}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${NODE_ADDRS[0]}" --nat extip:172.20.0.11 --maxpeers 25 --nodiscover
+      --config /root/.ethereum/config.toml --networkid $CHAIN_ID --unlock "0x${NODE_ADDRS[0]}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${NODE_ADDRS[0]}" --nat extip:172.20.0.11 --maxpeers 25 --nodiscover
     deploy:
       resources:
         limits:
@@ -228,7 +242,6 @@ cat >> "$PROJECT_DIR/docker-compose.yml" << COMPOSE_NODE1
           cpus: '0.5'
 COMPOSE_NODE1
 
-PORTS_RPC=(8546 8547 8548 8549)
 PORTS_P2P=(30304 30305 30306 30307)
 IPS=("172.20.0.12" "172.20.0.13" "172.20.0.14" "172.20.0.15")
 
@@ -246,12 +259,11 @@ for j in 0 1 2 3; do
       vision-net:
         ipv4_address: ${IPS[$j]}
     ports:
-      - "${PORTS_RPC[$j]}:8545"
       - "${PORTS_P2P[$j]}:30303"
     volumes:
       - ./deploy/v1-mainnet/node${NODE_NUM}:/root/.ethereum
     command: >
-      --networkid $CHAIN_ID --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,clique,miner" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x${ADDR}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${ADDR}" --nat extip:${IPS[$j]} --maxpeers 25 --nodiscover
+      --config /root/.ethereum/config.toml --networkid $CHAIN_ID --unlock "0x${ADDR}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${ADDR}" --nat extip:${IPS[$j]} --maxpeers 25 --nodiscover
     deploy:
       resources:
         limits:
@@ -259,6 +271,28 @@ for j in 0 1 2 3; do
           cpus: '0.5'
 COMPOSE_NODE
 done
+
+cat >> "$PROJECT_DIR/docker-compose.yml" << COMPOSE_RPC
+
+  rpc-node:
+    image: ethereum/client-go:v1.13.15
+    container_name: vision-rpc-node
+    restart: unless-stopped
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.31
+    ports:
+      - "127.0.0.1:8555:8545"
+    volumes:
+      - ./deploy/v1-mainnet/rpc-node:/root/.ethereum
+    command: >
+      --config /root/.ethereum/config.toml --networkid $CHAIN_ID --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3" --http.vhosts "localhost,rpc-node" --nat extip:172.20.0.31 --maxpeers 25 --nodiscover
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '0.5'
+COMPOSE_RPC
 
 cat >> "$PROJECT_DIR/docker-compose.yml" << 'COMPOSE_INFRA'
 
@@ -322,14 +356,15 @@ echo "Waiting for interconnected sync to establish..."
 sleep 10
 echo ""
 echo "Enode Status (Static Mesh):"
-echo "If static-nodes is working, peers will auto-connect without admin_addPeer."
+echo "Peers come from config.toml StaticNodes; signers are queried over IPC (no HTTP)."
 echo ""
 echo "Peer counts:"
-for port in 8545 8546 8547 8548 8549; do
-    PEERS=$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' http://172.20.0.11:$port 2>/dev/null | grep -oP '"result":"[^"]+' | sed 's/"result":"//')
-    BLOCK=$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://172.20.0.11:$port 2>/dev/null | grep -oP '"result":"[^"]+' | sed 's/"result":"//')
-    echo "  Port $port - Peers: $(printf "%d" 0x${PEERS:-0}) | Block: $(printf "%d" 0x${BLOCK:-0})"
+for i in 1 2 3 4 5; do
+    PEERS=$(docker exec vision-node-$i geth attach --exec net.peerCount /root/.ethereum/geth.ipc 2>/dev/null)
+    BLOCK=$(docker exec vision-node-$i geth attach --exec eth.blockNumber /root/.ethereum/geth.ipc 2>/dev/null)
+    echo "  node-$i - Peers: ${PEERS:-?} | Block: ${BLOCK:-?}"
 done
+echo "  rpc-node - $(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8555 2>/dev/null)"
 
 echo ""
 echo "============================================"

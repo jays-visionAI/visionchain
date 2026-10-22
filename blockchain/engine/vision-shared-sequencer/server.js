@@ -5,6 +5,11 @@ const cors = require('cors');
 const { Kafka } = require('kafkajs');
 const admin = require('firebase-admin');
 const path = require('path');
+const { checkRequest, createRejectLog } = require('./rpc-allowlist');
+
+// geth HTTP endpoint this server talks to. After the RPC lockdown it is the
+// non-signing RPC node (see docs/pending/rpc-lockdown.md), not a signer.
+const GETH_RPC_URL = process.env.GETH_RPC_URL || 'http://127.0.0.1:8545';
 
 // Firebase Admin SDK Setup
 if (!admin.apps.length) {
@@ -19,7 +24,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Manual RPC Proxy to handle Geth connectivity and CORS
+// Public RPC proxy (https://api.visionchain.co/rpc-proxy). Only allowlisted
+// JSON-RPC methods are forwarded to geth; see rpc-allowlist.js.
+const logRpcRefused = createRejectLog(console);
 app.post('/rpc-proxy', async (req, res) => {
     // Explicitly set CORS for preflight and actual requests
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,13 +37,20 @@ app.post('/rpc-proxy', async (req, res) => {
         return res.status(200).end();
     }
 
-    const http = require('http');
-    const postData = JSON.stringify(req.body);
+    const checked = checkRequest(req.body);
+    if (!checked.ok) {
+        logRpcRefused('/rpc-proxy', checked.rejected, req.headers['cf-connecting-ip'] || req.ip);
+        return res.json(checked.reply);
+    }
+
+    const upstream = new URL(GETH_RPC_URL);
+    const http = require(upstream.protocol === 'https:' ? 'https' : 'http');
+    const postData = JSON.stringify(checked.payload);
 
     const options = {
-        hostname: '127.0.0.1',
-        port: 8545,
-        path: '/',
+        hostname: upstream.hostname,
+        port: upstream.port || (upstream.protocol === 'https:' ? 443 : 80),
+        path: upstream.pathname || '/',
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -62,13 +76,13 @@ app.post('/rpc-proxy', async (req, res) => {
         res.status(504).json({
             error: 'Gateway Timeout',
             details: err.message,
-            node: '127.0.0.1:8545'
+            node: upstream.host
         });
     });
 
     proxyReq.on('timeout', () => {
         proxyReq.destroy();
-        res.status(504).json({ error: 'Request Timeout', node: '127.0.0.1:8545' });
+        res.status(504).json({ error: 'Request Timeout', node: upstream.host });
     });
 
     proxyReq.write(postData);
@@ -79,7 +93,7 @@ app.post('/rpc-proxy', async (req, res) => {
 app.get('/debug-rpc', async (req, res) => {
     try {
         const { ethers } = require('ethers');
-        const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
+        const provider = new ethers.JsonRpcProvider(GETH_RPC_URL, {
             chainId: 1337,
             name: 'vision_testnet_v2'
         }, { staticNetwork: true });
@@ -176,7 +190,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
 
     try {
         const { ethers } = require('ethers');
-        const rpcProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
+        const rpcProvider = new ethers.JsonRpcProvider(GETH_RPC_URL, {
             chainId: 1337,
             name: 'vision_testnet_v2'
         }, { staticNetwork: true });
@@ -312,7 +326,7 @@ app.get('/api/transactions', async (req, res) => {
     if (address) {
         try {
             const { ethers } = require('ethers');
-            const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+            const provider = new ethers.JsonRpcProvider(GETH_RPC_URL);
             const vcnAbi = ["function balanceOf(address) view returns (uint256)"];
             const vcnContract = new ethers.Contract("0xf8a2F49C782447a8660554F7c3274cbd765b1963", vcnAbi, provider);
             const balance = await vcnContract.balanceOf(address);
@@ -379,7 +393,7 @@ app.get('/api/transactions', async (req, res) => {
         if (hash && results.length === 0) {
             try {
                 const { ethers } = require('ethers');
-                const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+                const provider = new ethers.JsonRpcProvider(GETH_RPC_URL);
                 const tx = await provider.getTransaction(hash);
 
                 if (tx) {
@@ -472,6 +486,14 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', brokers: KAFKA_BROKERS });
 });
 
-app.listen(PORT, () => {
-    console.log(`🌐 Shared Sequencer API running on port ${PORT}`);
-});
+// HOST=127.0.0.1 keeps port 3000 off the internet (nginx still reaches it).
+// Unset = all interfaces, as before.
+const HOST = process.env.HOST;
+const onListening = () => {
+    console.log(`🌐 Shared Sequencer API running on ${HOST || '*'}:${PORT} (geth: ${GETH_RPC_URL})`);
+};
+if (HOST) {
+    app.listen(PORT, HOST, onListening);
+} else {
+    app.listen(PORT, onListening);
+}

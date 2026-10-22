@@ -1,6 +1,11 @@
 #!/bin/bash
 # Import new signer key to Vision Chain node and replace Hardhat #0 signer
 # Usage: bash scripts/import-signer.sh
+#
+# The node runs without HTTP: geth allows --unlock only when no HTTP/WS listener
+# is up (or with --allow-insecure-unlock, which exposes the key to RPC callers).
+# admin/clique calls below go over IPC via `docker exec`. See
+# docs/pending/rpc-lockdown.md.
 
 set -e
 
@@ -62,14 +67,10 @@ docker rm vision-node-1 && \
 docker run -d --name vision-node-1 \
   --network $NETWORK \
   --ip 172.20.0.11 \
-  -p 8545:8545 \
   -p 30303:30303 \
   -v $VOLUME:/root/.ethereum \
   $IMAGE \
   --networkid 3151909 \
-  --http --http.addr 0.0.0.0 --http.port 8545 \
-  --http.api eth,net,web3,admin,debug,clique \
-  --allow-insecure-unlock \
   --unlock '$OLD_SIGNER,$NEW_ADMIN' \
   --password /root/.ethereum/password.txt \
   --mine \
@@ -83,22 +84,17 @@ sleep 15
 
 echo ""
 echo "[5/5] Checking chain status..."
+# "geth attach --exec <js> <ipc>" inside the container (flags before the path)
+ipc() { echo "docker exec vision-node-1 geth attach --exec '$1' /root/.ethereum/geth.ipc"; }
 ssh -i "$SSH_KEY" "$SERVER" "
-echo 'Block number:' && \
-curl -s -X POST http://localhost:8545 -H 'Content-Type: application/json' \
-  -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' && echo '' && \
-echo 'Signers:' && \
-curl -s -X POST http://localhost:8545 -H 'Content-Type: application/json' \
-  -d '{\"jsonrpc\":\"2.0\",\"method\":\"clique_getSigners\",\"params\":[],\"id\":2}' && echo '' && \
+echo 'Block number:' && $(ipc 'eth.blockNumber') && \
+echo 'Signers:' && $(ipc 'clique.getSigners()') && \
 echo '' && \
 echo 'Proposing removal of old signer...' && \
-curl -s -X POST http://localhost:8545 -H 'Content-Type: application/json' \
-  -d '{\"jsonrpc\":\"2.0\",\"method\":\"clique_propose\",\"params\":[\"$OLD_SIGNER\", false],\"id\":3}' && echo '' && \
+$(ipc "clique.propose(\"$OLD_SIGNER\", false)") && \
 sleep 10 && \
 echo '' && \
-echo 'Final signers:' && \
-curl -s -X POST http://localhost:8545 -H 'Content-Type: application/json' \
-  -d '{\"jsonrpc\":\"2.0\",\"method\":\"clique_getSigners\",\"params\":[],\"id\":4}'
+echo 'Final signers:' && $(ipc 'clique.getSigners()')
 "
 
 echo ""

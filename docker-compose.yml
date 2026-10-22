@@ -1,3 +1,15 @@
+# Vision Chain S1 node template (5 Clique signers + 1 public RPC node).
+#
+# Signers (node-1..5) run WITHOUT HTTP/WS: admin, clique and miner are reachable
+# only over IPC from the host, e.g.
+#   docker exec vision-node-1 geth attach --exec 'clique.getSigners()' /root/.ethereum/geth.ipc
+# geth refuses --unlock while any HTTP/WS listener is up unless
+# --allow-insecure-unlock is set, so a sealing signer must not serve HTTP.
+#
+# Public JSON-RPC is served by rpc-node: no keys, eth/net/web3 only, published on
+# the host's loopback for nginx -> rpc-gateway (method allowlist) and the sequencer.
+# Peers come from config.toml [Node.P2P] StaticNodes; geth 1.13 ignores
+# static-nodes.json. See docs/pending/rpc-lockdown.md.
 version: '3.8'
 
 services:
@@ -10,13 +22,12 @@ services:
       vision-net:
         ipv4_address: 172.20.0.11
     ports:
-      - "8545:8545" # RPC
       - "30303:30303" # P2P
     volumes:
       - ./deploy/v2-testnet/node1:/root/.ethereum
-      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
+      - ./deploy/v2-testnet/config.toml:/root/.ethereum/config.toml:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug,clique" --http.corsdomain "*" --allow-insecure-unlock --unlock "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --password /root/.ethereum/password.txt --mine --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --nat extip:172.20.0.11 --maxpeers 25
+      --networkid 3151909 --config /root/.ethereum/config.toml --unlock "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --password /root/.ethereum/password.txt --mine --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --nat extip:172.20.0.11 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -32,13 +43,12 @@ services:
       vision-net:
         ipv4_address: 172.20.0.12
     ports:
-      - "8546:8545" # RPC mapped to 8546
       - "30304:30303" # P2P mapped to 30304
     volumes:
       - ./deploy/v2-testnet/node2:/root/.ethereum
-      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
+      - ./deploy/v2-testnet/config.toml:/root/.ethereum/config.toml:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,clique" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x00d3a8e56106AfbE8feF6482AB95940F38FB5575" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x00d3a8e56106AfbE8feF6482AB95940F38FB5575" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.12 --maxpeers 25
+      --networkid 3151909 --config /root/.ethereum/config.toml --unlock "0x00d3a8e56106AfbE8feF6482AB95940F38FB5575" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x00d3a8e56106AfbE8feF6482AB95940F38FB5575" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.12 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -54,13 +64,12 @@ services:
       vision-net:
         ipv4_address: 172.20.0.13
     ports:
-      - "8547:8545"
       - "30305:30303"
     volumes:
       - ./deploy/v2-testnet/node3:/root/.ethereum
-      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
+      - ./deploy/v2-testnet/config.toml:/root/.ethereum/config.toml:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,clique" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x3ee48e2Accb9B1be621ddb87A207ef59B6Ed92FB" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x3ee48e2Accb9B1be621ddb87A207ef59B6Ed92FB" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.13 --maxpeers 25
+      --networkid 3151909 --config /root/.ethereum/config.toml --unlock "0x3ee48e2Accb9B1be621ddb87A207ef59B6Ed92FB" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x3ee48e2Accb9B1be621ddb87A207ef59B6Ed92FB" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.13 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -76,13 +85,12 @@ services:
       vision-net:
         ipv4_address: 172.20.0.14
     ports:
-      - "8548:8545"
       - "30306:30303"
     volumes:
       - ./deploy/v2-testnet/node4:/root/.ethereum
-      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
+      - ./deploy/v2-testnet/config.toml:/root/.ethereum/config.toml:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,clique" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x0c4907791eC700A8988F276179e6e2a8B3006f28" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x0c4907791eC700A8988F276179e6e2a8B3006f28" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.14 --maxpeers 25
+      --networkid 3151909 --config /root/.ethereum/config.toml --unlock "0x0c4907791eC700A8988F276179e6e2a8B3006f28" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x0c4907791eC700A8988F276179e6e2a8B3006f28" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.14 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -98,13 +106,33 @@ services:
       vision-net:
         ipv4_address: 172.20.0.15
     ports:
-      - "8549:8545"
       - "30307:30303"
     volumes:
       - ./deploy/v2-testnet/node5:/root/.ethereum
-      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
+      - ./deploy/v2-testnet/config.toml:/root/.ethereum/config.toml:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,clique" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x691acA3C185aFd0A57CA470D5f176f0559aEef31" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x691acA3C185aFd0A57CA470D5f176f0559aEef31" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.15 --maxpeers 25
+      --networkid 3151909 --config /root/.ethereum/config.toml --unlock "0x691acA3C185aFd0A57CA470D5f176f0559aEef31" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x691acA3C185aFd0A57CA470D5f176f0559aEef31" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.15 --maxpeers 25
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '0.5'
+
+  # Public RPC node: syncs from the signers, holds no keys, never seals.
+  rpc-node:
+    image: ethereum/client-go:v1.13.15
+    container_name: vision-rpc-node
+    restart: unless-stopped
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.31
+    ports:
+      - "127.0.0.1:8555:8545" # loopback only: nginx/rpc-gateway and the sequencer
+    volumes:
+      - ./deploy/v2-testnet/rpc-node:/root/.ethereum
+      - ./deploy/v2-testnet/config.toml:/root/.ethereum/config.toml:ro
+    command: >
+      --networkid 3151909 --config /root/.ethereum/config.toml --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3" --http.vhosts "localhost,rpc-node" --nat extip:172.20.0.31 --maxpeers 25
     deploy:
       resources:
         limits:

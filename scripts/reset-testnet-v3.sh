@@ -52,6 +52,10 @@ for i in 1 2 3 4 5; do
         docker run --rm -v "$NODE_DIR:/data" alpine sh -c "echo '$PASSWORD' > /data/password.txt"
     echo "  Cleared node$i"
 done
+# Public RPC node: no keystore, no password
+mkdir -p "$DEPLOY_DIR/rpc-node"
+docker run --rm -v "$DEPLOY_DIR/rpc-node:/data" alpine sh -c "rm -rf /data/geth /data/nodekey /data/config.toml /data/genesis.json 2>/dev/null" 2>/dev/null || true
+echo "  Cleared rpc-node"
 echo "  Done."
 
 # ==============================
@@ -154,6 +158,12 @@ for i in 1 2 3 4 5; do
         init /tmp/genesis.json 2>&1 | tail -1
     echo "  Node $i initialized."
 done
+docker run --rm \
+    -v "$DEPLOY_DIR/rpc-node:/root/.ethereum" \
+    -v "$DEPLOY_DIR/genesis.json:/tmp/genesis.json:ro" \
+    $GETH_IMAGE \
+    init /tmp/genesis.json 2>&1 | tail -1
+echo "  RPC node initialized."
 
 echo "  Done."
 
@@ -168,6 +178,9 @@ NODE1_ENODE_ID=$(docker run --rm \
     --entrypoint sh $GETH_IMAGE \
     -c "cat /root/.ethereum/geth/nodekey" 2>/dev/null || echo "")
 
+# Signers serve no HTTP/WS (geth allows --unlock only without them); admin, clique
+# and miner are reached over IPC. Public RPC = rpc-node (no keys, eth/net/web3,
+# 127.0.0.1:8555) behind rpc-gateway. See docs/pending/rpc-lockdown.md.
 cat > "$PROJECT_DIR/docker-compose.yml" << 'COMPOSE_EOF'
 services:
   node-1:
@@ -178,7 +191,6 @@ services:
       vision-net:
         ipv4_address: 172.20.0.11
     ports:
-      - "8545:8545"
       - "30303:30303"
     volumes:
       - ./deploy/v2-testnet/node1:/root/.ethereum
@@ -187,7 +199,7 @@ COMPOSE_EOF
 
 # Append node-1 command (needs variable expansion)
 cat >> "$PROJECT_DIR/docker-compose.yml" << COMPOSE_NODE1
-      --networkid $CHAIN_ID --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug,clique,miner" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x${NODE_ADDRS[0]}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${NODE_ADDRS[0]}" --nat extip:172.20.0.11 --maxpeers 25
+      --networkid $CHAIN_ID --unlock "0x${NODE_ADDRS[0]}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${NODE_ADDRS[0]}" --nat extip:172.20.0.11 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -196,7 +208,6 @@ cat >> "$PROJECT_DIR/docker-compose.yml" << COMPOSE_NODE1
 COMPOSE_NODE1
 
 # Nodes 2-5
-PORTS_RPC=(8546 8547 8548 8549)
 PORTS_P2P=(30304 30305 30306 30307)
 IPS=("172.20.0.12" "172.20.0.13" "172.20.0.14" "172.20.0.15")
 
@@ -214,12 +225,11 @@ for j in 0 1 2 3; do
       vision-net:
         ipv4_address: ${IPS[$j]}
     ports:
-      - "${PORTS_RPC[$j]}:8545"
       - "${PORTS_P2P[$j]}:30303"
     volumes:
       - ./deploy/v2-testnet/node${NODE_NUM}:/root/.ethereum
     command: >
-      --networkid $CHAIN_ID --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,clique,miner" --http.corsdomain "*" --allow-insecure-unlock --unlock "0x${ADDR}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${ADDR}" --nat extip:${IPS[$j]} --maxpeers 25
+      --networkid $CHAIN_ID --unlock "0x${ADDR}" --password /root/.ethereum/password.txt --mine --miner.etherbase "0x${ADDR}" --nat extip:${IPS[$j]} --maxpeers 25
     deploy:
       resources:
         limits:
@@ -227,6 +237,28 @@ for j in 0 1 2 3; do
           cpus: '0.5'
 COMPOSE_NODE
 done
+
+cat >> "$PROJECT_DIR/docker-compose.yml" << COMPOSE_RPC
+
+  rpc-node:
+    image: ethereum/client-go:v1.13.15
+    container_name: vision-rpc-node
+    restart: unless-stopped
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.31
+    ports:
+      - "127.0.0.1:8555:8545"
+    volumes:
+      - ./deploy/v2-testnet/rpc-node:/root/.ethereum
+    command: >
+      --networkid $CHAIN_ID --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3" --http.vhosts "localhost,rpc-node" --nat extip:172.20.0.31 --maxpeers 25
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '0.5'
+COMPOSE_RPC
 
 # Kafka & Zookeeper
 cat >> "$PROJECT_DIR/docker-compose.yml" << 'COMPOSE_INFRA'
@@ -295,38 +327,41 @@ echo ""
 echo "Waiting for nodes to start mining..."
 sleep 15
 
+# Signers have no HTTP: talk to them over IPC.
+ipc() { docker exec "$1" geth attach --exec "$2" /root/.ethereum/geth.ipc 2>/dev/null; }
+
 # Get Node 1 enode for peer additions
-NODE1_ENODE=$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' http://172.20.0.11:8545 2>/dev/null | grep -oP '"enode":"[^"]+' | sed 's/"enode":"//')
+NODE1_ENODE=$(ipc vision-node-1 admin.nodeInfo.enode | tr -d '"')
 echo "Node 1 enode: ${NODE1_ENODE:-UNKNOWN}"
 
-# Add Node 1 as peer to all other nodes
+# Add Node 1 as peer to all other nodes and the RPC node.
+# (Runtime peers only; for restarts, put StaticNodes in config.toml.)
 if [ -n "$NODE1_ENODE" ]; then
     echo ""
     echo "Adding Node 1 as peer to all nodes..."
-    for port in 8546 8547 8548 8549; do
-        curl -s -X POST -H "Content-Type: application/json" \
-            -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$NODE1_ENODE\"],\"id\":1}" \
-            http://172.20.0.11:$port 2>/dev/null | head -1
+    for c in vision-node-2 vision-node-3 vision-node-4 vision-node-5 vision-rpc-node; do
+        echo "  $c: $(ipc $c "admin.addPeer('$NODE1_ENODE')")"
     done
     sleep 5
 fi
 
 echo ""
 echo "Block number (should be > 0):"
-for port in 8545 8546 8547 8548 8549; do
-    BLOCK=$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://172.20.0.11:$port 2>/dev/null)
-    MINING=$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_mining","params":[],"id":1}' http://172.20.0.11:$port 2>/dev/null)
-    echo "  Port $port: $BLOCK mining=$MINING"
+for i in 1 2 3 4 5; do
+    echo "  node-$i: $(ipc vision-node-$i eth.blockNumber) mining=$(ipc vision-node-$i eth.mining)"
 done
 
 echo ""
 echo "Clique signers:"
-curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"clique_getSigners","params":[],"id":1}' http://172.20.0.11:8545
+ipc vision-node-1 "clique.getSigners()"
 
 echo ""
+echo "Peer count (node-1):"
+ipc vision-node-1 net.peerCount
+
 echo ""
-echo "Peer count:"
-curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' http://172.20.0.11:8545
+echo "Public RPC node (127.0.0.1:8555, expect only eth/net/rpc/web3):"
+curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"rpc_modules","params":[],"id":1}' http://127.0.0.1:8555
 
 echo ""
 echo ""
