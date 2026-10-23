@@ -617,78 +617,53 @@ export const updateDefiConfig = async (config: Partial<DefiConfig>): Promise<voi
 }
 
 /**
- * Processes referral rewards when a revenue event occurs.
+ * What the buying wallet signs to claim a node purchase's referral rewards
+ * for this account. Must match nodePurchaseMessage in
+ * functions/referralLedger.js (functions/test/referralLedger.test.cjs checks).
  */
-export const processReferralRewards = async (
-    event: string,
-    fromUserEmail: string,
-    amount: number,
-    currency: 'USD' | 'VCN' = 'USD',
-    txHash?: string
-): Promise<void> => {
+export const nodePurchaseReferralMessage = (txHash: string, email: string): string =>
+    `Vision Chain referral claim\nNode purchase: ${txHash.toLowerCase()}\nAccount: ${email.toLowerCase()}`;
+
+/**
+ * Credits the referral rewards for a node purchase.
+ *
+ * This used to compute the rewards here and write them onto the referrers'
+ * users documents, with an amount the browser chose — so any signed-in user
+ * could raise anyone's reward totals. The creditNodePurchaseReferral callable
+ * now does it: it reads the purchase from the chain, takes the amount from
+ * the license tier, and credits each purchase once. `signature` is the buying
+ * wallet's signature over nodePurchaseReferralMessage(txHash, email), which
+ * is how the server knows the purchase is this account's.
+ */
+export const processReferralRewards = async (txHash: string, signature: string): Promise<void> => {
     try {
-        const db = getFirebaseDb();
-        const fromUser = await getUserData(fromUserEmail);
-        if (!fromUser || !fromUser.referrerId) return;
-
-        const config = await getReferralConfig();
-        if (!config.enabledEvents.includes(event)) return;
-
-        // 1. Tier 1 Reward
-        const referrer = await getUserData(fromUser.referrerId);
-        if (referrer) {
-            const rewardAmount = amount * config.tier1Rate;
-            await addDoc(collection(db, 'referral_rewards'), {
-                userId: referrer.email,
-                fromUserId: fromUserEmail,
-                amount: rewardAmount,
-                currency,
-                tier: 1,
-                event,
-                percentage: config.tier1Rate,
-                status: 'pending',
-                timestamp: new Date().toISOString(),
-                txHash
-            });
-
-            // Update Referrer Totals
-            const rRef = doc(db, 'users', referrer.email.toLowerCase());
-            const totalField = currency === 'VCN' ? 'totalRewardsVCN' : 'totalRewardsUSD';
-            await updateDoc(rRef, {
-                [totalField]: (referrer[totalField] || 0) + rewardAmount
-            });
-            console.log(`[Referral] Distributed ${rewardAmount} ${currency} to 1st tier referrer ${referrer.email}`);
-        }
-
-        // 2. Tier 2 Reward
-        if (fromUser.grandReferrerId) {
-            const grandReferrer = await getUserData(fromUser.grandReferrerId);
-            if (grandReferrer) {
-                const rewardAmount = amount * config.tier2Rate;
-                await addDoc(collection(db, 'referral_rewards'), {
-                    userId: grandReferrer.email,
-                    fromUserId: fromUserEmail,
-                    amount: rewardAmount,
-                    currency,
-                    tier: 2,
-                    event,
-                    percentage: config.tier2Rate,
-                    status: 'pending',
-                    timestamp: new Date().toISOString(),
-                    txHash
-                });
-
-                // Update Grand Referrer Totals
-                const grRef = doc(db, 'users', grandReferrer.email.toLowerCase());
-                const totalField = currency === 'VCN' ? 'totalRewardsVCN' : 'totalRewardsUSD';
-                await updateDoc(grRef, {
-                    [totalField]: (grandReferrer[totalField] || 0) + rewardAmount
-                });
-                console.log(`[Referral] Distributed ${rewardAmount} ${currency} to 2nd tier referrer ${grandReferrer.email}`);
-            }
-        }
+        const creditFn = httpsCallableFn(getFns(getFirebaseApp()), 'creditNodePurchaseReferral');
+        const { data } = await creditFn({ txHash, signature });
+        console.log('[Referral] Node purchase referral rewards:', data);
     } catch (e) {
         console.error("Failed to process referral rewards:", e);
+    }
+};
+
+/**
+ * Runs the signup bookkeeping that touches OTHER users' documents — the
+ * referrer's referralCount and the duplicate-phone flags — on the server
+ * (completeSignup in functions/referralLedger.js). The server resolves
+ * `referralCode` itself, reads the phone from the caller's own users document
+ * (so call this after writing it), and does it once per account.
+ *
+ * Never throws: signup has already created the Auth account and the users
+ * document by now, and must not fail over bookkeeping.
+ */
+type SignupBookkeeping = { credited: boolean; referrer: string; phoneDuplicate: boolean };
+const completeSignupOnServer = async (referralCode: string): Promise<SignupBookkeeping | null> => {
+    try {
+        const completeFn = httpsCallableFn(getFns(getFirebaseApp()), 'completeSignup');
+        const { data } = await completeFn({ referralCode });
+        return data as SignupBookkeeping;
+    } catch (e) {
+        console.error('[Signup] Server-side signup bookkeeping failed:', e);
+        return null;
     }
 };
 
@@ -1841,9 +1816,14 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
         const user = userSnap.data();
         const sale = saleSnap.data();
 
-        // 4. Ensure Referral Code Exists
-        let referralCode = user?.referralCode;
-        if (!referralCode) {
+        // 4. Ensure Referral Code Exists — on the caller's own document only.
+        // This used to write a code onto whatever email it was given, which
+        // meant the rules had to let any user write another's referralCode.
+        // Someone else's missing code is left missing (''), not invented: a
+        // code that was never saved would not resolve to anyone.
+        let referralCode = user?.referralCode || '';
+        const signedInEmail = getFirebaseAuth().currentUser?.email?.toLowerCase();
+        if (!referralCode && signedInEmail === emailLower) {
             console.log(`[Referral] Generating missing code for ${emailLower}`);
             referralCode = await generateReferralCode('', emailLower);
             // Save immediately
@@ -2171,15 +2151,11 @@ export const userRegister = async (email: string, password: string, phone?: stri
     const emailLower = email.toLowerCase().trim();
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : '';
 
-    // ── Phone duplicate detection (Policy C: allow registration, block transfers) ──
-    // Check if phone is already used - if so, flag for transfer block (resolved via SMS OTP later)
-    let isPhoneDuplicate = false;
-    if (normalizedPhone) {
-        const existingUsers = await searchUsersByPhone(normalizedPhone);
-        if (existingUsers.length > 0) {
-            isPhoneDuplicate = true;
-        }
-    }
+    // Phone duplicate detection (Policy C: allow registration, block
+    // transfers) happens on the server once the users document below exists:
+    // see completeSignupOnServer. It used to run here, before the account was
+    // created — a signed-out query on `users`, which the rules deny, so it
+    // never found a duplicate.
 
     const { createUserWithEmailAndPassword, sendEmailVerification } = await import('firebase/auth');
     const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
@@ -2202,14 +2178,9 @@ export const userRegister = async (email: string, password: string, phone?: stri
             referrerId = referrer.email;
             grandReferrerId = referrer.referrerId || '';
 
-            // Increment referrer's count
-            const rRef = doc(db, 'users', referrerId.toLowerCase());
-            await updateDoc(rRef, {
-                referralCount: (referrer.referralCount || 0) + 1
-            });
-
-            // Record referral for current round (Referral Rush)
-            await recordRoundReferral(referrerId, emailLower);
+            // The referrer's referralCount, the round record and the
+            // notification come after the users document exists: see
+            // completeSignupOnServer below.
 
             // 1. Add new user to referrer's contact list (or update existing pending contact)
             const existingContact = await findContactByPhone(referrerId.toLowerCase(), normalizedPhone);
@@ -2252,22 +2223,6 @@ export const userRegister = async (email: string, password: string, phone?: stri
             });
 
             console.log(`[Referral] User ${emailLower} referred by ${referrerId}. Bi-directional contacts created.`);
-
-            // Send referral signup notification email to referrer (fire-and-forget)
-            try {
-                const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || (import.meta.env.VITE_CHAIN_ENV === 'staging' ? 'visionchain-staging' : 'visionchain-d19ed');
-                fetch(`https://us-central1-${projectId}.cloudfunctions.net/notifyReferralSignup`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        referrerEmail: referrerId,
-                        newUserEmail: emailLower,
-                        referralCode: referralCode,
-                    }),
-                }).catch(err => console.warn('[Referral] Email notification failed:', err));
-            } catch (notifyErr) {
-                console.warn('[Referral] Email notification call failed:', notifyErr);
-            }
         }
     }
 
@@ -2314,11 +2269,6 @@ export const userRegister = async (email: string, password: string, phone?: stri
             referralCount: 0,
             totalRewardsVCN: 0,
             totalRewardsUSD: 0,
-            // Phone duplicate: block transfers until SMS OTP verification
-            ...(isPhoneDuplicate ? {
-                phoneDuplicateBlocked: true,
-                phoneDuplicateBlockedAt: new Date().toISOString(),
-            } : {}),
             createdAt: new Date().toISOString(),
             // Signup day (KST) as a plain YYYY-MM-DD key. `createdAt` alone
             // cannot be grouped without parsing every document, so D1/D7/D30
@@ -2331,19 +2281,34 @@ export const userRegister = async (email: string, password: string, phone?: stri
         });
     }
 
-    // If phone is duplicate, also flag existing accounts that share this phone
-    if (isPhoneDuplicate && normalizedPhone) {
-        const existingUsers = await searchUsersByPhone(normalizedPhone);
-        for (const u of existingUsers) {
-            if (u.email.toLowerCase() !== emailLower) {
-                const existingRef = doc(db, 'users', u.email.toLowerCase());
-                await setDoc(existingRef, {
-                    phoneDuplicateBlocked: true,
-                    phoneDuplicateBlockedAt: new Date().toISOString(),
-                }, { merge: true });
-            }
-        }
+    // The referrer's referralCount and the duplicate-phone flags (on this
+    // account and on every account sharing its phone) are written by the
+    // server, which re-derives both — the client may not write another
+    // user's document.
+    const signup = await completeSignupOnServer(referralCode || '');
+    if (signup?.phoneDuplicate) {
         console.log(`[Registration] Phone duplicate detected for ${emailLower}. Transfer blocked until SMS verification.`);
+    }
+
+    if (signup?.credited && signup.referrer) {
+        // Record referral for current round (Referral Rush)
+        await recordRoundReferral(signup.referrer, emailLower);
+
+        // Send referral signup notification email to referrer (fire-and-forget)
+        try {
+            const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || (import.meta.env.VITE_CHAIN_ENV === 'staging' ? 'visionchain-staging' : 'visionchain-d19ed');
+            fetch(`https://us-central1-${projectId}.cloudfunctions.net/notifyReferralSignup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    referrerEmail: signup.referrer,
+                    newUserEmail: emailLower,
+                    referralCode: referralCode,
+                }),
+            }).catch(err => console.warn('[Referral] Email notification failed:', err));
+        } catch (notifyErr) {
+            console.warn('[Referral] Email notification call failed:', notifyErr);
+        }
     }
 
     // Send welcome email + schedule drip campaign (fire-and-forget)
@@ -2758,6 +2723,38 @@ export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'pa
         console.error('Error fetching user role:', error);
     }
     return 'user';
+};
+
+/**
+ * The admin console's role for whoever is signed in to the admin console.
+ *
+ * 'admin' comes only from the `admin` custom claim on the ID token, which is
+ * what the server checks (functions/adminGate.js). The users document's `role`
+ * no longer counts for admin: any user could write `role: 'admin'` onto their
+ * own document. 'partner' still comes from the document, where only an admin
+ * can now set it (firestore.rules).
+ *
+ * The token is force-refreshed so a claim granted since sign-in shows up
+ * without signing out. The admin callables called through the default app
+ * (adminSetAPY, adminFundPool, …) send the WALLET session's token, so that one
+ * is refreshed too when it is the same account.
+ */
+export const getAdminConsoleRole = async (): Promise<'admin' | 'user' | 'partner'> => {
+    const user = getAdminFirebaseAuth().currentUser;
+    if (!user?.email) return 'user';
+    try {
+        const { claims } = await user.getIdTokenResult(true);
+        if (claims.admin === true) {
+            const walletUser = getFirebaseAuth().currentUser;
+            if (walletUser && walletUser.uid === user.uid) {
+                await walletUser.getIdToken(true).catch(() => { });
+            }
+            return 'admin';
+        }
+    } catch (error) {
+        console.error('Error reading admin claim:', error);
+    }
+    return (await getUserRole(user.email)) === 'partner' ? 'partner' : 'user';
 };
 
 
@@ -4470,16 +4467,8 @@ export const activateAccountWithToken = async (token: string, password: string) 
         const referrer = await getUserByReferralCode(partnerCode);
         if (referrer) {
             grandReferrerId = referrer.referrerId || '';
-
-            // Increment referrer's count
-            const rRef = doc(db, 'users', referrer.email.toLowerCase());
-            await updateDoc(rRef, {
-                referralCount: (referrer.referralCount || 0) + 1
-            });
-            console.log(`[Referral] User ${email.toLowerCase()} invited by ${referrer.email}`);
-
-            // Record referral for current round (Referral Rush)
-            await recordRoundReferral(referrer.email, email.toLowerCase());
+            // The referrer's referralCount is the server's: see
+            // completeSignupOnServer after the profile is written.
         }
     }
 
@@ -4501,6 +4490,18 @@ export const activateAccountWithToken = async (token: string, password: string) 
         totalRewardsUSD: 0,
         updatedAt: new Date().toISOString()
     }, { merge: true });
+
+    // Referrer's referralCount (and duplicate-phone flags, if the invitee's
+    // document carries a phone): on the server, once. When the partner code
+    // is someone's referral code, the server also stores that account's
+    // email as referrerId in place of the code.
+    const signup = await completeSignupOnServer(partnerCode);
+    if (signup?.credited && signup.referrer) {
+        console.log(`[Referral] User ${email.toLowerCase()} invited by ${signup.referrer}`);
+
+        // Record referral for current round (Referral Rush)
+        await recordRoundReferral(signup.referrer, email.toLowerCase());
+    }
 
     // 5. Mark Token as Used
     await markTokenAsUsed(token);

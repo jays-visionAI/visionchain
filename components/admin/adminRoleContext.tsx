@@ -1,5 +1,5 @@
 import { createContext, useContext, createSignal, onMount, onCleanup, JSX } from 'solid-js';
-import { onAdminAuthStateChanged, getUserRole } from '../../services/firebaseService';
+import { onAdminAuthStateChanged, getAdminConsoleRole } from '../../services/firebaseService';
 
 type AdminRole = 'admin' | 'partner' | 'user';
 
@@ -41,7 +41,7 @@ export function AdminRoleProvider(props: { children: JSX.Element }) {
         const unsubscribe = onAdminAuthStateChanged(async (user) => {
             if (user?.email) {
                 try {
-                    const role = await getUserRole(user.email);
+                    const role = await getAdminConsoleRole();
                     setAdminRole(role);
                     setCachedRole(role, user.email);
                 } catch {

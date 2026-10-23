@@ -30,6 +30,23 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Collections the catch-all at the bottom must not grant WRITE on, though
+    // they are not reward ledgers: `users` and `referral_configs`, whose
+    // dedicated rules below decide every write, and `admins`, which the
+    // server once read as its admin list and which no client writes. Reads
+    // are untouched: the catch-all's signed-in read is what all three
+    // already allow.
+    //
+    // This is `hasDedicatedRule`'s job, done through `isRewardLedger` only
+    // because those are the two predicates the catch-all consults, and the
+    // pending patches in docs/pending/ (transactions, agents) both edit
+    // `hasDedicatedRule` and the catch-all itself. Hooking in here keeps this
+    // change applicable before or after either. Fold it into
+    // `hasDedicatedRule` once they have landed.
+    function isClosedToCatchAllWrites(col) {
+      return col == 'users' || col == 'admins' || col == 'referral_configs';
+    }
+
     // Collections that hold reward state. These are written exclusively by
     // Cloud Functions (the Admin SDK bypasses these rules), via:
     //   rp.award      -> user_reward_points, rp_history, user_streaks,
@@ -37,7 +54,12 @@ service cloud.firestore {
     //   game.start    -> mini_game_plays, mini_game_tokens
     //   game.submit   -> mini_game_plays, user_reward_points, rp_history
     //   dailyRPDigest -> rp_daily_stats
+    //   completeSignup             -> signup_records
+    //   creditNodePurchaseReferral -> referral_purchase_claims,
+    //                                 referral_rewards
     // A client write to any of them is a forgery attempt by definition.
+    //
+    // It also answers true for `isClosedToCatchAllWrites` — see there for why.
     function isRewardLedger(col) {
       return col in [
         'user_reward_points',
@@ -55,13 +77,23 @@ service cloud.firestore {
         'reward_snapshots',
         'reward_snapshot_line_items',
         'payout_requests',
+        'signup_records',
+        'referral_purchase_claims',
+        'referral_rewards',
         'revenue_monthly',
         'node_rollover_balances'
-      ];
+      ] || isClosedToCatchAllWrites(col);
     }
 
+    // Admin is the `admin` custom claim: what every admin Cloud Function checks
+    // (functions/adminGate.js), settable only with the Admin SDK
+    // (functions/scripts/grant-admin-claims.cjs). The email list is the older
+    // rules-only allowlist, kept so these rules do not depend on the claims
+    // having been granted first; it can go once they have. `&&` binds tighter
+    // than `||`: this is claim OR (signed in AND listed).
     function isAdmin() {
-      return request.auth != null
+      return (request.auth != null && request.auth.token.get('admin', false) == true)
+        || request.auth != null
         && request.auth.token.email in ['jays@visai.io', 'sangky94@gmail.com'];
     }
 
@@ -72,23 +104,98 @@ service cloud.firestore {
 
     // Users collection.
     //
-    // KNOWN GAP, deliberately left as-is: the owner-only `write` below is not
-    // actually binding, because the generic `/{col}/{docId}` match at the
-    // bottom also covers this path and rules are additive. Tightening it now
-    // would break signup: registerUser writes the REFERRER's document
-    // (referralCount, totalRewardsVCN) and the referrer's contacts
-    // subcollection from the new user's session. That cross-user write has to
-    // move server-side before this can be closed — it is tracked with the
-    // referral settlement work, and it is not an RP-minting path, which is
-    // what this phase is scoped to.
-    match /users/{email} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.email == email;
+    // P0 SECURITY: admin used to be `role == 'admin'` on the caller's own
+    // document — read by every admin Cloud Function and by the admin console's
+    // login. The owner-only write here restricted no fields, and it was not
+    // binding anyway, because the catch-all at the bottom also matched this
+    // path and rules are additive. So any signed-in user could make themselves
+    // an admin (adminFundPool spends the executor wallet), or rewrite anyone
+    // else's document. Admin is now the custom claim (isAdmin above), and the
+    // catch-all no longer grants write here (isClosedToCatchAllWrites).
+    //
+    // Who may write a users document now:
+    //   - its owner: anything, except that a privilege key (role, isAdmin,
+    //     permissions) may only stay as stored or drop to its default. Signup
+    //     creates the document with role 'user'; account activation merges
+    //     role 'user' back in.
+    //   - an admin: anything (the console sets role 'partner', bumps
+    //     adminSentTotal, pre-registers invitees).
+    //   - a partner: an invitation stub for an address with no document yet
+    //     (manualInviteUser). `role` is trustworthy to read here now that
+    //     only an admin can set it.
+    //   - nobody else. The bookkeeping signup and referrals do on SOMEONE
+    //     ELSE's document — the referrer's referralCount, the duplicate-phone
+    //     block on accounts sharing a number, the referrers' reward totals —
+    //     is done by Cloud Functions (completeSignup and
+    //     creditNodePurchaseReferral in functions/referralLedger.js), which
+    //     re-derive each value instead of taking it from the caller. Any
+    //     signed-in user used to be allowed those writes here, which let
+    //     anyone add to anyone's referralCount or reward totals, or set anyone's
+    //     phoneDuplicateBlocked (a transfer block). getUserData now fills in a
+    //     missing referralCode only on the caller's own document.
+    function isOwner(email) {
+      return request.auth != null && request.auth.token.email == email;
     }
 
-    // Per-user subcollections (notifications, contacts, …).
-    match /users/{email}/{sub=**} {
+    // A new document may carry only the default privileges.
+    function isUnprivileged(data) {
+      return data.get('role', 'user') == 'user'
+        && data.get('isAdmin', false) == false
+        && data.get('permissions', null) == null;
+    }
+
+    // `get(key, default)` because most documents carry none of these keys,
+    // and reading a missing field would deny the write.
+    function keepsOrLowers(key, lowest) {
+      return request.resource.data.get(key, lowest) == lowest
+        || request.resource.data.get(key, lowest) == resource.data.get(key, lowest);
+    }
+    function keepsPrivilege() {
+      return keepsOrLowers('role', 'user')
+        && keepsOrLowers('isAdmin', false)
+        && keepsOrLowers('permissions', null);
+    }
+
+    function isPartner() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.get('role', 'user') == 'partner';
+    }
+    function isInvitationStub(data) {
+      return data.keys().hasOnly(['email', 'role', 'partnerCode', 'status', 'createdAt'])
+        && data.get('role', 'user') == 'user'
+        && data.get('status', '') == 'PendingActivation';
+    }
+
+    match /users/{email} {
+      allow read: if request.auth != null;
+      allow create: if (isOwner(email) && isUnprivileged(request.resource.data))
+        || (isPartner() && isInvitationStub(request.resource.data));
+      allow update: if isOwner(email) && keepsPrivilege();
+      allow delete: if isOwner(email);
+      allow write: if isAdmin();
+    }
+
+    // Per-user subcollections (notifications, contacts, …). Still open to any
+    // signed-in user: signup writes the referrer's contacts, and several
+    // features write other users' notifications.
+    //
+    // This used to be `match /users/{email}/{sub=**}`. In rules version 2 a
+    // `=**` wildcard matches ZERO or more segments, so that pattern also
+    // matched users/{email} itself and granted any signed-in user write on
+    // every users document, whatever the rule above said. Naming the
+    // subcollection segment makes it match subcollection documents only.
+    match /users/{email}/{subcollection}/{rest=**} {
       allow read, write: if request.auth != null;
+    }
+
+    // Referral reward rates and the events that earn them. The server takes
+    // the rates from here when it credits a node purchase
+    // (creditNodePurchaseReferral), so a client that could write this could
+    // still set its referrer's reward. Read by the app (getReferralConfig),
+    // written only by the admin console (AdminReferrals).
+    match /referral_configs/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // RP rates drive every award the server makes, so a client that can write

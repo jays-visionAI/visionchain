@@ -198,6 +198,39 @@ permit on chain and only then failed inside `transferFrom`. Now the client
 refuses before signing and names what it could not resolve, and the gateway
 rejects a non-address `to` before anything is signed.
 
+### Any signed-in user could make themselves an admin
+
+Every admin Cloud Function (adminFundPool included) treated a caller as an
+admin when their own `users/{email}.role` was `"admin"`, and some also took
+`isAdmin: true` or an `admins/{id}` document. The rules let the owner write any
+field of that document, and the catch-all, plus `match /users/{email}/{sub=**}`
+(in rules v2 `=**` also matches zero segments, so that "subcollections" rule
+covered the users document itself), let any signed-in user write anyone's
+users document and create `admins` documents. `sendAdminBroadcast` took the
+admin's email from the request body with no token at all.
+
+Fix: admin is the `admin` custom claim, checked in one place,
+`functions/adminGate.js`, by every admin endpoint; the admin console's login
+reads the claim too. `firestore.rules` stops clients granting themselves
+`role` / `isAdmin` / `permissions`, stops the catch-all and the subcollection
+rule writing users documents, closes `admins`, and accepts the claim in
+`isAdmin()`. No client writes another user's users document any more: the
+referral count, duplicate-phone flags and referral reward totals that signup
+and node purchases wrote there are Cloud Functions (`completeSignup`,
+`creditNodePurchaseReferral` in `functions/referralLedger.js`), which derive
+each value themselves. The admin-role check mentioned in the next section is
+this claim now.
+
+**Deploy order matters** (claims → Functions → frontend → rules): see
+`docs/pending/admin-claims-deploy.md`, which also lists two behaviour changes
+to decide on first (duplicate-phone flagging starts working; node purchases
+credit no reward while the license contract is not deployed). Tests:
+`node functions/test/adminGate.test.cjs` (19 checks),
+`functions/test/referralLedger.test.cjs` (36 cases) and
+`scripts/check-firestore-rules-users.mjs` (54 cases, also run with every
+pending rules patch applied) under the emulator, all mutation-tested, plus
+`scripts/check-referral-flows-e2e.mjs` end to end.
+
 ### Admin endpoints guarded by a published string
 
 `adminSetAPY` and `adminFundPool` were `onRequest({ invoker: "public" })`

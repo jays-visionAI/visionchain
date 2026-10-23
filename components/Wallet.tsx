@@ -1288,11 +1288,15 @@ const Wallet = (): JSX.Element => {
                 setLastTxHash(receipt.hash);
                 alert(`Successfully deployed ${nodeType} Node! Tx: ${receipt.hash}`);
 
-                // 5. Trigger Referral Rewards
-                const vcnAmount = nodeType === 'Enterprise' ? 500000 : 70000;
-                import('../services/firebaseService').then(m => {
-                    m.processReferralRewards('token_sale', userProfile().email, vcnAmount, 'VCN', receipt.hash);
-                });
+                // 5. Trigger Referral Rewards. The server reads the purchase
+                // and its amount from the chain; this wallet's signature is
+                // what proves the purchase belongs to this account.
+                const buyerEmail = userProfile().email;
+                import('../services/firebaseService').then(async m => {
+                    const signature = await new ethers.Wallet(privateKey).signMessage(
+                        m.nodePurchaseReferralMessage(receipt.hash, buyerEmail));
+                    await m.processReferralRewards(receipt.hash, signature);
+                }).catch(e => console.error('[Referral] Could not claim node purchase rewards:', e));
             } else if (action.type === 'disk_unlock') {
                 const encrypted = WalletService.getEncryptedWallet(userProfile().email);
                 if (!encrypted) throw new Error("Local wallet key not found.");
