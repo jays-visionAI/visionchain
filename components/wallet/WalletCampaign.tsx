@@ -33,7 +33,7 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
         try {
             const provider = new ethers.JsonRpcProvider('https://api.visionchain.co/rpc-proxy');
             const stakingContract = new ethers.Contract(
-                '0x746a48E39dC57Ff14B872B8979E20efE5E5100B1',
+                '0x009326c391012593Aeca601B09c02545E00Aa818', // BridgeStaking (ADDRESSES.BRIDGE_STAKING in services/contractService.ts)
                 ['function totalStaked() view returns (uint256)'],
                 provider
             );

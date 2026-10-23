@@ -806,6 +806,12 @@ const STORAGE_REGISTRY_ABI = [
   "function getNetworkStats() external view returns (uint256,uint256,uint256,uint256)",
 ];
 
+// recordProofResult reverts for a node StorageRegistry does not know, and the
+// storage proof handler sends it with a fixed gasLimit and no receipt wait, so
+// the revert never surfaced. The handler preflights the first write on each
+// instance and logs the revert reason once; the sends themselves are unchanged.
+let storageProofPreflightDone = false;
+
 const STORAGE_PROOF_ABI = [
   "function issueChallenges(bytes32[] challengeIds, bytes32[] nodeIds, bytes32[] chunkHashes, uint256[] offsets, uint256[] readBytesArr) external",
   "function submitProofs(bytes32[] challengeIds, bytes32[] proofHashes) external",
@@ -11740,7 +11746,7 @@ exports.agentGateway = onRequest({
           success: true,
           network: {
             name: "Vision Chain",
-            chain_id: 8888,
+            chain_id: 3151909,
             rpc_url: RPC_URL,
             latest_block: latestBlock,
             token: {
@@ -18317,6 +18323,18 @@ exports.agentGateway = onRequest({
               const recordable = enforcement === "enforce"
                 ? (r.status === "verified" || r.status === "failed" || r.status === "not_found" || r.status === "expired")
                 : r.status === "verified";
+              if (recordable && !storageProofPreflightDone) {
+                try {
+                  await registryContract.recordProofResult.staticCall(nodeIdBytes, r.status === "verified");
+                  storageProofPreflightDone = true;
+                } catch (preflightErr) {
+                  // Anything other than a revert (RPC down) is left to the send below.
+                  if (preflightErr.code === "CALL_EXCEPTION") {
+                    storageProofPreflightDone = true;
+                    console.warn(`[Storage Proof] On-chain proof writes revert: StorageRegistry ${STORAGE_REGISTRY_ADDRESS} rejects recordProofResult for node ${nodeId} with "${preflightErr.reason || preflightErr.shortMessage}". "Node not registered" means the node was never registered on StorageRegistry. The writes are still sent and revert on chain; proof results are kept in Firestore only. Logged once per instance.`);
+                  }
+                }
+              }
               if (recordable) {
                 await registryContract.recordProofResult(nodeIdBytes, r.status === "verified", { gasLimit: 100000, gasPrice: ethers.parseUnits("1", "gwei") });
               }

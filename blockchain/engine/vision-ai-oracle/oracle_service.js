@@ -6,7 +6,10 @@ const axios = require('axios');
 // In production, these come from .env
 const RPC_URL = "https://rpc.visionchain.co";
 const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "YOUR_PRIVATE_KEY"; // Must be the 'oracleAddress' in MiningPool
-const MINING_POOL_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"; // From previous deploy log
+// MiningPool is not deployed on Vision Chain. The old default here
+// (0xCf7Ed3Ac...) is the frontend's Vesting address and has no code either,
+// so the address must be supplied and is checked for code at startup.
+const MINING_POOL_ADDRESS = process.env.MINING_POOL_ADDRESS;
 const NODE_LICENSE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 const SEQUENCER_API = "https://api.visionchain.co/health"; // To check network load
 
@@ -29,6 +32,13 @@ async function main() {
 
     // Setup Provider & Signer
     const provider = new ethers.JsonRpcProvider(RPC_URL);
+    try {
+        await requireContract(provider, "MiningPool (MINING_POOL_ADDRESS)", MINING_POOL_ADDRESS);
+        await requireContract(provider, "NodeLicense", NODE_LICENSE_ADDRESS);
+    } catch (e) {
+        console.error(`❌ ${e.message}`);
+        process.exit(1);
+    }
     // Be careful with Private Keys in code. In prod, use secure vault.
     // For this demo, we assume the deployer (Account 0) is the Oracle.
     // Hardhat Account #0 Private Key for dev/testnet (matches setup_node.sh)
@@ -47,6 +57,18 @@ async function main() {
             console.error("❌ AI Cycle Error:", e);
         }
     }, 60000); // Run every minute (for demo purposes) -> In prod, daily or hourly
+}
+
+// Refuse to start against an address with no contract: every call would
+// otherwise fail with an opaque decode error, once a minute, forever.
+async function requireContract(provider, name, address) {
+    if (!address || !ethers.isAddress(address)) {
+        throw new Error(`${name} is not set to a valid address (got: ${address || "nothing"}).`);
+    }
+    const code = await provider.getCode(address);
+    if (code === "0x") {
+        throw new Error(`${name} has no contract code at ${address} on ${RPC_URL}; it is not deployed there.`);
+    }
 }
 
 async function runAIAnalysis(miningPool, nodeLicense) {

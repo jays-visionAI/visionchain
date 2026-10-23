@@ -2,9 +2,14 @@
  * Check TSS signer wallet balances on both chains
  */
 
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const { ethers } = require('ethers');
 
-const TSS_KEY = '0x78ef903e82813aebe7ff3dfb46581520435c70f8b05d8fa1d728a2bebc3179b0';
+const TSS_KEY = process.env.TSS_PRIVATE_KEY;
+if (!TSS_KEY) {
+    console.error('Set TSS_PRIVATE_KEY (see .env.example; it is not stored in this repo).');
+    process.exit(1);
+}
 
 async function checkBalances() {
     const wallet = new ethers.Wallet(TSS_KEY);

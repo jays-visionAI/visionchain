@@ -11,17 +11,17 @@ set -e
 PROJECT_DIR="/home/admin/vision-shared-sequencer"
 DEPLOY_DIR="$PROJECT_DIR/deploy/v2-testnet"
 CHAIN_ID=3151909
-PASSWORD="visionchain2026"
+PASSWORD="${GETH_KEYSTORE_PASSWORD:?set GETH_KEYSTORE_PASSWORD (geth keystore password; not stored in this repo)}"
 GETH_IMAGE="ethereum/client-go:v1.13.15"
 
 # Executor wallet (for Paymaster/AgentGateway - key stored in Firebase Secrets)
 EXECUTOR_ADDR="08a1b183a53a0f8f1d875945d504272738e3af34"
 
-# Node 1 uses the Hardhat default key (known PK)
-NODE1_PK="ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+# Node 1 used the Hardhat default key (account #0); now read from the environment
+NODE1_PK="${NODE1_PK:?set NODE1_PK (not stored in this repo)}"
 
-# Nodes 2-5 use known PKs (from previous validator setup)
-NODE2_PK="be145d080d2138cdedd09f69abfa026be4ff21fc0d08b715f666211fc40980a1"
+# Node 2 uses a known PK (from previous validator setup), read from the environment; nodes 3-5 are random
+NODE2_PK="${NODE2_PK:?set NODE2_PK (not stored in this repo)}"
 NODE3_PK=$(openssl rand -hex 32)
 NODE4_PK=$(openssl rand -hex 32)
 NODE5_PK=$(openssl rand -hex 32)

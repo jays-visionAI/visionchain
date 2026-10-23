@@ -109,10 +109,16 @@ export const runSchedulerTick = async () => {
     // 2. Process Jobs
     console.log(`-> Processing ${eligibleJobs.length} eligible jobs.`);
 
-    const EXECUTOR_PRIVATE_KEY = process.env.VITE_EXECUTOR_PK || '';
+    // Not a VITE_ name: if this read ever became import.meta.env, Vite would
+    // inline a VITE_ value into the browser bundle. The old name still works
+    // as a fallback so an existing runner setup keeps running.
+    const EXECUTOR_PRIVATE_KEY = process.env.VCN_EXECUTOR_PK || process.env.VITE_EXECUTOR_PK || '';
     if (!EXECUTOR_PRIVATE_KEY) {
-        console.error("Critical: VITE_EXECUTOR_PK is missing.");
+        console.error("Critical: VCN_EXECUTOR_PK is missing.");
         return;
+    }
+    if (!process.env.VCN_EXECUTOR_PK) {
+        console.warn("VITE_EXECUTOR_PK is deprecated; set VCN_EXECUTOR_PK instead.");
     }
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);

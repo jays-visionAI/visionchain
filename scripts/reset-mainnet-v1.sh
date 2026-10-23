@@ -14,22 +14,24 @@ set -e
 PROJECT_DIR="/home/admin/vision-shared-sequencer"
 DEPLOY_DIR="$PROJECT_DIR/deploy/v1-mainnet"
 CHAIN_ID=3151909
-PASSWORD="visionchainmainnet2026"
+PASSWORD="${GETH_KEYSTORE_PASSWORD:?set GETH_KEYSTORE_PASSWORD (geth keystore password; not stored in this repo)}"
 GETH_IMAGE="ethereum/client-go:v1.13.15"
 
 # ==============================
 # SECURE MAINNET CREDENTIALS
+# Read from the environment. If you rotate a key, update the matching
+# address (EXECUTOR_ADDR, NODE_ADDRS) or enode (NODE*_PUB) below too.
 # ==============================
 # Executor (Paymaster / AI Agent / Faucet)
-EXECUTOR_PK="406de1fd9dd5c9cc60a4bde5fc7969407f00ccd33df98f2cdedd0c4a3c84e6eb"
+EXECUTOR_PK="${EXECUTOR_PK:?set EXECUTOR_PK (not stored in this repo)}"
 EXECUTOR_ADDR="1695b3E7421B5A1b76171720Ae29782Bf2209d6F"
 
 # Validators (Consensus Signers)
-NODE1_PK="398115f7d186ba066e06b44f38372c17b55ff50707c57880a20fc38bb370fabe"
-NODE2_PK="e5aeb7aa7b1f945ab4cc62a91ba3edf7cc0734bda818ba677a97f5985f308063"
-NODE3_PK="3caaba9785fb2a34065cf1a0d6521c195eb214c06d503c3c0e47981f76bc2a9b"
-NODE4_PK="9fa15d5477f10be2fe518ac77d886d35b6b3078fb64982b5ab2a32606433f26c"
-NODE5_PK="add23f474939dc3caa165add4837df190511b20b986ac748f510776a53746be0"
+NODE1_PK="${NODE1_PK:?set NODE1_PK (not stored in this repo)}"
+NODE2_PK="${NODE2_PK:?set NODE2_PK (not stored in this repo)}"
+NODE3_PK="${NODE3_PK:?set NODE3_PK (not stored in this repo)}"
+NODE4_PK="${NODE4_PK:?set NODE4_PK (not stored in this repo)}"
+NODE5_PK="${NODE5_PK:?set NODE5_PK (not stored in this repo)}"
 
 NODE_ADDRS=(
   "B8fe232F6E9De248fDBA4964eC048144C25E4fe0"  # Node 1
@@ -40,11 +42,11 @@ NODE_ADDRS=(
 )
 
 # P2P NodeKeys (Identity keys to guarantee consistent enodes)
-NODE1_NK="179d3e87fa3dc0d4c2030882188569e5912241bd05dbd297da03d6ec4b29edf3"
-NODE2_NK="176a68967af3b4b9a768e5557f127fe171039e4ce0d8b3727726457bc985811d"
-NODE3_NK="8415c141a84fff73e06a21b06cbbea1524f3cb8d6d791a86d360ca04a02cc5ec"
-NODE4_NK="5ce164b13a0faad911d4771b2c6799e67d2b5fc3f6a60bc664ee0c3319c446fe"
-NODE5_NK="c399ec6f05f2b3a7e871a7ac847fb84520bd56750f05126176754dfcb15b73a1"
+NODE1_NK="${NODE1_NK:?set NODE1_NK (not stored in this repo)}"
+NODE2_NK="${NODE2_NK:?set NODE2_NK (not stored in this repo)}"
+NODE3_NK="${NODE3_NK:?set NODE3_NK (not stored in this repo)}"
+NODE4_NK="${NODE4_NK:?set NODE4_NK (not stored in this repo)}"
+NODE5_NK="${NODE5_NK:?set NODE5_NK (not stored in this repo)}"
 
 # Evaluated Enode PubKeys (Generated from NodeKeys)
 NODE1_PUB="90c110c3dcacf21500c0a998d769430f052498623a8469c2c2a6932d189f2ca5b68f54bac18ba5c677b3fdd5f9ec7dabf88a189034d1e6e0cee9cfacf3eb2e9b"
@@ -339,7 +341,7 @@ echo "  Core Validator Setup (Static): Node1 to Node5"
 echo ""
 echo "  [EXECUTOR WALLET] (Store securely!):"
 echo "  Address: 0x1695b3E7421B5A1b76171720Ae29782Bf2209d6F"
-echo "  Private Key: 406de1fd9dd5c9cc60a4bde5fc7969407f00ccd33df98f2cdedd0c4a3c84e6eb"
+echo "  Private Key: (not printed; it is \$EXECUTOR_PK)"
 echo ""
 echo "  Next Steps for Server Admin:"
 echo "  1. Update Hardhat / smart contract deploy configs to use the EXECUTOR KEY."

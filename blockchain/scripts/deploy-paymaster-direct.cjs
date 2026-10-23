@@ -10,7 +10,10 @@ const path = require('path');
 
 async function main() {
     const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-    const ADMIN_PK = process.env.PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    const ADMIN_PK = process.env.PRIVATE_KEY;
+    if (!ADMIN_PK) {
+        throw new Error("Set PRIVATE_KEY to the deployer key (it is not stored in this repo).");
+    }
 
     // EntryPoint v0.7 address (standard)
     const ENTRY_POINT_ADDRESS = "0x0000000071727de22e5e9d8baf0edac6f37a0521";
