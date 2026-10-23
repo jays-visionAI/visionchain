@@ -1,54 +1,75 @@
 # Handoff — `main`
 
 Written for the next engineer or agent session picking this up cold. It covers
-the `main` branch only. Last updated 2026-10-18.
+the `main` branch only. Last updated 2026-10-24.
 
 ## State in one paragraph
 
-`main` is **8 commits ahead of `origin/main` and nothing is pushed**. Pushing
-`main` deploys production (`.github/workflows/deploy-production.yml` triggers
-on push to `main`, building with secrets from GitHub), so the push is a release
-decision, not a housekeeping step. The working tree is clean apart from
-regenerable build output. Four of the eight commits fix live money paths that
-are **still broken in production until Cloud Functions are deployed**.
+`main` is **23 commits ahead of `origin/main` (`e7f87f3`, which is also what
+GitHub has as of 2026-10-24) and nothing is pushed**.
+- Pushing `main` deploys the frontend to production. The workflow is
+  `.github/workflows/deploy-production.yml`, which deploys to Cloudflare
+  Pages.
+- Functions and Firestore rules deploy separately, with the Firebase CLI.
+- **The repository is public.** A push also publishes this file and
+  `docs/pending/`, which describe holes that stay open until the rules are
+  deployed.
 
-```
-917ce5e fix(transfer): a request to send later is no longer sent now
-90acd86 chore(secrets): stop tracking .env.production and .env.staging
-43ebba6 fix(contracts): the mining pool address was the VCN token
-d3508ed fix(bridge): pay what the chain locked, once — and refuse before charging
-ea2458d feat(admin): look up an investor's VCN purchase by ID
-4cde258 feat(solvent): vUSD, reserve, perps and the Lock market (testnet pilot)
-c220f25 perf(bundle): stop preloading admin, locales and staking on every page
-0ee8dfa chore(security): drop the client-bundled Resend key; RPC via the proxy
-```
+So the push is a release decision, taken in the order below.
 
-> **Branch `fix/agent-gateway-enforcement`** (cut from `main` at `8de290a`,
-> local only) adds two commits on top of the above: the Agent Gateway now
-> enforces SBT-bound keys, declared hosting scopes and fail-closed fees. See
-> [The agent gateway did not enforce its own rules](#the-agent-gateway-did-not-enforce-its-own-rules).
-> Its behaviour changes are integrator-visible; review that list before
-> merging it into `main`.
+On 2026-10-24 six fix branches were merged into `main`. There were no
+conflicts, and every check in [Verification commands](#verification-commands)
+passes on the result.
 
-## Do these first
+| branch | fixes |
+|---|---|
+| `claude/recursing-chaum-17d16b` | `agents` / `fee_reconciliation` open to any signed-in user (a pending rules patch) |
+| `claude/pensive-turing-7fbf7d` | any user could make themselves an admin: admin is now a custom claim |
+| `claude/peer-bookkeeping-server` | clients wrote other users' documents: referral bookkeeping moves to Cloud Functions |
+| `fix/agent-gateway-enforcement` | the agent gateway did not enforce SBT-bound keys, declared scopes or fees |
+| `claude/heuristic-faraday-25bc0e` | wrong chain id and addresses, a silent revert; committed keys read from the environment |
+| `claude/recursing-torvalds-fa44c5` | public RPC reached admin, clique, miner and node keys (runbook: `docs/pending/rpc-lockdown.md`) |
 
-1. **Apply and deploy the Firestore rules patches.** `transactions` is still
-   `allow read, write: if true` in the live ruleset, which is the other half of
-   `d3508ed`, and every agent's plaintext API key is readable by any signed-in
-   user. See [Pending: the rules patches](#pending-the-rules-patches).
-2. **Deploy functions.** The bridge payout gate, the transfer guards and the
-   admin callables are all server-side and inert until then:
+## Do these first — in this order
+
+0. **Decide the behaviour changes** before anything ships. There are two
+   lists:
+   - The agent gateway's integrator-visible list, in
+     [The agent gateway did not enforce its own rules](#the-agent-gateway-did-not-enforce-its-own-rules).
+     It includes agents with revoked SBTs being refused, and 29 aliases that
+     were free becoming priced.
+   - The referral list, under "Decide before deploying" in
+     `docs/pending/admin-claims-deploy.md`. It includes duplicate-phone
+     flagging starting to work.
+1. **Grant the admin claims** (`docs/pending/admin-claims-deploy.md` §1–2).
+   This must come before Functions, or every admin is locked out of the admin
+   endpoints.
+2. **Deploy Functions.** The bridge payout gate, the transfer guards, the admin
+   gate, the referral ledger and the gateway enforcement are all server-side
+   and inert until then:
    `cd functions && npm test && firebase deploy --only functions`.
-   Note that `adminSetAPY` and `adminFundPool` changed from `onRequest` to
-   `onCall`, so the old HTTPS URLs stop existing — the admin UI already calls
-   them as callables.
-3. **Rotate every value that was in `.env.production` / `.env.staging`.**
-   Untracking them (`90acd86`) does not remove them from history. The key in
-   them was the public Hardhat/anvil account #0 key, and that address holds
-   nothing, but it is published and `components/admin/AdminDeFi.tsx` lists it
-   as privileged.
-4. **Decide on the 40 VCN refund.** Its cause is now understood and fixed
-   (see below); the refund itself needs a key and is an operational call.
+   `adminSetAPY` and `adminFundPool` changed from `onRequest` to `onCall`, so
+   the old HTTPS URLs stop existing; the admin UI already calls them as
+   callables.
+3. **Push `main`.** This deploys the frontend.
+4. **Apply both rules patches and deploy the rules,** right after the
+   frontend is live: the new `users` rules refuse writes the old frontend
+   makes. See [Pending: the rules patches](#pending-the-rules-patches). Until
+   this step, `transactions` stays writable by anyone and `agents` (with
+   plaintext API keys) by any signed-in user, and after step 3 that is
+   public knowledge. So keep the gap between 3 and 4 short.
+
+These can run alongside 1–4 and should not wait for them:
+
+5. **Rotate the published secrets.** Follow `docs/pending/secrets-to-rotate.md`
+   (the TSS/deployer key `0x6605…F794` first), plus every value that was in
+   `.env.production` / `.env.staging`. Untracking them (`90acd86`) did not
+   remove them from history.
+6. **Lock down the public RPC on the nine nodes:** `docs/pending/rpc-lockdown.md`.
+   The reset scripts now read keys and passwords from the environment
+   (`GETH_KEYSTORE_PASSWORD`, `EXECUTOR_PK`, `NODE*_PK`, `NODE*_NK`).
+7. **Decide on the 40 VCN refund.** Its cause is understood and fixed (see
+   below); the refund itself needs a key and is an operational call.
 
 ## Pending: the rules patches
 
@@ -288,13 +309,20 @@ under the catch-all rule in `firestore.rules`, which includes plaintext
 | | |
 |---|---|
 | `cd functions && npm test` | bridge payout gate, 23 checks; agent gateway policy, 36 checks |
+| `node functions/test/adminGate.test.cjs` | admin claim gate, 19 checks |
 | `npm run check:intent` | voice transfer intent, 18 checks |
-| `node scripts/check-firestore-rules.mjs` | rules, under the emulator (see above) |
-| `npx tsc --noEmit -p .` | ~475 pre-existing errors. **Compare, never expect zero** |
+| `node scripts/check-firestore-rules.mjs` | `transactions` / `agents` rules under the emulator (see above): 37/37 with both patches |
+| `node scripts/check-firestore-rules-users.mjs` | `users` / `admins` rules under the emulator, 54 cases, with and without the patches |
+| `node functions/test/referralLedger.test.cjs` | referral ledger under the emulator, 36 cases |
+| `scripts/check-referral-flows-e2e.mjs` | signup → activation → node purchase end to end (auth, firestore and functions emulators plus anvil; see its header), 27 checks |
+| `cd blockchain/engine/vision-shared-sequencer && npm test` | RPC allowlist, 14 tests; the `/rpc-proxy` one needs `firebase-admin`, which the sequencer's package.json lacks, so set `NODE_PATH=../../../functions/node_modules` |
+| `npx tsc --noEmit -p .` | pre-existing errors. **Compare, never expect zero** |
 | `npx vite build --mode production` | must finish clean |
 
 The tsc baseline matters and it is not a fixed number: it was 474 on 2026-10-15
-and 475 on 2026-10-18 with no source change between them — installing a dev
+and 475 on 2026-10-18 with no source change between them, and 57 on
+2026-10-24 with another `node_modules` — the same 57 before and after the
+merges — installing a dev
 dependency moves it, because most of the errors come from
 `vision-mobile-node/src/screens/*` and shift with the type graph. So measure it
 twice in the same tree: stash your change, count, unstash, count. Anything
