@@ -222,7 +222,7 @@ test("signup: a grand-referrer that is the new account itself is dropped", async
   assert.equal(r.grandReferrer, "");
 });
 
-test("signup: a shared phone flags every account holding it, in any stored format, and the new one", async () => {
+test("signup: a shared phone, in any stored format, blocks only the new account and records who holds it", async () => {
   await seed("users/a@x.com", { email: "a@x.com", phone: "010-1234-5678" });
   await seed("users/b@x.com", { email: "b@x.com", phone: "+821012345678" });
   await seed("users/c@x.com", { email: "c@x.com", phone: "01012345678" });
@@ -232,12 +232,14 @@ test("signup: a shared phone flags every account holding it, in any stored forma
   AUTH["new@x.com"] = 5000;
   const r = await ledger.completeSignup(caller("new@x.com"));
   assert.equal(r.phoneDuplicate, true);
-  for (const e of ["a@x.com", "b@x.com", "c@x.com", "new@x.com"]) {
-    assert.equal((await user(e)).phoneDuplicateBlocked, true, `${e} should be flagged`);
+  assert.equal((await user("new@x.com")).phoneDuplicateBlocked, true, "the new account is blocked");
+  // Signup has no SMS check: blocking the existing holders would let anyone
+  // freeze someone else's transfers by signing up with their number.
+  for (const e of ["a@x.com", "b@x.com", "c@x.com", "archived@x.com", "other@x.com"]) {
+    assert.equal((await user(e)).phoneDuplicateBlocked, undefined, `${e} should not be blocked`);
   }
-  for (const e of ["archived@x.com", "other@x.com"]) {
-    assert.equal((await user(e)).phoneDuplicateBlocked, undefined, `${e} should not be flagged`);
-  }
+  const record = (await db.collection(SIGNUP_COLLECTION).doc("new@x.com").get()).data();
+  assert.deepEqual([...record.phoneSharers].sort(), ["a@x.com", "b@x.com", "c@x.com"]);
 });
 
 test("signup: a non-Korean number does not match a Korean one with the same last 8 digits", async () => {
@@ -250,14 +252,18 @@ test("signup: a non-Korean number does not match a Korean one with the same last
   assert.equal((await user("kr@x.com")).phoneDuplicateBlocked, undefined);
 });
 
-test("signup: once the number has a primary account, only that one is flagged", async () => {
+test("signup: once the number has a primary account, only that one is recorded as its holder", async () => {
   await seed("users/primary@x.com", { email: "primary@x.com", phone: "+82-10-1234-5678", isPhonePrimary: true });
   await seed("users/second@x.com", { email: "second@x.com", phone: "+82-10-1234-5678", isPhonePrimary: false, accountStatus: "secondary" });
   await seed("users/new@x.com", { email: "new@x.com", phone: "+82-10-1234-5678" });
   AUTH["new@x.com"] = 5000;
   await ledger.completeSignup(caller("new@x.com"));
-  assert.equal((await user("primary@x.com")).phoneDuplicateBlocked, true);
-  assert.equal((await user("second@x.com")).phoneDuplicateBlocked, undefined);
+  const record = (await db.collection(SIGNUP_COLLECTION).doc("new@x.com").get()).data();
+  assert.deepEqual(record.phoneSharers, ["primary@x.com"]);
+  assert.equal((await user("new@x.com")).phoneDuplicateBlocked, true);
+  for (const e of ["primary@x.com", "second@x.com"]) {
+    assert.equal((await user(e)).phoneDuplicateBlocked, undefined, `${e} should not be blocked`);
+  }
 });
 
 test("signup: no duplicate, no flags (and none on the new account)", async () => {

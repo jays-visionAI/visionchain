@@ -5,7 +5,7 @@ the `main` branch only. Last updated 2026-10-24.
 
 ## State in one paragraph
 
-`main` is **23 commits ahead of `origin/main` (`e7f87f3`, which is also what
+`main` is **24 commits ahead of `origin/main` (`e7f87f3`, which is also what
 GitHub has as of 2026-10-24) and nothing is pushed**.
 - Pushing `main` deploys the frontend to production. The workflow is
   `.github/workflows/deploy-production.yml`, which deploys to Cloudflare
@@ -32,15 +32,18 @@ passes on the result.
 
 ## Do these first — in this order
 
-0. **Decide the behaviour changes** before anything ships. There are two
-   lists:
-   - The agent gateway's integrator-visible list, in
+0. **The behaviour changes were decided on 2026-10-24:**
+   - The agent gateway ships as it is. See
      [The agent gateway did not enforce its own rules](#the-agent-gateway-did-not-enforce-its-own-rules).
-     It includes agents with revoked SBTs being refused, and 29 aliases that
-     were free becoming priced.
-   - The referral list, under "Decide before deploying" in
-     `docs/pending/admin-claims-deploy.md`. It includes duplicate-phone
-     flagging starting to work.
+     Tell integrators before step 2: agents with revoked SBTs are refused,
+     29 aliases that were free become priced, and fees fail closed.
+   - A shared phone at signup blocks **only the new account**. The accounts
+     already holding the number are recorded in `signup_records`, not
+     blocked: there is no SMS check, so blocking them would let anyone freeze
+     someone else's transfers.
+   - Node purchases credit referral rewards only for a real `LicenseMinted`.
+   - `docs/pending/` stays as it is, and the gap between steps 3 and 4 is kept
+     short.
 1. **Grant the admin claims** (`docs/pending/admin-claims-deploy.md` §1–2).
    This must come before Functions, or every admin is locked out of the admin
    endpoints.
@@ -250,9 +253,9 @@ each value themselves. The admin-role check mentioned in the next section is
 this claim now.
 
 **Deploy order matters** (claims → Functions → frontend → rules): see
-`docs/pending/admin-claims-deploy.md`, which also lists two behaviour changes
-to decide on first (duplicate-phone flagging starts working; node purchases
-credit no reward while the license contract is not deployed). Tests:
+`docs/pending/admin-claims-deploy.md`, which also lists the behaviour changes
+decided on 2026-10-24 (a shared phone blocks only the new account; node
+purchases credit no reward while the license contract is not deployed). Tests:
 `node functions/test/adminGate.test.cjs` (19 checks),
 `functions/test/referralLedger.test.cjs` (36 cases) and
 `scripts/check-firestore-rules-users.mjs` (54 cases, also run with every

@@ -262,7 +262,9 @@ function createReferralLedger({
 
   /**
    * completeSignup: the referral credit and the duplicate-phone flagging that
-   * signup and invitation activation used to write from the browser.
+   * signup and invitation activation used to write from the browser. A shared
+   * phone blocks the new account only; the accounts already holding the number
+   * are listed in the signup record, not blocked.
    *
    * request.data: { referralCode?: string } — the code the user signed up
    * with (activation passes its partnerCode). The referrer is whoever owns
@@ -324,10 +326,11 @@ function createReferralLedger({
         tx.update(owner.ref, { referralCount: FieldValue.increment(1) });
       }
 
+      // Only the new account is blocked. Signup has no SMS check, so blocking
+      // the accounts already holding the number would let anyone freeze
+      // someone else's transfers by signing up with their number (decided
+      // 2026-10-24). The record above keeps who shares it, for review.
       const blockedAt = new Date(now()).toISOString();
-      for (const d of sharers) {
-        tx.set(d.ref, { phoneDuplicateBlocked: true, phoneDuplicateBlockedAt: blockedAt }, { merge: true });
-      }
 
       if (caller.exists && (referrer || sharers.length)) {
         tx.set(callerRef, {

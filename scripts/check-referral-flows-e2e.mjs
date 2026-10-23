@@ -145,8 +145,8 @@ try {
         (await user('r@e2e.test')).referralCount === 1 && (await user('g@e2e.test')).referralCount === 1);
     const b = await user('b@e2e.test');
     check('second-level signup: grand-referrer recorded', b.grandReferrerId === 'g@e2e.test');
-    check('shared phone: the existing account is flagged', (await user('p@e2e.test')).phoneDuplicateBlocked === true);
-    check('shared phone: the new account is flagged', b.phoneDuplicateBlocked === true);
+    check('shared phone: the existing account is not blocked (no SMS check at signup)', (await user('p@e2e.test')).phoneDuplicateBlocked === undefined);
+    check('shared phone: the new account is blocked', b.phoneDuplicateBlocked === true);
     check('shared phone: an unrelated account is not', (await user('q@e2e.test')).phoneDuplicateBlocked === undefined);
 
     // 4. The old client writes are refused now (signed in as B).

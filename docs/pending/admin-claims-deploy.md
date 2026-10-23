@@ -187,9 +187,14 @@ mutation-tested: 16 deliberate breaks, each caught);
 cases flipped to deny, ten new denials, all ten allowed by 1f1dac0's rules);
 `scripts/check-referral-flows-e2e.mjs` (27 checks end to end).
 
-**Decide before deploying — behaviour that changes:**
+**Behaviour that changes** — decided 2026-10-24: the phone flag blocks only
+the new account (below); the other two ship as described.
 
-- **Duplicate-phone flagging starts happening.** It never ran in production:
+- **Duplicate-phone flagging starts happening — for the new account only
+  (decided 2026-10-24; `completeSignup` no longer blocks the accounts already
+  holding the number, it lists them in `signup_records`).** The paragraph
+  below describes the original proposal, which blocked both.
+  It never ran in production:
   `userRegister` searched for the phone *before* creating the account, as a
   signed-out query on `users`, which the rules deny, so it always found
   nothing. On the server it works, so signing up with a phone number another
