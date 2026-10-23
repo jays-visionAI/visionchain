@@ -1,0 +1,78 @@
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -100,6 +100,47 @@
+       allow write: if isAdmin();
+     }
+ 
++    // Agent accounts: one document per registered AI agent, keyed by name.
++    //
++    // P0 SECURITY: there was no rule here, so the catch-all below let ANY
++    // signed-in user read and write every agent. Each document holds the
++    // agent's plaintext `apiKey`, which authorises Agent Gateway calls that
++    // move that agent's VCN, and its server-encrypted `privateKey`. It also
++    // holds what the gateway now enforces on that key — the declared scope
++    // (`hosting.allowed_actions`), the identity (`sbtStatus`,
++    // `walletAddress`) and `status` — so a client that could write here could
++    // undo every one of those checks for any agent.
++    //
++    // Every writer is a Cloud Function (agentGateway, agentExecutor and the
++    // hosted loop) on the Admin SDK, which bypasses these rules. That includes
++    // all the subcollections: transactions, authority_delegations,
++    // authority_audit, kv_store, pipelines, webhooks, webhook_logs,
++    // hosting_logs, node. The only clients are in the admin console: the
++    // agent table (getAllAgents, and its delete button) and the dashboard's
++    // agent count. Note that `isAdmin()` is the email list, not the `role`
++    // field the console's own login checks.
++    match /agents/{agentId} {
++      allow read, write: if isAdmin();
++    }
++    match /agents/{agentId}/{sub=**} {
++      allow read, write: if isAdmin();
++    }
++
++    // API fees the gateway failed to collect or could not confirm
++    // (recordFeeReconciliation in functions/index.js). A server ledger of who
++    // owes what: an admin may read it, and no client may write it — one that
++    // could would erase its own debts or invent someone else's.
++    match /fee_reconciliation/{docId} {
++      allow read: if isAdmin();
++    }
++
++    // Server-owned collections, closed to the catch-all below. Same meaning
++    // as `hasDedicatedRule`; it is a separate predicate only so this change
++    // and the `transactions` one could each land without the other.
++    function isServerOwned(col) {
++      return col == 'agents' || col == 'fee_reconciliation';
++    }
++
+     // Web push device tokens. Written by the browser when a user enables
+     // push, read only by Cloud Functions when sending. A token is a delivery
+     // address, not a secret, but it does identify a device — so a client may
+@@ -131,17 +172,23 @@
+     // that defines a narrower read rule above — which is how a user could
+     // still fetch someone else's push token despite the owner check.
+     match /{col}/{docId} {
+-      allow read: if request.auth != null && !hasDedicatedRule(col);
++      allow read: if request.auth != null
++        && !hasDedicatedRule(col)
++        && !isServerOwned(col);
+       allow write: if request.auth != null
+         && !isRewardLedger(col)
+-        && !hasDedicatedRule(col);
++        && !hasDedicatedRule(col)
++        && !isServerOwned(col);
+     }
+ 
+     match /{col}/{docId}/{sub=**} {
+-      allow read: if request.auth != null && !hasDedicatedRule(col);
++      allow read: if request.auth != null
++        && !hasDedicatedRule(col)
++        && !isServerOwned(col);
+       allow write: if request.auth != null
+         && !isRewardLedger(col)
+-        && !hasDedicatedRule(col);
++        && !hasDedicatedRule(col)
++        && !isServerOwned(col);
+     }
+   }
+ }
