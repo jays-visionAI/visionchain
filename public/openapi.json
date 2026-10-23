@@ -3,7 +3,7 @@
     "info": {
         "title": "Vision Chain Agent Gateway API",
         "version": "5.0.0",
-        "description": "EVM-compatible L1 blockchain with gasless transactions for AI agents. Single POST endpoint with action-based routing. 59 actions across 15 domains.",
+        "description": "EVM-compatible L1 blockchain with gasless transactions for AI agents. Single POST endpoint with action-based routing. 83 actions across 17 domains.",
         "contact": {
             "url": "https://visionchain.co"
         },
@@ -13,7 +13,8 @@
             "token": "VCN",
             "decimals": 18,
             "gasless": true
-        }
+        },
+        "x-catalog": "GET /agentGateway is the authoritative action catalog; x-actions is kept in step with it by functions/scripts/sync-openapi.cjs."
     },
     "servers": [
         {
@@ -107,7 +108,11 @@
                         "type": "string"
                     },
                     "code": {
-                        "type": "integer"
+                        "type": "string",
+                        "description": "Machine-readable reason, when the gateway gives one"
+                    },
+                    "retryable": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -140,7 +145,7 @@
         "/agentGateway": {
             "get": {
                 "summary": "API Discovery",
-                "description": "Returns full API catalog with all 59 actions, parameter schemas, response fields, error codes, and pricing tiers.",
+                "description": "Returns full API catalog with all 83 actions, parameter schemas, response fields, error codes, and pricing tiers.",
                 "security": [],
                 "responses": {
                     "200": {
@@ -150,7 +155,7 @@
             },
             "post": {
                 "summary": "Execute Action",
-                "description": "Single endpoint for all 59 actions. Set 'action' field to specify which action to execute.",
+                "description": "Single endpoint for all 83 actions. Set 'action' field to specify which action to execute.",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -189,11 +194,21 @@
                         "description": "Unauthorized - invalid API key"
                     },
                     "402": {
-                        "description": "Insufficient balance",
+                        "description": "Insufficient VCN balance for the API fee, or the fee could not be collected (code fee_not_collected). The action was not executed.",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/InsufficientBalanceError"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Agent identity (VisionAgentSBT) missing or revoked (code agent_identity_missing | agent_identity_pending | agent_identity_revoked | agent_inactive), action outside the declared hosting scope (code action_not_declared), or a Vision Node is required for T3/T4.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
                                 }
                             }
                         }
@@ -203,6 +218,16 @@
                     },
                     "429": {
                         "description": "Rate limited (60 req/min)"
+                    },
+                    "503": {
+                        "description": "Balance, pricing or identity could not be read (code fee_balance_unavailable | fee_pricing_unavailable | agent_identity_unverifiable). Nothing was executed and no fee was taken; retry.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -576,7 +601,7 @@
                     },
                     "to": {
                         "type": "string",
-                        "description": "Recipient address or agent name"
+                        "description": "Recipient 0x address (names are refused with 400; resolve them first)"
                     },
                     "amount": {
                         "type": "string",
@@ -2133,7 +2158,7 @@
             "auth": true,
             "tier": "T2",
             "cost": "0.1 VCN",
-            "description": "Configure autonomous agent hosting settings.",
+            "description": "Configure autonomous agent hosting and declare the agent's actions. A non-empty allowed_actions is also the API key's scope: afterwards the key may call only those actions plus social.profile, social.leaderboard, system.network_info, system.delete_agent and hosting.*.",
             "request": {
                 "required": [
                     "action"
@@ -2142,29 +2167,81 @@
                     "action": {
                         "const": "hosting.configure"
                     },
-                    "model": {
-                        "type": "string"
+                    "llm_model": {
+                        "type": "string",
+                        "enum": [
+                            "gemini-2.0-flash",
+                            "gemini-3-flash-preview",
+                            "deepseek-chat"
+                        ],
+                        "default": "deepseek-chat"
                     },
                     "system_prompt": {
                         "type": "string"
                     },
-                    "enabled_actions": {
+                    "trigger": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "interval"
+                                ]
+                            },
+                            "interval_minutes": {
+                                "type": "integer",
+                                "minimum": 5,
+                                "maximum": 1440
+                            }
+                        }
+                    },
+                    "allowed_actions": {
                         "type": "array",
                         "items": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Hosted-loop names (balance, transfer, stake, unstake, network_info, leaderboard, staking_info, transactions, referral_outreach, social_promo, content_create, invite_distribute, community_engage), gateway actions (disk.write) or domain wildcards (disk.*). Unknown entries are refused with 400. enabled_actions is accepted as an alias."
+                    },
+                    "max_vcn_per_action": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 5
                     }
                 }
             },
             "response": {
                 "properties": {
-                    "configured": {
-                        "type": "boolean"
-                    },
-                    "settings": {
+                    "hosting": {
                         "type": "object"
+                    },
+                    "api_scope": {
+                        "type": "object",
+                        "properties": {
+                            "restricted": {
+                                "type": "boolean"
+                            },
+                            "declared_actions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "always_allowed": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "estimated_monthly_cost_vcn": {
+                        "type": "string"
                     }
                 }
+            },
+            "errors": {
+                "400": "Invalid model or interval, or unknown entries in allowed_actions"
             }
         },
         "hosting.toggle": {
@@ -2325,6 +2402,897 @@
                     }
                 }
             }
+        },
+        "disk.provision": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Provision disk storage for agent",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.provision"
+                    },
+                    "target_agent": {
+                        "description": "optional"
+                    },
+                    "quota_gb": {
+                        "description": "optional (1-1000, default 5)"
+                    },
+                    "tier": {
+                        "description": "optional (free|standard|premium|enterprise)"
+                    },
+                    "features": {
+                        "type": "array",
+                        "description": "optional (array)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "disk_id": {},
+                    "tenant": {},
+                    "quota_gb": {},
+                    "tier": {},
+                    "features_enabled": {},
+                    "status": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.write": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Upload file to Vision Disk",
+            "request": {
+                "required": [
+                    "action",
+                    "file_name",
+                    "data"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.write"
+                    },
+                    "file_name": {
+                        "description": "required"
+                    },
+                    "data": {
+                        "description": "required (base64)"
+                    },
+                    "file_type": {
+                        "description": "optional"
+                    },
+                    "folder": {
+                        "description": "optional"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "description": "optional (array)"
+                    },
+                    "source_type": {
+                        "description": "optional"
+                    },
+                    "auto_index": {
+                        "type": "boolean",
+                        "description": "optional (boolean)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "file_id": {},
+                    "name": {},
+                    "size": {},
+                    "chunks": {},
+                    "cid": {},
+                    "content_hash": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.read": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Download file from Vision Disk",
+            "request": {
+                "required": [
+                    "action",
+                    "file_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.read"
+                    },
+                    "file_id": {
+                        "description": "required"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "file_id": {},
+                    "name": {},
+                    "type": {},
+                    "size": {},
+                    "data": {},
+                    "content_hash": {},
+                    "cid": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.list": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List files with filters",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.list"
+                    },
+                    "folder": {
+                        "description": "optional"
+                    },
+                    "search": {
+                        "description": "optional"
+                    },
+                    "source_type": {
+                        "description": "optional"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "description": "optional (array)"
+                    },
+                    "limit": {
+                        "description": "optional (1-200)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "total": {},
+                    "files": {
+                        "type": "array"
+                    }
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.delete": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Delete file and its chunks",
+            "request": {
+                "required": [
+                    "action",
+                    "file_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.delete"
+                    },
+                    "file_id": {
+                        "description": "required"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "file_id": {},
+                    "name": {},
+                    "deleted_chunks": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.query": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Semantic search across indexed files",
+            "request": {
+                "required": [
+                    "action",
+                    "query"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.query"
+                    },
+                    "query": {
+                        "description": "required"
+                    },
+                    "model": {
+                        "description": "optional (gemini|openai)"
+                    },
+                    "top_k": {
+                        "description": "optional (1-20)"
+                    },
+                    "filters": {
+                        "description": "optional ({tags, source_type, date_range})"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "query": {},
+                    "model": {},
+                    "total_results": {},
+                    "results": {
+                        "type": "array"
+                    }
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.memory": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Long-term memory CRUD for AI agents",
+            "request": {
+                "required": [
+                    "action",
+                    "operation"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.memory"
+                    },
+                    "operation": {
+                        "description": "required (create|read|update|delete|list|search)"
+                    },
+                    "category": {
+                        "description": "optional"
+                    },
+                    "key": {
+                        "description": "optional"
+                    },
+                    "content": {
+                        "description": "optional"
+                    },
+                    "importance": {
+                        "description": "optional (0-1)"
+                    },
+                    "memory_id": {
+                        "description": "optional"
+                    },
+                    "query": {
+                        "description": "optional"
+                    },
+                    "ttl_days": {
+                        "description": "optional"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "memory_id": {},
+                    "category": {},
+                    "content": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "disk.usage": {
+            "domain": "disk",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Storage usage and quota info",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "disk.usage"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tenant": {},
+                    "usage": {},
+                    "quota": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "mobile_node.register": {
+            "domain": "mobile_node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Register mobile node (requires Firebase auth), get API key + wallet",
+            "request": {
+                "required": [
+                    "action",
+                    "email",
+                    "device_type",
+                    "firebase_id_token"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "mobile_node.register"
+                    },
+                    "email": {
+                        "description": "required"
+                    },
+                    "device_type": {
+                        "description": "required (android|pwa)"
+                    },
+                    "firebase_id_token": {
+                        "description": "required (Firebase ID token; email must match)"
+                    },
+                    "referral_code": {
+                        "description": "optional"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "node_id": {},
+                    "api_key": {},
+                    "wallet_address": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "mobile_node.heartbeat": {
+            "domain": "mobile_node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Send heartbeat (5min WiFi / 30min cellular)",
+            "request": {
+                "required": [
+                    "action",
+                    "mode"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "mobile_node.heartbeat"
+                    },
+                    "mode": {
+                        "description": "required (wifi_full|cellular_min)"
+                    },
+                    "battery_pct": {
+                        "description": "optional"
+                    },
+                    "data_used_mb": {
+                        "description": "optional"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "accepted": {},
+                    "epoch": {},
+                    "uptime_today_sec": {},
+                    "pending_reward": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "mobile_node.status": {
+            "domain": "mobile_node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Full node status + rewards",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "mobile_node.status"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "node_id": {},
+                    "device_type": {},
+                    "status": {},
+                    "total_uptime_hours": {},
+                    "current_epoch": {},
+                    "pending_reward": {},
+                    "claimed_reward": {},
+                    "weight": {},
+                    "network_rank": {},
+                    "total_nodes": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "mobile_node.claim_reward": {
+            "domain": "mobile_node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Claim pending epoch rewards",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "mobile_node.claim_reward"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "claimed_amount": {},
+                    "tx_hash": {},
+                    "new_balance": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "mobile_node.submit_attestation": {
+            "domain": "mobile_node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Submit block header verification results",
+            "request": {
+                "required": [
+                    "action",
+                    "attestations"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "mobile_node.submit_attestation"
+                    },
+                    "attestations": {
+                        "type": "array",
+                        "description": "required (array of {block_number, block_hash, signer_valid, parent_hash_valid, timestamp_valid})"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "attestations_accepted": {},
+                    "bonus_weight": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "mobile_node.leaderboard": {
+            "domain": "mobile_node",
+            "auth": false,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Node contribution leaderboard",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "mobile_node.leaderboard"
+                    },
+                    "scope": {
+                        "description": "optional (global|country)"
+                    },
+                    "limit": {
+                        "description": "optional (1-100, default 50)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "rankings": {
+                        "type": "array"
+                    },
+                    "total_nodes": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.eligibility": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Check user eligibility against Polymarket TOS, geo-block list, and Vision Predict launch gate. Always call before enroll.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.eligibility"
+                    },
+                    "country_code": {
+                        "description": "optional (ISO-3166-1 alpha-2, e.g. KR)"
+                    },
+                    "self_attest_age_18": {
+                        "type": "boolean",
+                        "description": "optional (boolean)"
+                    },
+                    "self_attest_not_us": {
+                        "type": "boolean",
+                        "description": "optional (boolean)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "eligible": {},
+                    "blocked_reason": {},
+                    "blocked_countries": {
+                        "type": "array"
+                    },
+                    "polymarket_tos_url": {},
+                    "disclaimer": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.config": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Read current Polymarket agent config and risk rules",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.config"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "enrolled": {},
+                    "status": {},
+                    "rules": {},
+                    "authority": {},
+                    "created_at": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.enroll": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Enroll agent into Vision Predict: persist risk rules and create authority.grant scope=polymarket.bet. Does NOT place bets (Phase 3).",
+            "request": {
+                "required": [
+                    "action",
+                    "wallet_address",
+                    "rules",
+                    "strategy",
+                    "acknowledged_disclaimer"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.enroll"
+                    },
+                    "wallet_address": {
+                        "description": "required (user's own Polygon wallet)"
+                    },
+                    "rules": {
+                        "description": "required ({max_bet_usdc, daily_loss_cap_usdc, daily_bet_count, allowed_categories[], forbidden_keywords[], time_window})"
+                    },
+                    "strategy": {
+                        "description": "required (preset|custom)"
+                    },
+                    "acknowledged_disclaimer": {
+                        "type": "boolean",
+                        "description": "required (boolean, must be true)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "enrollment_id": {},
+                    "authority_grant_id": {},
+                    "status": {},
+                    "rules": {},
+                    "next_step": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.update_rules": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Update risk rules. Authority.grant is automatically refreshed to match.",
+            "request": {
+                "required": [
+                    "action",
+                    "rules"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.update_rules"
+                    },
+                    "rules": {
+                        "description": "required (partial update of {max_bet_usdc, daily_loss_cap_usdc, daily_bet_count, allowed_categories[], forbidden_keywords[], time_window})"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "rules": {},
+                    "updated_at": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.pause": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Manually pause agent betting. Outstanding positions are NOT closed.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.pause"
+                    },
+                    "reason": {
+                        "description": "optional"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "status": {},
+                    "paused_at": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.resume": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Resume after manual pause. Eligibility re-checked at resume time.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.resume"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "status": {},
+                    "resumed_at": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.list_markets": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List active Polymarket markets via Gamma API (cached). Optionally intersects with the agent's allowed_categories and excludes forbidden_keywords. Read-only.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.list_markets"
+                    },
+                    "order": {
+                        "description": "optional (volume24hr|liquidity|competitive, default volume24hr)"
+                    },
+                    "tag_id": {
+                        "description": "optional"
+                    },
+                    "limit": {
+                        "description": "optional (1-100, default 20)"
+                    },
+                    "offset": {
+                        "description": "optional (>=0, default 0)"
+                    },
+                    "filter_by_rules": {
+                        "type": "boolean",
+                        "description": "optional (boolean, default true if enrolled)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "markets": {
+                        "type": "array"
+                    },
+                    "count": {},
+                    "total": {},
+                    "from_cache": {},
+                    "cached_age_seconds": {},
+                    "filter_applied": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.market_detail": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Fetch a single Polymarket market (cached). Includes rule-pass annotation. Read-only.",
+            "request": {
+                "required": [
+                    "action",
+                    "market_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.market_detail"
+                    },
+                    "market_id": {
+                        "description": "required (Polymarket market id)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "market": {},
+                    "passes_rules": {},
+                    "fail_reasons": {
+                        "type": "array"
+                    },
+                    "from_cache": {},
+                    "cached_age_seconds": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.simulate": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Phase 2 closed-loop simulation. Calls Gemini for rationale + decision, runs deterministic rule-check (server-side override), persists to predict_decisions. No on-chain bet. Charges 0.5 VCN.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.simulate"
+                    },
+                    "market_id": {
+                        "description": "optional (one of market_id or market_query required)"
+                    },
+                    "market_query": {
+                        "description": "optional (free-text)"
+                    },
+                    "model": {
+                        "description": "optional (gemini-2.0-flash|gemini-3-flash-preview|deepseek-chat, default gemini-2.0-flash)"
+                    },
+                    "max_size_usdc_hint": {
+                        "description": "optional"
+                    },
+                    "note": {
+                        "description": "optional (free-form, low-trust, clamped 500 chars)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "decision_id": {},
+                    "market_snapshot": {},
+                    "llm": {},
+                    "llm_decision": {},
+                    "rule_check": {},
+                    "charged_vcn": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.simulations": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Paginated history of past polymarket.simulate decisions, with PnL-if-bet for resolved markets (paper, not real).",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.simulations"
+                    },
+                    "limit": {
+                        "description": "optional (1-100, default 25)"
+                    },
+                    "cursor": {
+                        "description": "optional (decision_id of last seen doc)"
+                    },
+                    "filter": {
+                        "description": "optional (all|pending|resolved|skip, default all)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "decisions": {
+                        "type": "array"
+                    },
+                    "next_cursor": {},
+                    "total_in_filter": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
+        },
+        "polymarket.decision_detail": {
+            "domain": "polymarket",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Full detail of a single past polymarket.simulate decision, including the LLM raw_response for transparency.",
+            "request": {
+                "required": [
+                    "action",
+                    "decision_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "polymarket.decision_detail"
+                    },
+                    "decision_id": {
+                        "description": "required"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "decision_id": {},
+                    "market_id": {},
+                    "market_snapshot": {},
+                    "llm": {},
+                    "llm_decision": {},
+                    "rule_check": {},
+                    "resolution": {},
+                    "charged_vcn": {},
+                    "created_at": {}
+                }
+            },
+            "x-generated": "from the GET /agentGateway catalog (functions/agentCatalog.js); regenerate with functions/scripts/sync-openapi.cjs"
         }
     }
 }
