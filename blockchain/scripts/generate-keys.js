@@ -38,6 +38,10 @@ const NODE_IPS = [
   "172.20.0.15",
 ];
 
+// Public RPC node (no keys, never seals). Signers serve no HTTP; see
+// docs/pending/rpc-lockdown.md.
+const RPC_NODE_IP = "172.20.0.31";
+
 const OUTPUT_DIR = path.join(__dirname, "..", "mainnet-deploy");
 
 // ─── Helper Functions ────────────────────────────────────────────
@@ -160,7 +164,6 @@ function generateDockerCompose(signerAddresses) {
   for (let i = 0; i < NUM_NODES; i++) {
     const nodeNum = i + 1;
     const ip = NODE_IPS[i];
-    const rpcPort = 8545 + i;
     const p2pPort = 30303 + i;
     const address = signerAddresses[i];
 
@@ -173,7 +176,7 @@ function generateDockerCompose(signerAddresses) {
           ipv4_address: ip,
         },
       },
-      ports: [`${rpcPort}:8545`, `${p2pPort}:30303`, `${p2pPort}:30303/udp`],
+      ports: [`${p2pPort}:30303`, `${p2pPort}:30303/udp`],
       volumes: [
         `./deploy/v2-testnet/node${nodeNum}:/root/.ethereum`,
         "./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro",
@@ -182,16 +185,6 @@ function generateDockerCompose(signerAddresses) {
         "--networkid",
         String(NETWORK_ID),
         "--nodiscover",
-        "--http",
-        "--http.addr",
-        "0.0.0.0",
-        "--http.port",
-        "8545",
-        "--http.api",
-        "eth,net,web3,admin,debug,clique,miner,txpool",
-        "--http.corsdomain",
-        "*",
-        "--allow-insecure-unlock",
         "--unlock",
         address,
         "--password",
@@ -215,7 +208,7 @@ function generateDockerCompose(signerAddresses) {
       healthcheck: {
         test: [
           "CMD-SHELL",
-          `curl -sf -X POST -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545 || exit 1`,
+          "geth attach --exec eth.blockNumber /root/.ethereum/geth.ipc || exit 1",
         ],
         interval: "30s",
         timeout: "10s",
@@ -231,7 +224,6 @@ function generateDockerCompose(signerAddresses) {
   for (let i = 0; i < NUM_NODES; i++) {
     const nodeNum = i + 1;
     const ip = NODE_IPS[i];
-    const rpcPort = 8545 + i;
     const p2pPort = 30303 + i;
     const address = signerAddresses[i];
 
@@ -244,18 +236,14 @@ function generateDockerCompose(signerAddresses) {
     yaml += `      vision-net:\n`;
     yaml += `        ipv4_address: ${ip}\n`;
     yaml += `    ports:\n`;
-    yaml += `      - "${rpcPort}:8545"\n`;
     yaml += `      - "${p2pPort}:30303"\n`;
     yaml += `      - "${p2pPort}:30303/udp"\n`;
     yaml += `    volumes:\n`;
     yaml += `      - ./deploy/v2-testnet/node${nodeNum}:/root/.ethereum\n`;
+    // No HTTP/WS: geth allows --unlock only without them. admin/clique/miner over IPC.
     yaml += `    command: >\n`;
     yaml += `      --config /root/.ethereum/config.toml\n`;
     yaml += `      --networkid ${NETWORK_ID}\n`;
-    yaml += `      --http --http.addr "0.0.0.0" --http.port 8545\n`;
-    yaml += `      --http.api "eth,net,web3,admin,debug,clique,miner,txpool"\n`;
-    yaml += `      --http.corsdomain "*"\n`;
-    yaml += `      --allow-insecure-unlock\n`;
     yaml += `      --unlock "${address}"\n`;
     yaml += `      --password /root/.ethereum/password.txt\n`;
     yaml += `      --mine --miner.etherbase "${address}"\n`;
@@ -267,12 +255,40 @@ function generateDockerCompose(signerAddresses) {
     yaml += `          memory: 2G\n`;
     yaml += `          cpus: "0.5"\n`;
     yaml += `    healthcheck:\n`;
-    yaml += `      test: ["CMD-SHELL", "curl -sf -X POST -H 'Content-Type: application/json' --data '{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"method\\\":\\\"eth_blockNumber\\\",\\\"params\\\":[],\\\"id\\\":1}' http://localhost:8545 || exit 1"]\n`;
+    yaml += `      test: ["CMD", "geth", "attach", "--exec", "eth.blockNumber", "/root/.ethereum/geth.ipc"]\n`;
     yaml += `      interval: 30s\n`;
     yaml += `      timeout: 10s\n`;
     yaml += `      retries: 3\n`;
     yaml += `      start_period: 30s\n`;
   }
+
+  // Public RPC node: eth/net/web3 only, loopback-published for nginx -> rpc-gateway
+  // (method allowlist) and the sequencer. Holds no keys and never seals.
+  yaml += `\n  # Public RPC node (no keys, never seals)\n`;
+  yaml += `  rpc-node:\n`;
+  yaml += `    image: ethereum/client-go:v1.13.15\n`;
+  yaml += `    container_name: vision-rpc-node\n`;
+  yaml += `    restart: unless-stopped\n`;
+  yaml += `    networks:\n`;
+  yaml += `      vision-net:\n`;
+  yaml += `        ipv4_address: ${RPC_NODE_IP}\n`;
+  yaml += `    ports:\n`;
+  yaml += `      - "127.0.0.1:8555:8545"\n`;
+  yaml += `    volumes:\n`;
+  yaml += `      - ./deploy/v2-testnet/rpc-node:/root/.ethereum\n`;
+  yaml += `    command: >\n`;
+  yaml += `      --config /root/.ethereum/config.toml\n`;
+  yaml += `      --networkid ${NETWORK_ID}\n`;
+  yaml += `      --http --http.addr "0.0.0.0" --http.port 8545\n`;
+  yaml += `      --http.api "eth,net,web3"\n`;
+  yaml += `      --http.vhosts "localhost,rpc-node"\n`;
+  yaml += `      --nat extip:${RPC_NODE_IP}\n`;
+  yaml += `      --maxpeers 25\n`;
+  yaml += `    deploy:\n`;
+  yaml += `      resources:\n`;
+  yaml += `        limits:\n`;
+  yaml += `          memory: 2G\n`;
+  yaml += `          cpus: "0.5"\n`;
 
   // Kafka & Zookeeper (kept for compatibility)
   yaml += `\n  # Kafka & Zookeeper for Shared Sequencer\n`;
@@ -438,6 +454,10 @@ async function main() {
     fs.writeFileSync(path.join(nodeDir, "config.toml"), configToml);
     console.log(`  Node ${i + 1}: config.toml created`);
   }
+  const rpcNodeDir = path.join(OUTPUT_DIR, "rpc-node");
+  fs.mkdirSync(rpcNodeDir, { recursive: true });
+  fs.writeFileSync(path.join(rpcNodeDir, "config.toml"), configToml);
+  console.log("  RPC node: config.toml created");
   // Also save static-nodes.json for reference
   fs.writeFileSync(
     path.join(OUTPUT_DIR, "static-nodes.json"),
@@ -522,6 +542,7 @@ async function main() {
     console.log(`  - node${i}/geth/nodekey (P2P identity)`);
     console.log(`  - node${i}/config.toml (P2P static peers)`);
   }
+  console.log("  - rpc-node/config.toml (P2P static peers of the public RPC node)");
 
   console.log("\n--- Next Steps ---");
   console.log("1. Upload to server:");

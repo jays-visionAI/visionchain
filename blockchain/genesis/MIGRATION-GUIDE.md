@@ -38,15 +38,13 @@ geth init --datadir /root/vision-chain/data genesis-vcn-native.json
 ```bash
 geth --datadir /root/vision-chain/data \
   --networkid 3151909 \
-  --http --http.addr 0.0.0.0 --http.port 8545 \
-  --http.api eth,net,web3,personal,debug \
-  --http.corsdomain "*" \
-  --ws --ws.addr 0.0.0.0 --ws.port 8546 \
-  --ws.api eth,net,web3 \
   --mine --miner.threads 1 \
   --unlock 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --password /root/vision-chain/password.txt \
-  --allow-insecure-unlock
+  --password /root/vision-chain/password.txt
+# A sealing signer runs without --http/--ws (geth allows --unlock only then);
+# use IPC for admin/clique: geth attach --exec 'clique.getSigners()' /root/vision-chain/data/geth.ipc
+# Serve public RPC from a separate node with no keys, behind the method allowlist:
+#   --http --http.addr 127.0.0.1 --http.api eth,net,web3   (see docs/pending/rpc-lockdown.md)
 ```
 
 ### 5. Deploy contracts

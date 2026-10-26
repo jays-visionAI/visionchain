@@ -28,6 +28,7 @@ REQUIRED_FILES=(
   "$DEPLOY_SRC/static-nodes.json"
   "$DEPLOY_SRC/docker-compose.yml"
   "$DEPLOY_SRC/password.txt"
+  "$DEPLOY_SRC/rpc-node/config.toml"
 )
 
 for f in "${REQUIRED_FILES[@]}"; do
@@ -93,6 +94,12 @@ for i in 1 2 3 4 5; do
     echo "  Node $i: cleaned"
   fi
 done
+RPC_DIR="$TESTNET_DIR/rpc-node"
+if [ -d "$RPC_DIR" ]; then
+  rm -rf "$RPC_DIR/geth" 2>/dev/null
+  rm -f  "$RPC_DIR/geth.ipc" 2>/dev/null
+  echo "  RPC node: cleaned"
+fi
 echo ""
 
 # ─── Step 3: Deploy keystore + nodekey files ─────────────────
@@ -120,6 +127,10 @@ for i in 1 2 3 4 5; do
 
   echo "  Node $i: keystore + nodekey + config.toml deployed"
 done
+# Public RPC node: no keystore, no password, never seals
+mkdir -p "$TESTNET_DIR/rpc-node"
+cp "$DEPLOY_SRC/rpc-node/config.toml" "$TESTNET_DIR/rpc-node/config.toml"
+echo "  RPC node: config.toml deployed"
 echo ""
 
 # ─── Step 4: Deploy genesis.json ─────────────────────────────
@@ -128,6 +139,7 @@ cp "$DEPLOY_SRC/genesis.json" "$TESTNET_DIR/genesis.json"
 for i in 1 2 3 4 5; do
   cp "$DEPLOY_SRC/genesis.json" "$TESTNET_DIR/node${i}/genesis.json"
 done
+cp "$DEPLOY_SRC/genesis.json" "$TESTNET_DIR/rpc-node/genesis.json"
 echo "  Done."
 echo ""
 
@@ -141,6 +153,11 @@ for i in 1 2 3 4 5; do
     "$GETH_IMAGE" \
     init /root/.ethereum/genesis.json
 done
+echo "  Initializing RPC node..."
+docker run --rm \
+  -v "$TESTNET_DIR/rpc-node:/root/.ethereum" \
+  "$GETH_IMAGE" \
+  init /root/.ethereum/genesis.json
 echo "  All nodes initialized."
 echo ""
 
@@ -169,42 +186,45 @@ echo "=========================================================="
 sleep 30
 
 echo ""
-echo "--- Peer Count ---"
+# Signers serve no HTTP; query them over IPC. Only the RPC node has HTTP (loopback).
+ipc() {
+  docker exec "vision-node-$1" geth attach --exec "$2" /root/.ethereum/geth.ipc 2>/dev/null || echo "FAIL"
+}
+
+echo "--- Peer Count (signers also see the RPC node) ---"
 ALL_PEERS_OK=true
-for port in 8545 8546 8547 8548 8549; do
-  PEERS=$(curl -s -X POST -H "Content-Type: application/json" \
-    --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
-    http://localhost:$port 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(r['result'],16))" 2>/dev/null || echo "FAIL")
-  echo "  Port $port: $PEERS peers"
-  if [ "$PEERS" != "4" ]; then
+for i in 1 2 3 4 5; do
+  PEERS=$(ipc "$i" net.peerCount)
+  echo "  node-$i: $PEERS peers"
+  if ! [ "$PEERS" -ge 4 ] 2>/dev/null; then
     ALL_PEERS_OK=false
   fi
 done
 
 echo ""
 echo "--- Mining Status ---"
-for port in 8545 8546 8547 8548 8549; do
-  MINING=$(curl -s -X POST -H "Content-Type: application/json" \
-    --data '{"jsonrpc":"2.0","method":"eth_mining","params":[],"id":1}' \
-    http://localhost:$port 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['result'])" 2>/dev/null || echo "FAIL")
-  echo "  Port $port: mining=$MINING"
+for i in 1 2 3 4 5; do
+  echo "  node-$i: mining=$(ipc "$i" eth.mining)"
 done
 
 echo ""
 echo "--- Block Height ---"
-for port in 8545 8546 8547 8548 8549; do
-  BLOCK=$(curl -s -X POST -H "Content-Type: application/json" \
-    --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-    http://localhost:$port 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(r['result'],16))" 2>/dev/null || echo "FAIL")
-  echo "  Port $port: block $BLOCK"
+for i in 1 2 3 4 5; do
+  echo "  node-$i: block $(ipc "$i" eth.blockNumber)"
 done
 
 echo ""
 echo "--- Clique Signers ---"
-SIGNERS=$(curl -s -X POST -H "Content-Type: application/json" \
-  --data '{"jsonrpc":"2.0","method":"clique_getSigners","params":[],"id":1}' \
-  http://localhost:8545 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); [print('  ' + s) for s in r['result']]" 2>/dev/null || echo "FAIL")
-echo "$SIGNERS"
+ipc 1 "clique.getSigners().join('\\n')"
+
+echo ""
+echo "--- Public RPC node (127.0.0.1:8555, expect only eth/net/rpc/web3) ---"
+for m in eth_blockNumber rpc_modules; do
+  curl -s -X POST -H "Content-Type: application/json" \
+    --data "{\"jsonrpc\":\"2.0\",\"method\":\"$m\",\"params\":[],\"id\":1}" \
+    http://127.0.0.1:8555 || echo "FAIL"
+  echo ""
+done
 
 echo ""
 if [ "$ALL_PEERS_OK" = true ]; then
@@ -215,11 +235,9 @@ else
   echo "=========================================================="
   echo "  WARNING: Some nodes may not have full peer connections yet."
   echo "  Wait 60 more seconds and check again:"
-  echo '  for port in 8545 8546 8547 8548 8549; do'
-  echo '    curl -s -X POST -H "Content-Type: application/json" \'
-  echo '      --data '\''{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'\'' \'
-  echo "      http://localhost:\$port"
-  echo "  done"
+  echo '  for i in 1 2 3 4 5; do'
+  echo '    docker exec vision-node-$i geth attach --exec net.peerCount /root/.ethereum/geth.ipc'
+  echo '  done'
   echo "=========================================================="
 fi
 
