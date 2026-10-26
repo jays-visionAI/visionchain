@@ -1,16 +1,20 @@
-name: Deploy to Production
+name: Build check (Production)
+
+# Cloudflare Pages deploys this branch itself (git integration, project
+# "visionchain"). This workflow only checks that the production build
+# still succeeds. It used to deploy too, through cloudflare/pages-action,
+# which no longer exists.
 
 on:
   push:
     branches: [main]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,12 +40,3 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.PROD_FIREBASE_MEASUREMENT_ID }}
           VITE_CHAIN_ENV: production
           VITE_RPC_URL: https://api.visionchain.co/rpc-proxy
-
-      - name: Deploy to Cloudflare Pages (Production)
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: visionchain
-          directory: dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
