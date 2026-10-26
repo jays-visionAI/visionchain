@@ -5,7 +5,7 @@ the `main` branch only. Last updated 2026-10-24.
 
 ## State in one paragraph
 
-`main` is **24 commits ahead of `origin/main` (`e7f87f3`, which is also what
+`main` is **25 commits ahead of `origin/main` (`e7f87f3`, which is also what
 GitHub has as of 2026-10-24) and nothing is pushed**.
 - Pushing `main` deploys the frontend to production. The workflow is
   `.github/workflows/deploy-production.yml`, which deploys to Cloudflare
@@ -55,8 +55,9 @@ passes on the result.
    the old HTTPS URLs stop existing; the admin UI already calls them as
    callables.
 3. **Push `main`.** This deploys the frontend.
-4. **Apply both rules patches and deploy the rules,** right after the
-   frontend is live: the new `users` rules refuse writes the old frontend
+4. **Deploy the rules,** right after the frontend is live. Both pending
+   patches are applied on `main` (`fix(rules): apply the pending ...`), so
+   `firebase deploy --only firestore:rules` ships them: the new `users` rules refuse writes the old frontend
    makes. See [Pending: the rules patches](#pending-the-rules-patches). Until
    this step, `transactions` stays writable by anyone and `agents` (with
    plaintext API keys) by any signed-in user, and after step 3 that is
